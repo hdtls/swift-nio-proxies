@@ -13,10 +13,11 @@
 
 import XCTest
 
-#if !canImport(ObjectiveC)
-public func allTests() -> [XCTestCaseEntry] {
-    return [
-        testCase(NetbotTests.allTests),
+extension NIOVPNProtocolHTTPTests {
+    static var allTests = [
+        ("testUpgradeWithoutSendHttpEndPart", testUpgradeWithoutSendHttpEndPart),
+        ("testUpgradeHandlerBufferOnUnexpectedOrdering", testUpgradeHandlerBufferOnUnexpectedOrdering),
+        ("testUpgradeWhenBuildProxyResponseFailed", testUpgradeWhenBuildProxyResponseFailed),
+        ("testUpgradeFiresUserEvent", testUpgradeFiresUserEvent)
     ]
 }
-#endif

@@ -21,7 +21,8 @@ let package = Package(
                     "NIOVPNProtocolHTTP"
             ]),
         .target(name: "NIOVPNProtocolHTTP", dependencies: ["NIO", "NIOHTTP1"]),
-        .testTarget(name: "NetbotTests", dependencies: ["Netbot"])
+        .testTarget(name: "NetbotTests", dependencies: ["Netbot"]),
+        .testTarget(name: "NIOVPNProtocolHTTPTests", dependencies: ["NIOVPNProtocolHTTP"])
     ],
     swiftLanguageVersions: [.v5]
 )
