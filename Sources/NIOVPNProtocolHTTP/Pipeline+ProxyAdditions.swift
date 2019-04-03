@@ -18,7 +18,8 @@ extension ChannelPipeline {
     
     public func configureHTTPProxyPipeline(position: ChannelPipeline.Position = .last,
                                            withPipeliningAssistance pipelining: Bool = false,
-                                           httpProxyUpgrader: HTTPProxyUpgrader) -> EventLoopFuture<Void> {
+                                           httpProxyUpgrader: HTTPProxyUpgrader,
+                                           completion: @escaping (ChannelHandlerContext) -> Void) -> EventLoopFuture<Void> {
         let httpEncoder = HTTPResponseEncoder()
         let httpDecoder = HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)
         
@@ -31,7 +32,8 @@ extension ChannelPipeline {
         let extraHTTPHandlers = Array(handlers.dropFirst())
         let upgraderHandler = HTTPProxyUpgradeHandler(httpEncoder: httpEncoder,
                                                       extraHTTPHandlers: extraHTTPHandlers,
-                                                      upgrader: httpProxyUpgrader)
+                                                      upgrader: httpProxyUpgrader,
+                                                      completion: completion)
         handlers.append(upgraderHandler)
 
         return addHandlers(handlers, position: position)

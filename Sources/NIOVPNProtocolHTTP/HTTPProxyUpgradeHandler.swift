@@ -52,6 +52,7 @@ public final class HTTPProxyUpgradeHandler: ChannelInboundHandler, RemovableChan
     private let httpEncoder: HTTPResponseEncoder
     private let extraHTTPHandlers: [RemovableChannelHandler]
     private let upgrader: HTTPProxyUpgrader
+    private let completion: (ChannelHandlerContext) -> Void
 
     /// Whether we've already seen the first request.
     private var needBuffer = false
@@ -79,10 +80,12 @@ public final class HTTPProxyUpgradeHandler: ChannelInboundHandler, RemovableChan
     ///   - upgradeCompletionHandler: A block that will be fired when HTTP upgrade is complete.
     public init(httpEncoder: HTTPResponseEncoder,
                 extraHTTPHandlers: [RemovableChannelHandler],
-                upgrader: HTTPProxyUpgrader) {
+                upgrader: HTTPProxyUpgrader,
+                completion: @escaping (ChannelHandlerContext) -> Void) {
         self.httpEncoder = httpEncoder
         self.extraHTTPHandlers = extraHTTPHandlers
         self.upgrader = upgrader
+        self.completion = completion
     }
 
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -103,9 +106,10 @@ public final class HTTPProxyUpgradeHandler: ChannelInboundHandler, RemovableChan
                 needBuffer = true
                 applyHTTPUpgrade(context: context, head: head)
             }
-        case .failure(let error):
+        case .failure:
             // We were re-entrantly called while delivering the request head. We can just pass this through.
-            context.fireErrorCaught(error)
+//            context.fireErrorCaught(error)
+            break
         case .ready:
             preconditionFailure("Upgrade has completed but we have not seen a whole request and still got re-entrantly called.")
         case .preparing:
@@ -119,6 +123,7 @@ public final class HTTPProxyUpgradeHandler: ChannelInboundHandler, RemovableChan
         // upgrading, the only thing we should see is a request head. Anything else in an error.
         guard case .head(let head) = httpPart else {
             state = .failure(HTTPServerUpgradeErrors.invalidHTTPOrdering)
+            context.fireErrorCaught(HTTPServerUpgradeErrors.invalidHTTPOrdering)
             return
         }
 
@@ -152,10 +157,15 @@ public final class HTTPProxyUpgradeHandler: ChannelInboundHandler, RemovableChan
             .flatMap {
                 context.pipeline.removeHandler(self.httpEncoder)
             }
+            .map {
+                self.completion(context)
+            }
             .flatMap {
                 self.upgrader.proxyUpgradeEventLoop(context, head)
             }
             .map {
+                context.fireUserInboundEventTriggered(Events.success(head))
+
                 self.state = .ready
 
                 // We unbuffer any buffered data here and, if we sent any,
@@ -169,9 +179,14 @@ public final class HTTPProxyUpgradeHandler: ChannelInboundHandler, RemovableChan
                     context.fireChannelReadComplete()
                 }
             }
-            .whenComplete { _ in
-                context.pipeline.removeHandler(context: context, promise: nil)
-        }
+            .whenComplete({ (result) in
+                switch result {
+                case .success:
+                    context.pipeline.removeHandler(context: context, promise: nil)
+                case .failure(let error):
+                    context.fireErrorCaught(error)
+                }
+            })
     }
 
     /// Build establish response http headers
@@ -218,10 +233,10 @@ extension HTTPProxyUpgradeHandler {
     }
 
     /// User events that may be fired by the `HTTPServerProtocolUpgrader`.
-    private enum Events {
+    public enum Events {
         /// Fired when HTTP upgrade has completed and the
         /// `HTTPServerProtocolUpgrader` is about to remove itself from the
         /// `ChannelPipeline`.
-        case completed(result: HTTPRequestHead)
+        case success(HTTPRequestHead)
     }
 }
