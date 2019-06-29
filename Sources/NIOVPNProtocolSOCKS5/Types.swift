@@ -11,16 +11,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-import NIO
-
 // The SOCKS5 protocol is defined in [RFC 1928](https://tools.ietf.org/html/rfc1928)
-enum SOCKSVersion: UInt8 {
+enum Version: UInt8 {
     case v5 = 0x05
 }
 
 /// SOCKS5 Authentication METHOD
-///
 enum Method: UInt8 {
     /// - noAuth: X'00' NO AUTHENTICATION REQUIRED
     case noAuth = 0x00
@@ -48,16 +44,13 @@ enum Method: UInt8 {
         case 0x03...0x7f: self = .IANA
         case 0x08...0xfe: self = .private
         case 0xff: self = .noAcceptableMethods
-        default: return nil
+        default:
+            return nil
         }
     }
 }
 
 /// SOCKS5 Address type
-///
-/// - ipv4
-/// - domainLength
-/// - ipv6
 enum ATYP: UInt8 {
     case ipv4 = 0x01
     case domainLength = 0x03
@@ -65,7 +58,6 @@ enum ATYP: UInt8 {
 }
 
 /// The SOCKS request details command filed
-///
 enum CMD: UInt8 {
     /// - connect: CONNECT X'01'
     case connect = 0x01
@@ -78,7 +70,6 @@ enum CMD: UInt8 {
 }
 
 /// The SOCKS replies Reply field
-///
 enum Reply: UInt8 {
     /// - succeeded: X'00' succeeded
     case succeeded = 0x00
