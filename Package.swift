@@ -4,8 +4,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "Netbot",
-    platforms: [.macOS(.v10_14), .iOS(.v12)],
+    name: "swift-nio-Netbot",
     products: [
         .library(name: "Netbot", targets: ["Netbot"]),
         .library(name: "NIOVPNProtocolHTTP", targets: ["NIOVPNProtocolHTTP"]),
