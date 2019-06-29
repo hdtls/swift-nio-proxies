@@ -7,8 +7,8 @@ let package = Package(
     name: "swift-nio-Netbot",
     products: [
         .library(name: "Netbot", targets: ["Netbot"]),
-        .library(name: "NIOVPNProtocolHTTP", targets: ["NIOVPNProtocolHTTP"]),
-        .library(name: "NIOVPNProtocolSOCKS5", targets: ["NIOVPNProtocolSOCKS5"]),
+        .library(name: "NIOVPNProtoHTTP", targets: ["NIOVPNProtoHTTP"]),
+        .library(name: "NIOVPNProtoSOCKS5", targets: ["NIOVPNProtoSOCKS5"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0")
@@ -18,13 +18,13 @@ let package = Package(
                 dependencies: [
                     "NIO",
                     "NIOHTTP1",
-                    "NIOVPNProtocolHTTP",
-                    "NIOVPNProtocolSOCKS5"
+                    "NIOVPNProtoHTTP",
+                    "NIOVPNProtoSOCKS5"
             ]),
-        .target(name: "NIOVPNProtocolHTTP", dependencies: ["NIO", "NIOHTTP1"]),
-        .target(name: "NIOVPNProtocolSOCKS5", dependencies: ["NIO"]),
+        .target(name: "NIOVPNProtoHTTP", dependencies: ["NIO", "NIOHTTP1"]),
+        .target(name: "NIOVPNProtoSOCKS5", dependencies: ["NIO"]),
         .testTarget(name: "NetbotTests", dependencies: ["Netbot"]),
-        .testTarget(name: "NIOVPNProtocolHTTPTests", dependencies: ["NIOVPNProtocolHTTP"])
+        .testTarget(name: "NIOVPNProtoHTTPTests", dependencies: ["NIOVPNProtoHTTP"])
     ],
     swiftLanguageVersions: [.v5]
 )

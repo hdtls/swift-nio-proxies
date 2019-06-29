@@ -13,22 +13,39 @@
 
 import NIO
 
-/// A channel handler that wraps a channel in SOCKS5 proxy using NIOVPNProtocolSOCKS5.
+/// A channel handler that wraps a channel in SOCKS5 proxy using NIOVPNProtoSOCKS5.
 /// This handler can be used in channels that are acting as the client
-/// in the SOCKS5 dialog. For server connections, use the `SOCKS5ProxyClientHandler`.
-public final class SOCKS5ProxyServerHandler: SOCKS5ProxyHandler {
-
-    private var isValid: Bool = false
-    private var REPL: ByteBuffer?
+/// in the SOCKS5 dialog. For server connections, use the `SOCKS5ClientProxyHandler`.
+public final class SOCKS5ClientProxyHandler: SOCKS5ProxyHandler {
 
     public var configuration: ProxyConfiguration
+    public var ipAddr: [UInt8]
+    public var port: [UInt8]
 
-    public init(channel: Channel, configuration: ProxyConfiguration) {
+    public init(channel: Channel, ipAddr: [UInt8], port: [UInt8], configuration: ProxyConfiguration) {
         self.configuration = configuration
+        self.ipAddr = ipAddr
+        self.port = port
+
         super.init(channel: channel)
     }
 
-    override public func recvHMsg(context: ChannelHandlerContext, byteBuffer: inout ByteBuffer) throws {
+    public func handlerAdded(context: ChannelHandlerContext) {
+        super.handlerAdded(context: context)
+
+        // If channel active event has been fired already, which means `channelActive` will
+        // not be invoked. We have to initialize here instead.
+        if context.channel.isActive {
+            writeHMsg(context: context)
+        }
+    }
+
+    public func channelActive(context: ChannelHandlerContext) {
+        context.fireChannelActive()
+        writeHMsg(context: context)
+    }
+
+    override public func writeHMsg(context: ChannelHandlerContext) {
         // The client connects to the server, and sends a version
         // identifier/method selection message:
         //
@@ -42,29 +59,20 @@ public final class SOCKS5ProxyServerHandler: SOCKS5ProxyHandler {
         // NMETHODS field contains the number of method identifier octets that
         // appear in the METHODS field.
 
-        guard byteBuffer.readableBytes >= 2 else {
-            throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
+        var byteBuffer = context.channel.allocator.buffer(capacity: 3)
+
+        byteBuffer.writeInteger(Version.v5.rawValue)
+        byteBuffer.writeInteger(UInt8(0x01))
+        if configuration.basicAuthorization != nil {
+            byteBuffer.writeInteger(Method.basicAuth.rawValue)
+        } else {
+            byteBuffer.writeInteger(Method.noAuth.rawValue)
         }
 
-        byteBuffer.moveReaderIndex(forwardBy: 1)
-        let numberOfMethods: UInt8 = byteBuffer.readInteger()!
-
-        guard byteBuffer.readableBytes >= Int(numberOfMethods) else {
-            throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
-        }
-
-        let methods = byteBuffer.readBytes(length: Int(numberOfMethods))!.map(Method.init)
-
-        guard methods.contains(method) else {
-            // TODO: Error out
-//            context.fireErrorCaught(<#T##error: Error##Error#>)
-            return
-        }
-
-        writeHMsg(context: context)
+        context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
     }
-    
-    override public func writeHMsg(context: ChannelHandlerContext) {
+
+    override public func recvHMsg(context: ChannelHandlerContext, byteBuffer: inout ByteBuffer) throws {
         // The server selects from one of the methods given in METHODS, and
         // sends a METHOD selection message:
         //
@@ -86,28 +94,27 @@ public final class SOCKS5ProxyServerHandler: SOCKS5ProxyHandler {
         // o  X'80' to X'FE' RESERVED FOR PRIVATE METHODS
         // o  X'FF' NO ACCEPTABLE METHODS
 
-        var byteBuffer = context.channel.allocator.buffer(capacity: 2)
-        byteBuffer.writeInteger(Version.v5.rawValue)
-        byteBuffer.writeInteger(method.rawValue)
-
-        context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
-    }
-
-    override public func recvAMsg(context: ChannelHandlerContext, byteBuffer: inout ByteBuffer) throws {
-
-        switch method {
-        case .noAuth:
-            assertionFailure("This should never happen.")
-        case .basicAuth:
-            try recvBasicAMsg(context: context, byteBuffer: &byteBuffer)
-            writeAMsg(context: context)
-        default:
-            // TODO: - METHOD specific negotation implemention.
-            assertionFailure("METHOD specific negotiation not implemented.")
+        guard byteBuffer.readableBytes >= 2 else {
+            throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
         }
+
+        byteBuffer.moveReaderIndex(forwardBy: 1)
+
+        guard let method = Method.init(rawValue: byteBuffer.readInteger()!) else {
+            throw SOCKS5ProxyError.serializeFailed(reason: .invalidInputBytes)
+        }
+
+        self.method = method
+
+        guard method != .noAuth else {
+            writeRELMsg(context: context)
+            return
+        }
+
+        writeAMsg(context: context)
     }
 
-    override public func writeAMsg(context: ChannelHandlerContext) {
+    public override func writeAMsg(context: ChannelHandlerContext) {
 
         switch method {
         case .noAuth:
@@ -120,7 +127,21 @@ public final class SOCKS5ProxyServerHandler: SOCKS5ProxyHandler {
         }
     }
 
-    override public func recvRELMsg(context: ChannelHandlerContext, byteBuffer: inout ByteBuffer) throws {
+    public override func recvAMsg(context: ChannelHandlerContext, byteBuffer: inout ByteBuffer) throws {
+
+        switch method {
+        case .noAuth:
+            assertionFailure("This should never happen.")
+        case .basicAuth:
+            try recvBasicAMsg(context: context, byteBuffer: &byteBuffer)
+            writeRELMsg(context: context)
+        default:
+            // TODO: - METHOD specific negotation implemention.
+            assertionFailure("METHOD specific negotiation not implemented.")
+        }
+    }
+
+    override public func writeRELMsg(context: ChannelHandlerContext) {
         // Once the method-dependent subnegotiation has completed, the client
         // sends the request details.  If the negotiated method includes
         // encapsulation for purposes of integrity checking and/or
@@ -139,14 +160,14 @@ public final class SOCKS5ProxyServerHandler: SOCKS5ProxyHandler {
         //
         // o  VER    protocol version: X'05'
         // o  CMD
-        //  o  CONNECT X'01'
-        //  o  BIND X'02'
-        //  o  UDP ASSOCIATE X'03'
+        // o  CONNECT X'01'
+        // o  BIND X'02'
+        // o  UDP ASSOCIATE X'03'
         // o  RSV    RESERVED
         // o  ATYP   address type of following address
-        // o   IP V4 address: X'01'
-        // o   DOMAINNAME: X'03'
-        // o   IP V6 address: X'04'
+        // o  IP V4 address: X'01'
+        // o  DOMAINNAME: X'03'
+        // o  IP V6 address: X'04'
         // o  DST.ADDR       desired destination address
         // o  DST.PORT desired destination port in network octet order
         //
@@ -154,75 +175,21 @@ public final class SOCKS5ProxyServerHandler: SOCKS5ProxyHandler {
         // and destination addresses, and return one or more reply messages, as
         // appropriate for the request type.
 
-        guard byteBuffer.readableBytes >= 4 else {
-            throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
-        }
+        var byteBuffer = context.channel.allocator.buffer(capacity: 6 + ipAddr.count)
 
-        // Advance 3 byte to read ATYP
-        byteBuffer.moveReaderIndex(forwardBy: 3)
+        byteBuffer.writeInteger(Version.v5.rawValue)
+        byteBuffer.writeInteger(CMD.connect.rawValue)
+        byteBuffer.writeInteger(UInt8(0x00))
 
-        let family = ATYP.init(rawValue: byteBuffer.readInteger()!)
+        // FIXME: - Update REL ATYP
+        byteBuffer.writeInteger(ATYP.ipv4.rawValue)
+        byteBuffer.writeBytes(ipAddr)
+        byteBuffer.writeBytes(port)
 
-        let ipAddr: [UInt8]
-
-        switch family {
-        case .some(.ipv4):
-            // size of ipv4 address: 4
-            guard byteBuffer.readableBytes >= 4 else {
-                throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
-            }
-
-            ipAddr = byteBuffer.readBytes(length: 4)!
-        case .some(.domainLength):
-            guard byteBuffer.readableBytes >= 1 else {
-                throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
-            }
-
-            let copyLength: UInt8 = byteBuffer.readInteger()!
-            guard byteBuffer.readableBytes >= Int(copyLength) else {
-                throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
-            }
-
-            ipAddr = byteBuffer.readBytes(length: Int(copyLength))!
-        case .some(.ipv6):
-            // size of ipv6 address: 16
-            guard byteBuffer.readableBytes >= 16 else {
-                throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
-            }
-
-            ipAddr = byteBuffer.readBytes(length: 16)!
-        default:
-            throw SOCKS5ProxyError.serializeFailed(reason: .invalidInputBytes)
-        }
-
-        guard byteBuffer.readableBytes >= 2 else {
-            throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
-        }
-
-        let port = byteBuffer.readBytes(length: 2)!
-
-        // TODO: - SOCKS5 server should typically evaluate the request base on
-        // source and destination address.
-
-
-        let RSV: UInt8 = 0x00
-
-        REPL = context.channel.allocator.buffer(capacity: byteBuffer.readableBytes)
-
-        REPL?.writeInteger(Version.v5.rawValue)
-        REPL?.writeInteger(Reply.succeeded.rawValue)
-        REPL?.writeInteger(RSV)
-        REPL?.writeInteger(family!.rawValue)
-        if family! == .domainLength {
-            REPL?.writeInteger(UInt8(ipAddr.count))
-        }
-        REPL?.writeBytes(ipAddr)
-        REPL?.writeBytes(port)
-
-        writeRELMsg(context: context)
+        context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
     }
 
-    public override func writeRELMsg(context: ChannelHandlerContext) {
+    override public func recvRELMsg(context: ChannelHandlerContext, byteBuffer: inout ByteBuffer) throws {
         // The SOCKS request information is sent by the client as soon as it has
         // established a connection to the SOCKS server, and completed the
         // authentication negotiations.  The server evaluates the request, and
@@ -262,17 +229,46 @@ public final class SOCKS5ProxyServerHandler: SOCKS5ProxyHandler {
         // authentication, integrity and/or confidentiality, the replies are
         // encapsulated in the method-dependent encapsulation.
 
-        guard let byteBuffer = REPL else {
-            assertionFailure("REPL should not be nil")
-            return
+        guard byteBuffer.readableBytes >= 4 else {
+            throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
         }
-        context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
+
+        byteBuffer.moveReaderIndex(forwardBy: 1)
+        let REP = Reply.init(rawValue: byteBuffer.readInteger()!)
+
+        guard REP == .some(.succeeded) else {
+            throw SOCKS5ProxyError.replyFailed(reason: .withReply(REP))
+        }
+
+        byteBuffer.moveReaderIndex(forwardBy: 1)
+        guard let family = ATYP.init(rawValue: byteBuffer.readInteger()!) else {
+            throw SOCKS5ProxyError.serializeFailed(reason: .invalidInputBytes)
+        }
+
+        let readLength: Int
+
+        switch family {
+        case .ipv4: readLength = 6
+        case .ipv6: readLength = 18
+        case .domainLength:
+            guard byteBuffer.readableBytes >= 1 else {
+                throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
+            }
+
+            readLength = byteBuffer.readInteger()! + 2
+        }
+
+        guard byteBuffer.readableBytes >= readLength else {
+            throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
+        }
+
+        byteBuffer.moveReaderIndex(forwardBy: readLength)
     }
 }
 
-extension SOCKS5ProxyServerHandler: RFC1919 {
+extension SOCKS5ClientProxyHandler: RFC1919 {
 
-    public func recvBasicAMsg(context: ChannelHandlerContext, byteBuffer: inout ByteBuffer) throws {
+    public func writeBasicAMsg(context: ChannelHandlerContext) {
         // Once the SOCKS V5 server has started, and the client has selected the
         // Username/Password Authentication protocol, the Username/Password
         // subnegotiation begins.  This begins with the client producing a
@@ -283,6 +279,7 @@ extension SOCKS5ProxyServerHandler: RFC1919 {
         // +----+------+----------+------+----------+
         // | 1  |  1   | 1 to 255 |  1   | 1 to 255 |
         // +----+------+----------+------+----------+
+        //
         // The VER field contains the current version of the subnegotiation,
         // which is X'01'. The ULEN field contains the length of the UNAME field
         // that follows. The UNAME field contains the username as known to the
@@ -295,42 +292,21 @@ extension SOCKS5ProxyServerHandler: RFC1919 {
             return
         }
 
-        guard byteBuffer.readableBytes >= 2 else {
-            throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
-        }
+        let uLength = auth.username.utf8.count
+        let pLength = auth.password.utf8.count
 
-        byteBuffer.moveReaderIndex(forwardBy: 1)
+        var byteBuffer = context.channel.allocator.buffer(capacity: 2 + uLength + 1 + pLength)
 
-        let uLength: UInt8 = byteBuffer.readInteger()!
+        byteBuffer.writeInteger(UInt8(0x01))
+        byteBuffer.writeInteger(UInt8(uLength))
+        byteBuffer.writeString(auth.username)
+        byteBuffer.writeInteger(UInt8(pLength))
+        byteBuffer.writeString(auth.password)
 
-        guard byteBuffer.readableBytes >= uLength else {
-            throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
-        }
-
-        let username = byteBuffer.readString(length: Int(uLength))
-
-        guard byteBuffer.readableBytes >= 1 else {
-            throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
-        }
-
-        let pLength: UInt8 = byteBuffer.readInteger()!
-
-        guard byteBuffer.readableBytes >= pLength else {
-            throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
-        }
-
-        let pwd = byteBuffer.readString(length: Int(pLength))
-
-        isValid = username == auth.username && pwd == auth.password
-
-        guard isValid else {
-            throw SOCKS5ProxyError.authenticationFailed(reason: .incorrectUsernameOrPassword)
-        }
-
-        writeAMsg(context: context)
+        context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
     }
 
-    public func writeBasicAMsg(context: ChannelHandlerContext) {
+    public func recvBasicAMsg(context: ChannelHandlerContext, byteBuffer: inout ByteBuffer) throws {
         // The server verifies the supplied UNAME and PASSWD, and sends the
         // following response:
         //
@@ -343,11 +319,16 @@ extension SOCKS5ProxyServerHandler: RFC1919 {
         // A STATUS field of X'00' indicates success. If the server returns a
         // `failure' (STATUS value other than X'00') status, it MUST close the connection.
 
-        var byteBuffer = context.channel.allocator.buffer(capacity: 2)
+        guard byteBuffer.readableBytes >= 2 else {
+            throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
+        }
 
-        byteBuffer.writeInteger(UInt8(0x01))
-        byteBuffer.writeInteger(UInt8(isValid ? 0x00 : 0x01))
+        byteBuffer.moveReaderIndex(forwardBy: 1)
 
-        context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
+        let REP: UInt8 = byteBuffer.readInteger()!
+
+        guard REP == 0x00 else {
+            throw SOCKS5ProxyError.authenticationFailed(reason: .incorrectUsernameOrPassword)
+        }
     }
 }
