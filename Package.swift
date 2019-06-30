@@ -19,12 +19,26 @@ let package = Package(
                     "NIO",
                     "NIOHTTP1",
                     "NIOVPNProtoHTTP",
-                    "NIOVPNProtoSOCKS5"
+                    "NIOVPNProtoSOCKS5",
+                    "CNIOSecurityShims"
             ]),
-        .target(name: "NIOVPNProtoHTTP", dependencies: ["NIO", "NIOHTTP1"]),
-        .target(name: "NIOVPNProtoSOCKS5", dependencies: ["NIO"]),
-        .testTarget(name: "NetbotTests", dependencies: ["Netbot"]),
-        .testTarget(name: "NIOVPNProtoHTTPTests", dependencies: ["NIOVPNProtoHTTP"])
+        .target(name: "CNIOSodium",
+                cSettings: [
+            .headerSearchPath("$(SRCROOT)/Sources/CNIOSodium/include/sodium")
+            ]),
+        .target(name: "CNIOSecurityShims",
+                dependencies: ["CNIOSodium"]),
+        .target(name: "NIOVPNProtoHTTP",
+                dependencies: [
+                    "NIO",
+                    "NIOHTTP1"
+            ]),
+        .target(name: "NIOVPNProtoSOCKS5",
+                dependencies: ["NIO"]),
+        .testTarget(name: "NetbotTests",
+                    dependencies: ["Netbot"]),
+        .testTarget(name: "NIOVPNProtoHTTPTests",
+                    dependencies: ["NIOVPNProtoHTTP"])
     ],
     swiftLanguageVersions: [.v5]
 )
