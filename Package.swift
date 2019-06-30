@@ -8,7 +8,7 @@ let package = Package(
     products: [
         .library(name: "Netbot", targets: ["Netbot"]),
         .library(name: "NIOVPNProtoHTTP", targets: ["NIOVPNProtoHTTP"]),
-        .library(name: "NIOVPNProtoSOCKS5", targets: ["NIOVPNProtoSOCKS5"]),
+        .library(name: "NIOVPNProtoSOCKS5", targets: ["NIOVPNProtoSOCKS5"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0")
@@ -19,13 +19,13 @@ let package = Package(
                     "NIO",
                     "NIOHTTP1",
                     "NIOVPNProtoHTTP",
-                    "NIOVPNProtoSOCKS5",
-                    "CNIOSecurityShims"
+                    "NIOVPNProtoSOCKS5"
             ]),
         .target(name: "CNIOSodium",
                 cSettings: [
             .headerSearchPath("$(SRCROOT)/Sources/CNIOSodium/include/sodium")
             ]),
+        .target(name: "CNIOMbedCrypto"),
         .target(name: "CNIOSecurityShims",
                 dependencies: ["CNIOSodium"]),
         .target(name: "NIOVPNProtoHTTP",
