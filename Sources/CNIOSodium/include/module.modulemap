@@ -1,4 +1,4 @@
-module CNIOSodiumCrypto [system] {
+module CNIOSodium [system] {
   header "sodium/core.h"
   header "sodium/utils.h"
   header "sodium/crypto_stream_salsa20.h"
