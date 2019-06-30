@@ -45,7 +45,9 @@ let package = Package(
         .testTarget(name: "NetbotTests",
                     dependencies: ["Netbot"]),
         .testTarget(name: "NIOVPNProtoHTTPTests",
-                    dependencies: ["NIOVPNProtoHTTP"])
+                    dependencies: ["NIOVPNProtoHTTP"]),
+        .testTarget(name: "NIOSecurityTests",
+                    dependencies: ["NIOSecurity"])
     ],
     swiftLanguageVersions: [.v5]
 )

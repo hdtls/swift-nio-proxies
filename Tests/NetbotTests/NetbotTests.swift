@@ -21,8 +21,4 @@ final class NetbotTests: XCTestCase {
         // results.
         XCTAssertEqual(Netbot().text, "Hello, World!")
     }
-
-    static var allTests = [
-        ("testExample", testExample),
-    ]
 }

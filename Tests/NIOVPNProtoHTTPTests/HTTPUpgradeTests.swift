@@ -14,7 +14,7 @@
 import XCTest
 @testable import NIO
 @testable import NIOHTTP1
-@testable import NIOVPNProtocolHTTP
+@testable import NIOVPNProtoHTTP
 
 class ArrayAccumulationHandler<T>: ChannelInboundHandler {
     typealias InboundIn = T
@@ -203,7 +203,7 @@ func assert(_ response: String, expectedLine: String, expectedHTTPHeaders: [Stri
     XCTAssertEqual(lines.count, 0)
 }
 
-final class NIOVPNProtocolHTTPTests: XCTestCase {
+final class NIOVPNProtoHTTPTests: XCTestCase {
 
     func testUpgradeWithoutSendHttpEndPart() throws {
         let channel = EmbeddedChannel()
