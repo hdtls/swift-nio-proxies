@@ -90,26 +90,62 @@ extension Security: Cryptors {
 
     public func makeEncryptor() throws -> Cryptor & Updatable {
         switch algorithm {
-        case .salsa20, .chacha20, .chacha20ietf, .xchacha20:
+        case .salsa20,
+             .chacha20,
+             .chacha20ietf,
+             .xchacha20:
             return try SodiumStream.init(algorithm: algorithm, key: key, mode: .encrypt)
-        case .rc4, .rc4md5, .aes128cfb, .aes192cfb, .aes256cfb, .aes128ctr, .aes192ctr, .aes256ctr, .camellia128cfb, .camellia192cfb, .camellia256cfb, .bfcfb:
+        case .rc4,
+             .rc4md5,
+             .aes128cfb,
+             .aes192cfb,
+             .aes256cfb,
+             .aes128ctr,
+             .aes192ctr,
+             .aes256ctr,
+             .camellia128cfb,
+             .camellia192cfb,
+             .camellia256cfb,
+             .bfcfb:
             return try MbedTLSStream.init(algorithm: algorithm, key: key, mode: .encrypt)
-        case .aes128gcm, .aes192gcm, .aes256gcm:
+        case .aes128gcm,
+             .aes192gcm,
+             .aes256gcm:
             return try MbedTLSAEAD.init(algorithm: algorithm, key: key, mode: .encrypt)
-        case .chacha20poly1305, .chacha20ietfpoly1305, .xchacha20ietfpoly1305:
+        case .chacha20poly1305,
+             .chacha20ietfpoly1305,
+             .xchacha20ietfpoly1305:
             return try SodiumAEAD.init(algorithm: algorithm, key: key, mode: .encrypt)
         }
     }
 
     public func makeDecryptor() throws -> Cryptor & Updatable {
         switch algorithm {
-        case .salsa20, .chacha20, .chacha20ietf, .xchacha20:
+        case .salsa20,
+             .chacha20,
+             .chacha20ietf,
+             .xchacha20:
             return try SodiumStream.init(algorithm: algorithm, key: key, mode: .decrypt)
-        case .rc4, .rc4md5, .aes128cfb, .aes192cfb, .aes256cfb, .aes128ctr, .aes192ctr, .aes256ctr, .camellia128cfb, .camellia192cfb, .camellia256cfb, .bfcfb:
+        case .rc4,
+             .rc4md5,
+             .aes128cfb,
+             .aes192cfb,
+             .aes256cfb,
+             .aes128ctr,
+             .aes192ctr,
+             .aes256ctr,
+             .camellia128cfb,
+             .camellia192cfb,
+             .camellia256cfb,
+             .bfcfb:
             return try MbedTLSStream.init(algorithm: algorithm, key: key, mode: .decrypt)
-        case .aes128gcm, .aes192gcm, .aes256gcm:
+        case .aes128gcm,
+             .aes192gcm,
+             .aes256gcm:
             return try MbedTLSAEAD.init(algorithm: algorithm, key: key, mode: .decrypt)
-        case .chacha20poly1305, .chacha20ietfpoly1305, .xchacha20ietfpoly1305:
+        case .chacha20poly1305,
+             .chacha20ietfpoly1305,
+             .xchacha20ietfpoly1305:
             return try SodiumAEAD.init(algorithm: algorithm, key: key, mode: .decrypt)
         }
     }

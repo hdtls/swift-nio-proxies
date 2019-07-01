@@ -12,10 +12,11 @@
 //===----------------------------------------------------------------------===//
 
 import CNIOMbedCrypto
-import CNIOSodium
+import CNIOSecurityShims
 
-let AEAD_CHUNK_SIZE_MASK = 0x3FFF
-let AEAD_CHUNK_SIZE_LEN = 2
+let NIOSecurity_AEAD_CHUNK_SIZE_MASK = 0x3FFF
+let NIOSecurity_AEAD_CHUNK_SIZE = 2
+let NIOSecurity_AEAD_SUB_KEY = "ss-subkey"
 
 class AEAD: Cryptor, Updatable {
 
@@ -49,7 +50,7 @@ class AEAD: Cryptor, Updatable {
         var metadata: [UInt8] = []
 
         while inLength > 0 {
-            let copyLength = inLength < AEAD_CHUNK_SIZE_MASK ? inLength : AEAD_CHUNK_SIZE_MASK
+            let copyLength = inLength < NIOSecurity_AEAD_CHUNK_SIZE_MASK ? inLength : NIOSecurity_AEAD_CHUNK_SIZE_MASK
             metadata.append(contentsOf: try encrypt_chunck(Array(mutableBytes.prefix(copyLength))))
             mutableBytes.removeFirst(copyLength)
             inLength -= copyLength
@@ -67,20 +68,20 @@ class AEAD: Cryptor, Updatable {
         let inLength = bytes.count
 
         var metadata: [[UInt8]] = []
-        let pLength = UInt16(inLength & AEAD_CHUNK_SIZE_MASK).bigEndian
+        let pLength = UInt16(inLength & NIOSecurity_AEAD_CHUNK_SIZE_MASK).bigEndian
 
         metadata = [aead_encrypt(pLength.uint8)]
 
-        guard metadata[0].count == AEAD_CHUNK_SIZE_LEN + tagLength else {
+        guard metadata[0].count == NIOSecurity_AEAD_CHUNK_SIZE + tagLength else {
             clean()
-            throw MbedTLSError.invalidLength
+            throw SecurityError.responseValidationFailed(reason: .invalidLength)
         }
 
         metadata.append(aead_encrypt(bytes))
 
         guard metadata[1].count == inLength + tagLength else {
             clean()
-            throw MbedTLSError.invalidLength
+            throw SecurityError.responseValidationFailed(reason: .invalidLength)
         }
 
         return metadata[0] + metadata[1]
@@ -112,7 +113,7 @@ class AEAD: Cryptor, Updatable {
     func decrypt_chunck(_ bytes: [UInt8]) throws -> [UInt8] {
 
         if pLength <= 0 {
-            let pLength0 = AEAD_CHUNK_SIZE_LEN + tagLength
+            let pLength0 = NIOSecurity_AEAD_CHUNK_SIZE + tagLength
 
             guard byteBuffer.count > pLength0 else {
                 return []
@@ -123,15 +124,15 @@ class AEAD: Cryptor, Updatable {
                 Int($0.bindMemory(to: Int16.self).baseAddress!.pointee)
             }
 
-            if (pLength & AEAD_CHUNK_SIZE_MASK) != pLength || pLength <= 0 {
+            if (pLength & NIOSecurity_AEAD_CHUNK_SIZE_MASK) != pLength || pLength <= 0 {
                 clean()
                 pLength = -1
                 byteBuffer = []
-                throw MbedTLSError.invalidLength
+                throw SecurityError.responseValidationFailed(reason: .invalidLength)
             }
 
             //            pLength = pLength0
-            byteBuffer.removeFirst(AEAD_CHUNK_SIZE_LEN + tagLength)
+            byteBuffer.removeFirst(NIOSecurity_AEAD_CHUNK_SIZE + tagLength)
         }
 
         let copyLength = pLength + tagLength
@@ -146,7 +147,7 @@ class AEAD: Cryptor, Updatable {
             clean()
             pLength = -1
             byteBuffer = []
-            throw MbedTLSError.invalidLength
+            throw SecurityError.responseValidationFailed(reason: .invalidLength)
         }
 
         pLength = -1
@@ -170,7 +171,7 @@ class AEAD: Cryptor, Updatable {
         }
 
         if isHEAD {
-            deliverKey()
+            hkdf()
         }
 
         if mode == .encrypt {
@@ -184,10 +185,10 @@ class AEAD: Cryptor, Updatable {
         }
     }
 
-    private func deliverKey() {
+    private func hkdf() {
         var salt = self.iv
         var key = self.key
-        var info: [UInt8] = Array("ss-subkey".utf8)
+        var info: [UInt8] = Array(NIOSecurity_AEAD_SUB_KEY.utf8)
         subKey = allocate(key.count)
 
         mbedtls_hkdf(mbedtls_md_info_from_type(MBEDTLS_MD_SHA1),
@@ -214,21 +215,21 @@ final class MbedTLSAEAD: AEAD {
 
         try super.init(algorithm: algorithm, key: key, mode: mode)
 
-        let cipher = try mbedtls_cipher_init(algorithm)
+        let cipher = try NIOSecurity_cipher_info_from_ALGO(algorithm)
 
         guard mbedtls_cipher_setup(&context, cipher) == 0 else {
-            throw MbedTLSError.setupFailure
+            throw SecurityError.missingALGO(algorithm: algorithm)
         }
 
         let op = mode == .encrypt ? MBEDTLS_ENCRYPT : MBEDTLS_DECRYPT
         guard mbedtls_cipher_setkey(&context, &subKey, Int32(key.count * 8), op) == 0 else {
             mbedtls_cipher_free(&context)
-            throw MbedTLSError.setKeyFailure
+            throw SecurityError.securitySetupFailed(reason: .invalidKey)
         }
 
         guard mbedtls_cipher_reset(&context) == 0 else {
             mbedtls_cipher_free(&context)
-            throw MbedTLSError.resetFailure
+            throw SecurityError.securitySetupFailed(reason: .invalidData)
         }
     }
 
@@ -254,7 +255,8 @@ final class MbedTLSAEAD: AEAD {
                                             return []
         }
 
-        unique(&nonce, nonceLength)
+
+        CNIOSecurityShims_SECURITY_INCREMENT(&nonce, nonceLength)
 
         return Array(buf[0..<outLength] + tagBuf[0..<tagLength])
     }
@@ -285,7 +287,7 @@ final class MbedTLSAEAD: AEAD {
                                             return []
         }
 
-        unique(&nonce, nonceLength)
+        CNIOSecurityShims_SECURITY_INCREMENT(&nonce, nonceLength)
 
         return Array(buf[0..<outLength])
     }
@@ -297,27 +299,30 @@ final class MbedTLSAEAD: AEAD {
 
 final class SodiumAEAD: AEAD {
 
-    private let encryptor: (UnsafeMutablePointer<UInt8>, UnsafeMutablePointer<UInt64>?, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>?, UnsafePointer<UInt8>, UnsafePointer<UInt8>) -> Int32
-    private let decryptor: (UnsafeMutablePointer<UInt8>?, UnsafeMutablePointer<UInt64>?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>, UInt64, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>, UnsafePointer<UInt8>) -> Int32
+    private let encipher: (UnsafeMutablePointer<UInt8>, UnsafeMutablePointer<UInt64>?, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>?, UnsafePointer<UInt8>, UnsafePointer<UInt8>) -> Int8
+    private let decipher: (UnsafeMutablePointer<UInt8>?, UnsafeMutablePointer<UInt64>?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>, UInt64, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>, UnsafePointer<UInt8>) -> Int8
 
     override init(algorithm: Algorithm, key: [UInt8], mode: Mode) throws {
-        _ = sodium_init()
+
+        guard CNIOSecurityShims_SECURITY_init() >= 0 else {
+            throw SecurityError.securityNotAvailable
+        }
 
         switch algorithm {
         case .chacha20poly1305:
-            encryptor = crypto_aead_chacha20poly1305_encrypt
-            decryptor = crypto_aead_chacha20poly1305_decrypt
+            encipher = CNIOSecurityShims_AEAD_chacha20poly1305_enc
+            decipher = CNIOSecurityShims_AEAD_chacha20poly1305_dec
         case .chacha20ietfpoly1305:
-            encryptor = crypto_aead_chacha20poly1305_ietf_encrypt
-            decryptor = crypto_aead_chacha20poly1305_ietf_decrypt
+            encipher = CNIOSecurityShims_AEAD_chacha20poly1305_ietf_enc
+            decipher = CNIOSecurityShims_AEAD_chacha20poly1305_ietf_dec
         case .xchacha20ietfpoly1305:
-            encryptor = crypto_aead_xchacha20poly1305_ietf_encrypt
-            decryptor = crypto_aead_xchacha20poly1305_ietf_decrypt
+            encipher = CNIOSecurityShims_AEAD_xchacha20poly1305_ietf_enc
+            decipher = CNIOSecurityShims_AEAD_xchacha20poly1305_ietf_dec
         case .aes256gcm:
-            encryptor = crypto_aead_aes256gcm_encrypt
-            decryptor = crypto_aead_aes256gcm_decrypt
+            encipher = CNIOSecurityShims_AEAD_aes256gcm_enc
+            decipher = CNIOSecurityShims_AEAD_aes256gcm_dec
         default:
-            throw CryptoError.notFound
+            throw SecurityError.missingALGO(algorithm: algorithm)
         }
 
         try super.init(algorithm: algorithm, key: key, mode: mode)
@@ -331,7 +336,7 @@ final class SodiumAEAD: AEAD {
         var buf: [UInt8] = allocate(inLength + tagLength)
         var outLength: UInt64 = 0
 
-        guard encryptor(&buf, &outLength, &mutableBytes, UInt64(inLength), nil, 0, nil, &nonce, &subKey) == 0 else {
+        guard encipher(&buf, &outLength, &mutableBytes, UInt64(inLength), nil, 0, nil, &nonce, &subKey) == 0 else {
             return []
         }
 
@@ -339,7 +344,7 @@ final class SodiumAEAD: AEAD {
             return []
         }
 
-        unique(&nonce, nonceLength)
+        CNIOSecurityShims_SECURITY_INCREMENT(&nonce, nonceLength)
 
         return Array(buf[..<Int(outLength)])
     }
@@ -352,7 +357,7 @@ final class SodiumAEAD: AEAD {
         var buf: [UInt8] = allocate(inLength + tagLength)
         var outLength: UInt64 = 0
 
-        guard decryptor(&buf, &outLength, nil, &mutableBytes, UInt64(inLength), nil, outLength, &nonce, &subKey) == 0 else {
+        guard decipher(&buf, &outLength, nil, &mutableBytes, UInt64(inLength), nil, outLength, &nonce, &subKey) == 0 else {
             return []
         }
 
@@ -360,7 +365,7 @@ final class SodiumAEAD: AEAD {
             return []
         }
 
-        unique(&nonce, nonceLength)
+        CNIOSecurityShims_SECURITY_INCREMENT(&nonce, nonceLength)
 
         return Array(buf[..<Int(outLength)])
     }

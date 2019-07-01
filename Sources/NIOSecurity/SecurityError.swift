@@ -11,12 +11,20 @@
 //
 //===----------------------------------------------------------------------===//
 
-enum CryptoError: Error {
-    case notFound
+enum SecurityError: Error, Equatable {
 
-    enum SetupFailureReason {
+    enum SecuritySetupFailureReason {
+        case invalidIV
+        case invalidKey
         case invalidData
     }
 
-    case setupFailure(reason: SetupFailureReason)
+    enum ResponseValidationFailureReason {
+        case invalidLength
+    }
+
+    case securityNotAvailable
+    case missingALGO(algorithm: Algorithm)
+    case securitySetupFailed(reason: SecuritySetupFailureReason)
+    case responseValidationFailed(reason: ResponseValidationFailureReason)
 }

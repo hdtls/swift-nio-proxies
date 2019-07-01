@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-public enum Algorithm: String {
+public enum Algorithm: String, Equatable {
 
     // Legency
     // Stream ciphers provide only confidentiality. Data integrity and authenticity is not guaranteed. Users should
@@ -239,11 +239,5 @@ extension Algorithm {
         default:
             return -1
         }
-    }
-}
-
-extension Algorithm: CustomStringConvertible {
-    public var description: String {
-        return rawValue
     }
 }

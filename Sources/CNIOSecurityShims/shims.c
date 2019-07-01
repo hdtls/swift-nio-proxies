@@ -20,130 +20,58 @@
 #include "sodium/crypto_aead_chacha20poly1305.h"
 #include "sodium/crypto_aead_xchacha20poly1305.h"
 
-int CNIOSecurityShims_SECURITY_init(void) {
+int8_t CNIOSecurityShims_SECURITY_init(void) {
     return sodium_init();
 }
 
-int CNIOSecurityShims_STREAM_salsa20(unsigned char *c, const unsigned char *m,
-unsigned long long mlen,
-const unsigned char *n, uint64_t ic,
-const unsigned char *k) {
+void CNIOSecurityShims_SECURITY_INCREMENT(uint8_t *n, const size_t nlen) {
+    sodium_increment(n, nlen);
+}
+
+int8_t CNIOSecurityShims_STREAM_salsa20(uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *n, uint64_t ic, const uint8_t *k) {
     return crypto_stream_salsa20_xor_ic(c, m, mlen, n, ic, k);
 }
 
-int CNIOSecurityShims_STREAM_chacha20(unsigned char *c, const unsigned char *m,
-unsigned long long mlen,
-const unsigned char *n, uint64_t ic,
-const unsigned char *k) {
+int8_t CNIOSecurityShims_STREAM_chacha20(uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *n, uint64_t ic, const uint8_t *k) {
     return crypto_stream_chacha20_xor_ic(c, m, mlen, n, ic, k);
 }
 
-int CNIOSecurityShims_STREAM_chacha20_ietf(unsigned char *c, const unsigned char *m,
-unsigned long long mlen,
-const unsigned char *n, uint64_t ic,
-const unsigned char *k) {
+int8_t CNIOSecurityShims_STREAM_chacha20_ietf(uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *n, uint64_t ic, const uint8_t *k) {
     return crypto_stream_chacha20_ietf_xor_ic(c, m, mlen, n, ic, k);
 }
 
-int CNIOSecurityShims_STREAM_xchacha20(unsigned char *c, const unsigned char *m,
-unsigned long long mlen,
-const unsigned char *n, uint64_t ic,
-const unsigned char *k) {
+int8_t CNIOSecurityShims_STREAM_xchacha20(uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *n, uint64_t ic, const uint8_t *k) {
     return crypto_stream_xchacha20_xor_ic(c, m, mlen, n, ic, k);
 }
 
-int CNIOSecurityShims_AEAD_chacha20poly1305_enc(unsigned char *c,
-unsigned long long *clen_p,
-const unsigned char *m,
-unsigned long long mlen,
-const unsigned char *ad,
-unsigned long long adlen,
-const unsigned char *nsec,
-const unsigned char *npub,
-const unsigned char *k) {
+int8_t CNIOSecurityShims_AEAD_chacha20poly1305_enc(uint8_t *c, uint64_t *clen_p, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *nsec, const uint8_t *npub, const uint8_t *k) {
     return crypto_aead_chacha20poly1305_encrypt(c, clen_p, m, mlen, ad, adlen, nsec, npub, k);
 }
 
-int CNIOSecurityShims_AEAD_chacha20poly1305_dec(unsigned char *m,
-unsigned long long *mlen_p,
-unsigned char *nsec,
-const unsigned char *c,
-unsigned long long clen,
-const unsigned char *ad,
-unsigned long long adlen,
-const unsigned char *npub,
-const unsigned char *k) {
+int8_t CNIOSecurityShims_AEAD_chacha20poly1305_dec(uint8_t *m, uint64_t *mlen_p, uint8_t *nsec, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k) {
     return crypto_aead_chacha20poly1305_decrypt(m, mlen_p, nsec, c, clen, ad, adlen, npub, k);
 }
 
-int CNIOSecurityShims_AEAD_chacha20poly1305_ietf_enc(unsigned char *c,
-unsigned long long *clen_p,
-const unsigned char *m,
-unsigned long long mlen,
-const unsigned char *ad,
-unsigned long long adlen,
-const unsigned char *nsec,
-const unsigned char *npub,
-const unsigned char *k) {
+int8_t CNIOSecurityShims_AEAD_chacha20poly1305_ietf_enc(uint8_t *c, uint64_t *clen_p, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *nsec, const uint8_t *npub, const uint8_t *k) {
     return crypto_aead_chacha20poly1305_ietf_encrypt(c, clen_p, m, mlen, ad, adlen, nsec, npub, k);
 }
 
-int CNIOSecurityShims_AEAD_chacha20poly1305_ietf_dec(unsigned char *m,
-unsigned long long *mlen_p,
-unsigned char *nsec,
-const unsigned char *c,
-unsigned long long clen,
-const unsigned char *ad,
-unsigned long long adlen,
-const unsigned char *npub,
-const unsigned char *k) {
+int8_t CNIOSecurityShims_AEAD_chacha20poly1305_ietf_dec(uint8_t *m, uint64_t *mlen_p, uint8_t *nsec, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k) {
     return crypto_aead_chacha20poly1305_ietf_decrypt(m, mlen_p, nsec, c, clen, ad, adlen, npub, k);
 }
 
-int CNIOSecurityShims_AEAD_xchacha20poly1305_ietf_enc(unsigned char *c,
-unsigned long long *clen_p,
-const unsigned char *m,
-unsigned long long mlen,
-const unsigned char *ad,
-unsigned long long adlen,
-const unsigned char *nsec,
-const unsigned char *npub,
-const unsigned char *k) {
+int8_t CNIOSecurityShims_AEAD_xchacha20poly1305_ietf_enc(uint8_t *c, uint64_t *clen_p, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *nsec, const uint8_t *npub, const uint8_t *k) {
     return crypto_aead_xchacha20poly1305_ietf_encrypt(c, clen_p, m, mlen, ad, adlen, nsec, npub, k);
 }
 
-int CNIOSecurityShims_AEAD_xchacha20poly1305_ietf_dec(unsigned char *m,
-     unsigned long long *mlen_p,
-     unsigned char *nsec,
-     const unsigned char *c,
-     unsigned long long clen,
-     const unsigned char *ad,
-     unsigned long long adlen,
-     const unsigned char *npub,
-const unsigned char *k) {
+int8_t CNIOSecurityShims_AEAD_xchacha20poly1305_ietf_dec(uint8_t *m, uint64_t *mlen_p, uint8_t *nsec, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k) {
     return crypto_aead_xchacha20poly1305_ietf_decrypt(m, mlen_p, nsec, c, clen, ad, adlen, npub, k);
 }
 
-int CNIOSecurityShims_AEAD_aes256gcm_enc(unsigned char *c,
-unsigned long long *clen_p,
-const unsigned char *m,
-unsigned long long mlen,
-const unsigned char *ad,
-unsigned long long adlen,
-const unsigned char *nsec,
-const unsigned char *npub,
-const unsigned char *k) {
+int8_t CNIOSecurityShims_AEAD_aes256gcm_enc(uint8_t *c, uint64_t *clen_p, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *nsec, const uint8_t *npub, const uint8_t *k) {
     return crypto_aead_aes256gcm_encrypt(c, clen_p, mlen, mlen, ad, adlen, nsec, npub, k);
 }
 
-int CNIOSecurityShims_AEAD_aes256gcm_dec(unsigned char *m,
-unsigned long long *mlen_p,
-unsigned char *nsec,
-const unsigned char *c,
-unsigned long long clen,
-const unsigned char *ad,
-unsigned long long adlen,
-const unsigned char *npub,
-const unsigned char *k) {
+int8_t CNIOSecurityShims_AEAD_aes256gcm_dec(uint8_t *m, uint64_t *mlen_p, uint8_t *nsec, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k) {
     return crypto_aead_aes256gcm_decrypt(m, mlen_p, nsec, c, clen, ad, adlen, npub, k);
 }

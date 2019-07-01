@@ -36,7 +36,3 @@ extension Array where Element: FixedWidthInteger {
 func allocate<T: FixedWidthInteger>(_ cnt: Int) -> [T] {
     return [T](repeating: 0, count: cnt)
 }
-
-func unique(_ buf: inout [UInt8], _ size: Int) {
-    sodium_increment(&buf, size)
-}
