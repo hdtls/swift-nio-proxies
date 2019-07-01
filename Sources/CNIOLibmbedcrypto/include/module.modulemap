@@ -1,0 +1,4 @@
+module CNIOLibmbedcrypto {
+  header "CNIOLibmbedcrypto.h"
+  export *
+}

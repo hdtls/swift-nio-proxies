@@ -29,18 +29,25 @@ let package = Package(
             ]),
         .target(name: "NIOVPNProtoSOCKS5",
                 dependencies: ["NIO"]),
-        .target(name: "CNIOSodium",
-                cSettings: [
-                    .headerSearchPath("$(SRCROOT)/Sources/CNIOSodium/include/sodium")
-            ]),
-        .target(name: "CNIOMbedCrypto"),
         .target(name: "CNIOSecurityShims",
-                dependencies: ["CNIOSodium"]),
+                dependencies: ["CNIOLibsodium"]),
         .target(name: "NIOSecurity",
                 dependencies: [
-                    "CNIOSodium",
-                    "CNIOMbedCrypto",
+                    "CNIOLibmbedcrypto",
                     "CNIOSecurityShims"
+            ]),
+        .target(name: "CNIOLibsodium",
+                path: "Sources/CNIOLibsodium/src/libsodium",
+                cSettings: [
+                    .headerSearchPath("$(SRCROOT)/Sources/CNIOLibsodium/src/libsodium/include/CNIOLibsodium")
+            ]),
+        .target(name: "CNIOLibmbedcrypto",
+                exclude: [
+                    "programs"
+            ],
+                cSettings: [
+                    .headerSearchPath("$(SRCROOT)/Sources/CNIOLibmbedcrypto/include/mbedtls"),
+                    .headerSearchPath("$(SRCROOT)/Sources/CNIOLibmbedcrypto/include/psa")
             ]),
         .testTarget(name: "NetbotTests",
                     dependencies: ["Netbot"]),

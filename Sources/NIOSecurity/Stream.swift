@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import CNIOMbedCrypto
+import CNIOLibmbedcrypto
 import CNIOSecurityShims
 
 let NIOSecurity_AEAD_BLOCK_SIZE = 64;
@@ -26,7 +26,7 @@ final class SodiumStream: Cryptor, Updatable {
     private var isHEAD: Bool = true
     private var NIOSecurity_AEAD_CNT: Int = 0
 
-    private let cipher: (UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>?) -> Int8
+    private let cipher: (UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>?) -> Int32
 
     init(algorithm: Algorithm, key: [UInt8], mode: Mode) throws {
 

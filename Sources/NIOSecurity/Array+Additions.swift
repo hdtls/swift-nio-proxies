@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import CNIOSodium
+import Foundation
 
 extension UInt16 {
     var uint8: [UInt8] {

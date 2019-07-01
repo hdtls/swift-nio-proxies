@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import CNIOMbedCrypto
+import CNIOLibmbedcrypto
 import CNIOSecurityShims
 
 let NIOSecurity_AEAD_CHUNK_SIZE_MASK = 0x3FFF
@@ -299,8 +299,8 @@ final class MbedTLSAEAD: AEAD {
 
 final class SodiumAEAD: AEAD {
 
-    private let encipher: (UnsafeMutablePointer<UInt8>, UnsafeMutablePointer<UInt64>?, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>?, UnsafePointer<UInt8>, UnsafePointer<UInt8>) -> Int8
-    private let decipher: (UnsafeMutablePointer<UInt8>?, UnsafeMutablePointer<UInt64>?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>, UInt64, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>, UnsafePointer<UInt8>) -> Int8
+    private let encipher: (UnsafeMutablePointer<UInt8>, UnsafeMutablePointer<UInt64>?, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>?, UnsafePointer<UInt8>, UnsafePointer<UInt8>) -> Int32
+    private let decipher: (UnsafeMutablePointer<UInt8>?, UnsafeMutablePointer<UInt64>?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>, UInt64, UnsafePointer<UInt8>?, UInt64, UnsafePointer<UInt8>, UnsafePointer<UInt8>) -> Int32
 
     override init(algorithm: Algorithm, key: [UInt8], mode: Mode) throws {
 

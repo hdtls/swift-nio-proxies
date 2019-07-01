@@ -1,5 +1,0 @@
-module CNIOMbedCrypto [system] {
-  header "shim.h"
-  link "mbedtls"
-  export *
-}

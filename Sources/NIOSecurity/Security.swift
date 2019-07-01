@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import CNIOMbedCrypto
+import CNIOLibmbedcrypto
 
 public func EVP_BytesToKey(_ algorithm: Algorithm, pwd: String) -> [UInt8] {
     guard !pwd.isEmpty else {

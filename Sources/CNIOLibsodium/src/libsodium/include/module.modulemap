@@ -1,0 +1,4 @@
+module CNIOLibsodium {
+  header "CNIOLibsodium.h"
+  export *
+}
