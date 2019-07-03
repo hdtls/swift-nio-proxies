@@ -8,7 +8,8 @@ let package = Package(
     products: [
         .library(name: "Netbot", targets: ["Netbot"]),
         .library(name: "NIOVPNProtoHTTP", targets: ["NIOVPNProtoHTTP"]),
-        .library(name: "NIOVPNProtoSOCKS5", targets: ["NIOVPNProtoSOCKS5"])
+        .library(name: "NIOVPNProtoSOCKS5", targets: ["NIOVPNProtoSOCKS5"]),
+        .library(name: "NIOSecurity", targets: ["NIOSecurity"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0")
@@ -42,7 +43,11 @@ let package = Package(
         .target(name: "NIOVPNProtoSOCKS5",
                 dependencies: ["NIO"]),
         .target(name: "NIOVPNProtoShadowsocks",
-                dependencies: ["NIO", "NIOSecurity"]),
+                dependencies: [
+                    "NIO",
+                    "NIOSecurity",
+                    "NIOVPNProtoSOCKS5"
+        ]),
         .target(name: "Netbot",
                 dependencies: [
                     "NIO",
@@ -56,7 +61,9 @@ let package = Package(
         .testTarget(name: "NIOVPNProtoHTTPTests",
                     dependencies: ["NIOVPNProtoHTTP"]),
         .testTarget(name: "NIOSecurityTests",
-                    dependencies: ["NIOSecurity"])
+                    dependencies: ["NIOSecurity"]),
+        .testTarget(name: "NIOVPNProtoShadowsocksTests",
+                    dependencies: ["NIOVPNProtoShadowsocks"])
     ],
     swiftLanguageVersions: [.v5]
 )

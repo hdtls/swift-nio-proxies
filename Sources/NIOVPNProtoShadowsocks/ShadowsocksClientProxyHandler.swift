@@ -55,8 +55,9 @@ public struct ProxyConfiguration: Equatable {
 public final class ShadowsocksClientProxyHandler: ChannelDuplexHandler {
 
     public typealias InboundIn = ByteBuffer
-
+    public typealias InboundOut = ByteBuffer
     public typealias OutboundIn = ByteBuffer
+    public typealias OutboundOut = ByteBuffer
 
     /// Shadowsocks security encipher.
     private let encipher: Cryptor & Updatable
@@ -77,24 +78,27 @@ public final class ShadowsocksClientProxyHandler: ChannelDuplexHandler {
     }
 
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        var byteBuffer = unwrapInboundIn(data)
+        var unwrapped = unwrapInboundIn(data)
 
-        guard let buf = byteBuffer.readBytes(length: byteBuffer.readableBytes) else {
+        guard let buf = unwrapped.readBytes(length: unwrapped.readableBytes) else {
             context.fireChannelRead(data)
             return
         }
 
         do {
+            var byteBuffer = context.channel.allocator.buffer(capacity: buf.count)
             byteBuffer.writeBytes(try decipher.update(buf))
+
+            context.fireChannelRead(wrapInboundOut(byteBuffer))
         } catch {
             context.fireErrorCaught(error)
         }
     }
 
     public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
-        var byteBuffer = unwrapOutboundIn(data)
+        var unwrapped = unwrapOutboundIn(data)
 
-        guard var buf = byteBuffer.readBytes(length: byteBuffer.readableBytes) else {
+        guard var buf = unwrapped.readBytes(length: unwrapped.readableBytes) else {
             context.write(data, promise: promise)
             return
         }
@@ -114,7 +118,10 @@ public final class ShadowsocksClientProxyHandler: ChannelDuplexHandler {
                 isHEAD = false
             }
 
+            var byteBuffer = context.channel.allocator.buffer(capacity: buf.count)
+
             byteBuffer.writeBytes(try encipher.update(buf))
+            context.write(wrapOutboundOut(byteBuffer), promise: promise)
         } catch {
             promise?.fail(error)
         }
