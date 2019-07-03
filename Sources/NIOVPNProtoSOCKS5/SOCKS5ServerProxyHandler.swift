@@ -23,9 +23,10 @@ public final class SOCKS5ServerProxyHandler: SOCKS5ProxyHandler {
 
     public var configuration: ProxyConfiguration
 
-    public init(channel: Channel, configuration: ProxyConfiguration) {
+    public init(configuration: ProxyConfiguration,
+                completion: @escaping (SLPNResult) -> EventLoopFuture<Void>) {
         self.configuration = configuration
-        super.init(channel: channel)
+        super.init(completion: completion)
     }
 
     override public func recvHMsg(context: ChannelHandlerContext, byteBuffer: inout ByteBuffer) throws {
@@ -158,7 +159,9 @@ public final class SOCKS5ServerProxyHandler: SOCKS5ProxyHandler {
             throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
         }
 
-        // Advance 3 byte to read ATYP
+        byteBuffer.moveReaderIndex(forwardBy: 1)
+        let cmd = CMD.init(rawValue: byteBuffer.readInteger()!)
+
         byteBuffer.moveReaderIndex(forwardBy: 3)
 
         let family = ATYP.init(rawValue: byteBuffer.readInteger()!)
@@ -204,14 +207,11 @@ public final class SOCKS5ServerProxyHandler: SOCKS5ProxyHandler {
         // TODO: - SOCKS5 server should typically evaluate the request base on
         // source and destination address.
 
-
-        let RSV: UInt8 = 0x00
-
         REPL = context.channel.allocator.buffer(capacity: byteBuffer.readableBytes)
 
         REPL?.writeInteger(Version.v5.rawValue)
         REPL?.writeInteger(Reply.succeeded.rawValue)
-        REPL?.writeInteger(RSV)
+        REPL?.writeInteger(SOCKS5_HANDSHAKE_REL_RSV_CODE)
         REPL?.writeInteger(family!.rawValue)
         if family! == .domainLength {
             REPL?.writeInteger(UInt8(ipAddr.count))
@@ -345,8 +345,8 @@ extension SOCKS5ServerProxyHandler: RFC1919 {
 
         var byteBuffer = context.channel.allocator.buffer(capacity: 2)
 
-        byteBuffer.writeInteger(UInt8(0x01))
-        byteBuffer.writeInteger(UInt8(isValid ? 0x00 : 0x01))
+        byteBuffer.writeInteger(SOCKS5_BASIC_AUTH_VERSION)
+        byteBuffer.writeInteger(isValid ? SOCKS5_BASIC_AUTH_SUCCESS_CODE : SOCKS5_BASIC_AUTH_FAILURE_CODE)
 
         context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
     }

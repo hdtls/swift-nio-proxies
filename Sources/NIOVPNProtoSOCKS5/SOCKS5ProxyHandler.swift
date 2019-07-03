@@ -13,58 +13,22 @@
 
 import NIO
 
-/// A basic username and password.
-public struct BasicAuthorization: Codable, Equatable {
-    /// The username, sometimes an email address
-    public let username: String
-
-    /// The plaintext password
-    public let password: String
-
-    /// Create a new `BasicAuthorization`.
-    public init(username: String, password: String) {
-        self.username = username
-        self.password = password
-    }
-
-    /// Returns a base64 encoded basic authentication credential as an authorization header tuple.
-    ///
-    /// - parameter user:     The user.
-    /// - parameter password: The password.
-    ///
-    /// - returns: A tuple with Authorization header and credential value if encoding succeeds, `nil` otherwise.
-    public var authorizationHeader: (key: String, value: String)? {
-        guard let data = "\(username):\(password)".data(using: .utf8) else { return nil }
-
-        let credential = data.base64EncodedString(options: [])
-
-        return (key: "Authorization", value: "Basic \(credential)")
-    }
-}
-
-/// SOCKS Proxy configuation
-public struct ProxyConfiguration: Codable, Equatable {
-    /// Basic authentication info.
-    public var basicAuthorization: BasicAuthorization?
-
-    /// TLS SNI value
-    public var customTLSSNI: String?
-
-    /// A bool value to determise whether proxy should skip server
-    /// certificate verification.
-    public var skipServerCertificateVerification: Bool = false
-
-    public init(basicAuthorization: BasicAuthorization? = nil,
-                customTLSSNI: String? = nil,
-                skipServerCertificateVerification: Bool = false) {
-        self.basicAuthorization = basicAuthorization
-        self.customTLSSNI = customTLSSNI
-        self.skipServerCertificateVerification = skipServerCertificateVerification
-    }
+/// The result of an SLPN negotiation.
+///
+/// In a system expecting an SLPN negotiation to occur, a wide range of
+/// possible things can happen. In the best case scenario it is possible for
+/// the server and client to agree on a SOCKS5 connection to speak, in which case this
+/// will be `success`. However, if for any reason it was not possible to negotiate SOCKS5
+/// handshake, we should `failure` to a default choice of some kind.
+///
+/// Exactly what to do when failed is the responsibility of a specific
+/// implementation.
+public enum SLPNResult {
+    case success
+    case failure(Error)
 }
 
 private let SOCKS5_MAX_RECORD_SIZE = 16 * 1024
-
 /// The base class for all SOCKS5 proxy handlers. This class cannot actually be instantiated by
 /// users directly: instead, users must select which mode they would like their handler to
 /// operate in, client or server.
@@ -73,25 +37,36 @@ private let SOCKS5_MAX_RECORD_SIZE = 16 * 1024
 /// of a SOCKS5 proxy connection.
 /// For this reason almost the entirety of the implementation for the channel and server
 /// handlers in SOCKS5 proxy is shared, in the form of this parent class.
-public class SOCKS5ProxyHandler: ChannelInboundHandler, RFC1918 {
+public class SOCKS5ProxyHandler: ChannelDuplexHandler, RemovableChannelHandler, RFC1918 {
     public typealias InboundIn = ByteBuffer
     public typealias OutboundOut = ByteBuffer
+    public typealias OutboundIn = ByteBuffer
 
     var method: Method = .noAuth
 
-    enum State {
+    private enum State {
         case hello
         case authentication
         case reply
         case completion
     }
 
-    var state: State = .hello
-
+    private var state: State
     private var recvBuffer: ByteBuffer
 
-    init(channel: Channel) {
-        self.recvBuffer = channel.allocator.buffer(capacity: SOCKS5_MAX_RECORD_SIZE)
+    enum OutbundEvent {
+        case write(NIOAny, EventLoopPromise<Void>?)
+        case flush
+    }
+
+    private var eventBuffer: [OutbundEvent]
+    public let completion: (SLPNResult) -> EventLoopFuture<Void>
+
+    init(completion: @escaping (SLPNResult) -> EventLoopFuture<Void>) {
+        self.recvBuffer = ByteBufferAllocator.init().buffer(capacity: SOCKS5_MAX_RECORD_SIZE)
+        self.state = .hello
+        self.completion = completion
+        self.eventBuffer = []
     }
 
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -109,7 +84,12 @@ public class SOCKS5ProxyHandler: ChannelInboundHandler, RFC1918 {
                 state = .reply
             case .reply:
                 try recvRELMsg(context: context, byteBuffer: &recvBuffer)
-                state = .completion
+                completion(.success).whenComplete { (_) in
+                    self.unbuffer(context: context)
+                    self.state = .completion
+
+                    context.pipeline.removeHandler(self, promise: nil)
+                }
             case .completion:
                 context.fireChannelRead(data)
                 break
@@ -132,6 +112,37 @@ public class SOCKS5ProxyHandler: ChannelInboundHandler, RFC1918 {
         }
     }
 
+    public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
+        guard state != .completion else {
+            context.write(data, promise: promise)
+            return
+        }
+
+        // Buffer write event that happend before handshake has beed finished.
+        eventBuffer.append(.write(data, promise))
+    }
+
+    public func flush(context: ChannelHandlerContext) {
+        guard state != .completion else {
+            context.flush()
+            return
+        }
+
+        eventBuffer.append(.flush)
+    }
+
+    func unbuffer(context: ChannelHandlerContext) {
+        while !eventBuffer.isEmpty {
+            switch eventBuffer.removeLast() {
+            case .write(let data, let promise):
+                context.write(data, promise: promise)
+            case .flush:
+                context.flush()
+            }
+        }
+    }
+
+    // MARK: SOCKS5 handshake RFC1918
     public func recvHMsg(context: ChannelHandlerContext, byteBuffer: inout ByteBuffer) throws {
         fatalError("this must be overridden by sub class")
     }

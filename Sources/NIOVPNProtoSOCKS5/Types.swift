@@ -101,3 +101,8 @@ enum Reply: UInt8 {
     /// - unassigned: X'09' to X'FF' unassigned
     case unassigned = 0x09
 }
+
+let SOCKS5_HANDSHAKE_REL_RSV_CODE: UInt8 = 0x00
+let SOCKS5_BASIC_AUTH_VERSION: UInt8 = 0x01
+let SOCKS5_BASIC_AUTH_SUCCESS_CODE: UInt8 = 0x00
+let SOCKS5_BASIC_AUTH_FAILURE_CODE: UInt8 = 0x01

@@ -22,12 +22,15 @@ public final class SOCKS5ClientProxyHandler: SOCKS5ProxyHandler {
     public var ipAddr: [UInt8]
     public var port: [UInt8]
 
-    public init(channel: Channel, ipAddr: [UInt8], port: [UInt8], configuration: ProxyConfiguration) {
+    public init(ipAddr: [UInt8],
+                port: [UInt8],
+                configuration: ProxyConfiguration,
+                completion: @escaping (SLPNResult) -> EventLoopFuture<Void>) {
         self.configuration = configuration
         self.ipAddr = ipAddr
         self.port = port
 
-        super.init(channel: channel)
+        super.init(completion: completion)
     }
 
     public func handlerAdded(context: ChannelHandlerContext) {
@@ -62,7 +65,7 @@ public final class SOCKS5ClientProxyHandler: SOCKS5ProxyHandler {
         var byteBuffer = context.channel.allocator.buffer(capacity: 3)
 
         byteBuffer.writeInteger(Version.v5.rawValue)
-        byteBuffer.writeInteger(UInt8(0x01))
+        byteBuffer.writeInteger(UInt8(1))
         if configuration.basicAuthorization != nil {
             byteBuffer.writeInteger(Method.basicAuth.rawValue)
         } else {
@@ -179,7 +182,7 @@ public final class SOCKS5ClientProxyHandler: SOCKS5ProxyHandler {
 
         byteBuffer.writeInteger(Version.v5.rawValue)
         byteBuffer.writeInteger(CMD.connect.rawValue)
-        byteBuffer.writeInteger(UInt8(0x00))
+        byteBuffer.writeInteger(SOCKS5_HANDSHAKE_REL_RSV_CODE)
 
         // FIXME: - Update REL ATYP
         byteBuffer.writeInteger(ATYP.ipv4.rawValue)
@@ -297,7 +300,7 @@ extension SOCKS5ClientProxyHandler: RFC1919 {
 
         var byteBuffer = context.channel.allocator.buffer(capacity: 2 + uLength + 1 + pLength)
 
-        byteBuffer.writeInteger(UInt8(0x01))
+        byteBuffer.writeInteger(SOCKS5_BASIC_AUTH_VERSION)
         byteBuffer.writeInteger(UInt8(uLength))
         byteBuffer.writeString(auth.username)
         byteBuffer.writeInteger(UInt8(pLength))
@@ -325,9 +328,7 @@ extension SOCKS5ClientProxyHandler: RFC1919 {
 
         byteBuffer.moveReaderIndex(forwardBy: 1)
 
-        let REP: UInt8 = byteBuffer.readInteger()!
-
-        guard REP == 0x00 else {
+        guard byteBuffer.readInteger()! == SOCKS5_BASIC_AUTH_SUCCESS_CODE else {
             throw SOCKS5ProxyError.authenticationFailed(reason: .incorrectUsernameOrPassword)
         }
     }
