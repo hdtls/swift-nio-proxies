@@ -14,7 +14,7 @@
 import CNIOLibmbedcrypto
 import CNIOSecurityShims
 
-let NIOSecurity_AEAD_BLOCK_SIZE = 64;
+let NIOSecurity_STREAM_BLOCK_SIZE = 64;
 
 final class SodiumStream: Cryptor, Updatable {
 
@@ -74,7 +74,7 @@ final class SodiumStream: Cryptor, Updatable {
         let inLength = mutableBytes.count
 
         // Prepend padding to make the encryption to align to the blocks
-        let padding = NIOSecurity_AEAD_CNT % NIOSecurity_AEAD_BLOCK_SIZE
+        let padding = NIOSecurity_AEAD_CNT % NIOSecurity_STREAM_BLOCK_SIZE
 
         var buf: [UInt8] = allocate(padding + inLength)
 
@@ -90,7 +90,7 @@ final class SodiumStream: Cryptor, Updatable {
                    &mutableBytes,
                    UInt64(inLength + padding),
                    &iv,
-                   UInt64(NIOSecurity_AEAD_CNT / NIOSecurity_AEAD_BLOCK_SIZE),
+                   UInt64(NIOSecurity_AEAD_CNT / NIOSecurity_STREAM_BLOCK_SIZE),
                    &key)
 
         NIOSecurity_AEAD_CNT += inLength
@@ -178,6 +178,7 @@ final class MbedTLSStream: Cryptor, Updatable {
             throw SecurityError.securityNotAvailable
         }
 
+        // Generation trueKey for RC4-MD5.
         let size = algorithm.ivLength + algorithm.keyLength
         var trueKey: [UInt8] = allocate(size)
         var ivLength: Int

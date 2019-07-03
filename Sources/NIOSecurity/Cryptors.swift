@@ -11,6 +11,18 @@
 //
 //===----------------------------------------------------------------------===//
 
+/// Cryptor (Encryptor or Decryptor)
+public protocol Cryptor {
+    /// Seek to position in file, if block mode allows random access.
+    ///
+    /// - parameter to: new value of counter
+    //    mutating func seek(to: Int) throws
+
+    var iv: [UInt8] { get }
+    var key: [UInt8] { get }
+    var algorithm: Algorithm { get }
+}
+
 /// Worker cryptor/decryptor of `Updatable` types
 public protocol Cryptors: class {
 

@@ -18,6 +18,11 @@ let NIOSecurity_AEAD_CHUNK_SIZE_MASK = 0x3FFF
 let NIOSecurity_AEAD_CHUNK_SIZE = 2
 let NIOSecurity_AEAD_SUB_KEY = "ss-subkey"
 
+enum Mode {
+    case encrypt
+    case decrypt
+}
+
 class AEAD: Cryptor, Updatable {
 
     let mode: Mode
@@ -44,14 +49,15 @@ class AEAD: Cryptor, Updatable {
     }
 
     func encrypt(_ bytes: [UInt8]) throws -> [UInt8] {
-
         var mutableBytes = bytes
         var inLength = mutableBytes.count
         var metadata: [UInt8] = []
 
+        // AEAD cipher has a NIOSecurity_AEAD_CHUNK_SIZE_MASK, we need split data to suit this mask.
+        // so CHUNK encryption may be run multiple times.
         while inLength > 0 {
             let copyLength = inLength < NIOSecurity_AEAD_CHUNK_SIZE_MASK ? inLength : NIOSecurity_AEAD_CHUNK_SIZE_MASK
-            metadata.append(contentsOf: try encrypt_chunck(Array(mutableBytes.prefix(copyLength))))
+            metadata.append(contentsOf: try encryptChunk(Array(mutableBytes.prefix(copyLength))))
             mutableBytes.removeFirst(copyLength)
             inLength -= copyLength
         }
@@ -59,25 +65,30 @@ class AEAD: Cryptor, Updatable {
         return metadata
     }
 
-    func aead_encrypt(_ bytes: [UInt8]) -> [UInt8] {
+    func aeadEncrypt(_ bytes: [UInt8]) -> [UInt8] {
         fatalError("this must be overridden by sub class")
     }
 
-    func encrypt_chunck(_ bytes: [UInt8]) throws -> [UInt8] {
+    func encryptChunk(_ bytes: [UInt8]) throws -> [UInt8] {
+        // An AEAD encrypted TCP stream starts with a randomly generated salt to derive
+        // the per-session subkey, followed by any number of encrypted chunks.
+        // Each chunk has the following structure:
+        // [encrypted payload length][length tag][encrypted payload][payload tag]
+        // Payload length is a 2-byte big-endian unsigned integer capped at 0x3FFF. The higher two bits are reserved and must be set to zero. Payload is therefore limited to 16*1024 - 1 bytes.
 
         let inLength = bytes.count
 
         var metadata: [[UInt8]] = []
         let pLength = UInt16(inLength & NIOSecurity_AEAD_CHUNK_SIZE_MASK).bigEndian
 
-        metadata = [aead_encrypt(pLength.uint8)]
+        metadata = [aeadEncrypt(pLength.uint8)]
 
         guard metadata[0].count == NIOSecurity_AEAD_CHUNK_SIZE + tagLength else {
             clean()
             throw SecurityError.responseValidationFailed(reason: .invalidLength)
         }
 
-        metadata.append(aead_encrypt(bytes))
+        metadata.append(aeadEncrypt(bytes))
 
         guard metadata[1].count == inLength + tagLength else {
             clean()
@@ -87,7 +98,7 @@ class AEAD: Cryptor, Updatable {
         return metadata[0] + metadata[1]
     }
 
-    func aead_decrypt(_ bytes: [UInt8]) -> [UInt8] {
+    func aeadDecrypt(_ bytes: [UInt8]) -> [UInt8] {
         fatalError("this must be overridden by sub class")
     }
 
@@ -98,7 +109,7 @@ class AEAD: Cryptor, Updatable {
         byteBuffer.append(contentsOf: bytes)
 
         while !byteBuffer.isEmpty {
-            let payload = try decrypt_chunck(byteBuffer)
+            let payload = try decryptChunk(byteBuffer)
 
             plaintext.append(contentsOf: payload)
 
@@ -110,7 +121,7 @@ class AEAD: Cryptor, Updatable {
         return plaintext
     }
 
-    func decrypt_chunck(_ bytes: [UInt8]) throws -> [UInt8] {
+    func decryptChunk(_ bytes: [UInt8]) throws -> [UInt8] {
 
         if pLength <= 0 {
             let pLength0 = NIOSecurity_AEAD_CHUNK_SIZE + tagLength
@@ -119,7 +130,7 @@ class AEAD: Cryptor, Updatable {
                 return []
             }
 
-            let p = aead_decrypt(Array(byteBuffer.prefix(pLength0)))
+            let p = aeadDecrypt(Array(byteBuffer.prefix(pLength0)))
             pLength = p.withUnsafeBytes {
                 Int($0.bindMemory(to: Int16.self).baseAddress!.pointee)
             }
@@ -141,7 +152,7 @@ class AEAD: Cryptor, Updatable {
             return []
         }
 
-        let plaintext = aead_decrypt(Array(byteBuffer.prefix(copyLength)))
+        let plaintext = aeadDecrypt(Array(byteBuffer.prefix(copyLength)))
 
         if plaintext.count != pLength {
             clean()
@@ -163,23 +174,19 @@ class AEAD: Cryptor, Updatable {
 
         var mutableBytes = bytes
 
-        if isHEAD, mode == .decrypt {
-            if mutableBytes.count >= algorithm.ivLength {
+        if isHEAD {
+            if mode == .decrypt && mutableBytes.count >= algorithm.ivLength {
                 iv = Array(mutableBytes[..<algorithm.ivLength])
                 mutableBytes = mutableBytes[algorithm.ivLength...]
             }
-        }
 
-        if isHEAD {
             hkdf()
         }
 
         if mode == .encrypt {
             let payload = try encrypt(Array(mutableBytes))
-            if isHEAD {
-                return iv + payload
-            }
-            return payload
+
+            return isHEAD ? iv + payload : payload
         } else {
             return try decrypt(Array(mutableBytes))
         }
@@ -233,7 +240,7 @@ final class MbedTLSAEAD: AEAD {
         }
     }
 
-    override func aead_encrypt(_ bytes: [UInt8]) -> [UInt8] {
+    override func aeadEncrypt(_ bytes: [UInt8]) -> [UInt8] {
         var mutableBytes = bytes
         let inLength = mutableBytes.count
 
@@ -265,7 +272,7 @@ final class MbedTLSAEAD: AEAD {
         mbedtls_cipher_free(&context)
     }
 
-    override func aead_decrypt(_ bytes: [UInt8]) -> [UInt8] {
+    override func aeadDecrypt(_ bytes: [UInt8]) -> [UInt8] {
         var mutableBytes = bytes
         var outLength = 0
         let pLength = bytes.count - tagLength
@@ -328,7 +335,7 @@ final class SodiumAEAD: AEAD {
         try super.init(algorithm: algorithm, key: key, mode: mode)
     }
 
-    override func aead_encrypt(_ bytes: [UInt8]) -> [UInt8] {
+    override func aeadEncrypt(_ bytes: [UInt8]) -> [UInt8] {
 
         var mutableBytes = bytes
         let inLength = bytes.count
@@ -349,7 +356,7 @@ final class SodiumAEAD: AEAD {
         return Array(buf[..<Int(outLength)])
     }
 
-    override func aead_decrypt(_ bytes: [UInt8]) -> [UInt8] {
+    override func aeadDecrypt(_ bytes: [UInt8]) -> [UInt8] {
 
         var mutableBytes = bytes
         let inLength = bytes.count

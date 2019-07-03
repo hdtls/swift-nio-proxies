@@ -14,28 +14,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0")
     ],
     targets: [
-        .target(name: "Netbot",
-                dependencies: [
-                    "NIO",
-                    "NIOHTTP1",
-                    "NIOVPNProtoHTTP",
-                    "NIOVPNProtoSOCKS5",
-                    "NIOSecurity"
-            ]),
-        .target(name: "NIOVPNProtoHTTP",
-                dependencies: [
-                    "NIO",
-                    "NIOHTTP1"
-            ]),
-        .target(name: "NIOVPNProtoSOCKS5",
-                dependencies: ["NIO"]),
-        .target(name: "CNIOSecurityShims",
-                dependencies: ["CNIOLibsodium"]),
-        .target(name: "NIOSecurity",
-                dependencies: [
-                    "CNIOLibmbedcrypto",
-                    "CNIOSecurityShims"
-            ]),
         .target(name: "CNIOLibsodium",
                 path: "Sources/CNIOLibsodium/src/libsodium",
                 cSettings: [
@@ -49,6 +27,30 @@ let package = Package(
                     .headerSearchPath("$(SRCROOT)/Sources/CNIOLibmbedcrypto/include/mbedtls"),
                     .headerSearchPath("$(SRCROOT)/Sources/CNIOLibmbedcrypto/include/psa")
             ]),
+        .target(name: "CNIOSecurityShims",
+                dependencies: ["CNIOLibsodium"]),
+        .target(name: "NIOSecurity",
+                dependencies: [
+                    "CNIOLibmbedcrypto",
+                    "CNIOSecurityShims"
+            ]),
+        .target(name: "NIOVPNProtoHTTP",
+                dependencies: [
+                    "NIO",
+                    "NIOHTTP1"
+        ]),
+        .target(name: "NIOVPNProtoSOCKS5",
+                dependencies: ["NIO"]),
+        .target(name: "NIOVPNProtoShadowsocks",
+                dependencies: ["NIO", "NIOSecurity"]),
+        .target(name: "Netbot",
+                dependencies: [
+                    "NIO",
+                    "NIOHTTP1",
+                    "NIOVPNProtoHTTP",
+                    "NIOVPNProtoSOCKS5",
+                    "NIOVPNProtoShadowsocks"
+        ]),
         .testTarget(name: "NetbotTests",
                     dependencies: ["Netbot"]),
         .testTarget(name: "NIOVPNProtoHTTPTests",
