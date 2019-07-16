@@ -42,57 +42,84 @@ public class SOCKS5ProxyHandler: ChannelDuplexHandler, RemovableChannelHandler, 
     public typealias OutboundOut = ByteBuffer
     public typealias OutboundIn = ByteBuffer
 
+    public let completion: (SLPNResult) -> EventLoopFuture<Void>
+
     var method: Method = .noAuth
 
-    private enum State {
-        case hello
-        case authentication
-        case reply
+    private enum ConnectionState {
+        case handshaking
         case completion
     }
 
-    private var state: State
-    private var recvBuffer: ByteBuffer
-
-    enum OutbundEvent {
-        case write(NIOAny, EventLoopPromise<Void>?)
-        case flush
+    private enum HandshakeState {
+        case hello
+        case authentication
+        case reply
     }
 
-    private var eventBuffer: [OutbundEvent]
-    public let completion: (SLPNResult) -> EventLoopFuture<Void>
+    private var state: ConnectionState
+    private var handshakeState: HandshakeState
+    private var recvBuffer: ByteBuffer
+    private var writeBuffer: MarkedCircularBuffer<BufferedWrite>
 
     init(completion: @escaping (SLPNResult) -> EventLoopFuture<Void>) {
         self.recvBuffer = ByteBufferAllocator.init().buffer(capacity: SOCKS5_MAX_RECORD_SIZE)
-        self.state = .hello
+        self.state = .handshaking
+        self.handshakeState = .hello
         self.completion = completion
-        self.eventBuffer = []
+        self.writeBuffer = .init(initialCapacity: 20)
     }
 
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        switch state {
+        case .handshaking:
+            doHandshakeStep(context: context, data: data)
+        case .completion:
+            context.fireChannelRead(data)
+        }
+    }
+
+    public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
+        guard state != .completion else {
+            context.write(data, promise: promise)
+            return
+        }
+
+        // Buffer write event that happend before handshake has beed finished.
+        bufferWrite(data: data, promise: promise)
+    }
+
+    public func flush(context: ChannelHandlerContext) {
+        guard state != .completion else {
+            context.flush()
+            return
+        }
+
+        bufferFlush()
+    }
+
+    private func doHandshakeStep(context: ChannelHandlerContext, data: NIOAny) {
 
         var byteBuffer = unwrapInboundIn(data)
         recvBuffer.writeBuffer(&byteBuffer)
 
         do {
-            switch state {
+            switch handshakeState {
             case .hello:
                 try recvHMsg(context: context, byteBuffer: &recvBuffer)
-                state = method == .noAuth ? .reply : .authentication
+                handshakeState = method == .noAuth ? .reply : .authentication
             case .authentication:
                 try recvAMsg(context: context, byteBuffer: &recvBuffer)
-                state = .reply
+                handshakeState = .reply
             case .reply:
                 try recvRELMsg(context: context, byteBuffer: &recvBuffer)
-                completion(.success).whenComplete { (_) in
-                    self.unbuffer(context: context)
-                    self.state = .completion
 
+                // Notify that handshake finished.
+                completion(.success).whenComplete { (_) in
+                    self.unbufferWrites(context: context)
+                    self.state = .completion
                     context.pipeline.removeHandler(self, promise: nil)
                 }
-            case .completion:
-                context.fireChannelRead(data)
-                break
             }
 
             // Discard readed byte to make readIndex begin with zero.
@@ -112,37 +139,7 @@ public class SOCKS5ProxyHandler: ChannelDuplexHandler, RemovableChannelHandler, 
         }
     }
 
-    public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
-        guard state != .completion else {
-            context.write(data, promise: promise)
-            return
-        }
-
-        // Buffer write event that happend before handshake has beed finished.
-        eventBuffer.append(.write(data, promise))
-    }
-
-    public func flush(context: ChannelHandlerContext) {
-        guard state != .completion else {
-            context.flush()
-            return
-        }
-
-        eventBuffer.append(.flush)
-    }
-
-    func unbuffer(context: ChannelHandlerContext) {
-        while !eventBuffer.isEmpty {
-            switch eventBuffer.removeLast() {
-            case .write(let data, let promise):
-                context.write(data, promise: promise)
-            case .flush:
-                context.flush()
-            }
-        }
-    }
-
-    // MARK: SOCKS5 handshake RFC1918
+    // MARK: - Code that handles RFC1918 SOCKS5 handshake
     public func recvHMsg(context: ChannelHandlerContext, byteBuffer: inout ByteBuffer) throws {
         fatalError("this must be overridden by sub class")
     }
@@ -165,5 +162,34 @@ public class SOCKS5ProxyHandler: ChannelDuplexHandler, RemovableChannelHandler, 
 
     public func writeRELMsg(context: ChannelHandlerContext) {
         fatalError("this must be overridden by sub class")
+    }
+}
+
+// MARK: - Code that handles buffering/unbuffering writes.
+extension SOCKS5ProxyHandler {
+    private typealias BufferedWrite = (data: NIOAny, promise: EventLoopPromise<Void>?)
+
+    private func bufferWrite(data: NIOAny, promise: EventLoopPromise<Void>?) {
+        writeBuffer.append((data, promise))
+    }
+
+    private func bufferFlush() {
+        writeBuffer.mark()
+    }
+
+    private func unbufferWrites(context: ChannelHandlerContext) {
+
+        if writeBuffer.hasMark {
+            while !writeBuffer.isEmpty && writeBuffer.hasMark {
+                let write = writeBuffer.removeFirst()
+                context.write(write.data, promise: write.promise)
+            }
+            context.flush()
+        }
+
+        while !writeBuffer.isEmpty {
+            let write = writeBuffer.removeFirst()
+            context.write(write.data, promise: write.promise)
+        }
     }
 }

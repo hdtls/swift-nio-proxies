@@ -11,6 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+import enum NIO.SocketAddress
+
 /// A basic username and password.
 public struct BasicAuthorization: Codable, Equatable {
     /// The username, sometimes an email address
@@ -41,7 +43,7 @@ public struct BasicAuthorization: Codable, Equatable {
 }
 
 /// SOCKS Proxy configuation
-public struct ProxyConfiguration: Codable, Equatable {
+public struct ProxyConfiguration {
     /// Basic authentication info.
     public var basicAuthorization: BasicAuthorization?
 
@@ -52,11 +54,15 @@ public struct ProxyConfiguration: Codable, Equatable {
     /// certificate verification.
     public var skipServerCertificateVerification: Bool = false
 
+    public var taskAddress: SocketAddress?
+
     public init(basicAuthorization: BasicAuthorization? = nil,
                 customTLSSNI: String? = nil,
-                skipServerCertificateVerification: Bool = false) {
+                skipServerCertificateVerification: Bool = false,
+                taskAddress: SocketAddress? = nil) {
         self.basicAuthorization = basicAuthorization
         self.customTLSSNI = customTLSSNI
         self.skipServerCertificateVerification = skipServerCertificateVerification
+        self.taskAddress = taskAddress
     }
 }

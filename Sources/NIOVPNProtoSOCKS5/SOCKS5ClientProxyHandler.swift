@@ -19,16 +19,9 @@ import NIO
 public final class SOCKS5ClientProxyHandler: SOCKS5ProxyHandler {
 
     public var configuration: ProxyConfiguration
-    public var ipAddr: [UInt8]
-    public var port: [UInt8]
 
-    public init(ipAddr: [UInt8],
-                port: [UInt8],
-                configuration: ProxyConfiguration,
-                completion: @escaping (SLPNResult) -> EventLoopFuture<Void>) {
+    public init(configuration: ProxyConfiguration, completion: @escaping (SLPNResult) -> EventLoopFuture<Void>) {
         self.configuration = configuration
-        self.ipAddr = ipAddr
-        self.port = port
 
         super.init(completion: completion)
     }
@@ -177,17 +170,34 @@ public final class SOCKS5ClientProxyHandler: SOCKS5ProxyHandler {
         // The SOCKS server will typically evaluate the request based on source
         // and destination addresses, and return one or more reply messages, as
         // appropriate for the request type.
-
-        var byteBuffer = context.channel.allocator.buffer(capacity: 6 + ipAddr.count)
+        var byteBuffer = context.channel.allocator.buffer(capacity: 6)
 
         byteBuffer.writeInteger(Version.v5.rawValue)
         byteBuffer.writeInteger(CMD.connect.rawValue)
         byteBuffer.writeInteger(SOCKS5_HANDSHAKE_REL_RSV_CODE)
 
-        // FIXME: - Update REL ATYP
-        byteBuffer.writeInteger(ATYP.ipv4.rawValue)
-        byteBuffer.writeBytes(ipAddr)
-        byteBuffer.writeBytes(port)
+        guard let taskAddress = configuration.taskAddress else {
+            assertionFailure("This should never happen.")
+            return
+        }
+        switch taskAddress {
+        case .v4(let addr):
+            byteBuffer.writeInteger(ATYP.ipv4.rawValue)
+            _ = withUnsafeBytes(of: addr.address.sin_addr) {
+                byteBuffer.writeBytes($0)
+            }
+        case .v6(let addr):
+            byteBuffer.writeInteger(ATYP.ipv6.rawValue)
+            _ = withUnsafeBytes(of: addr.address.sin6_addr) {
+                byteBuffer.writeBytes($0)
+            }
+        default:
+            assertionFailure("This should never happen.")
+        }
+
+        _ = withUnsafeBytes(of: in_port_t(taskAddress.port!)) {
+            byteBuffer.writeBytes($0)
+        }
 
         context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
     }
@@ -248,24 +258,25 @@ public final class SOCKS5ClientProxyHandler: SOCKS5ProxyHandler {
             throw SOCKS5ProxyError.serializeFailed(reason: .invalidInputBytes)
         }
 
-        let readLength: Int
+        let readLength: Int32
+        let INET_PORTLEN: Int32 = 8
 
         switch family {
-        case .ipv4: readLength = 6
-        case .ipv6: readLength = 18
+        case .ipv4: readLength = (INET_ADDRSTRLEN + INET_PORTLEN) / 4
+        case .ipv6: readLength = (INET6_ADDRSTRLEN + INET_PORTLEN) / 4
         case .domainLength:
             guard byteBuffer.readableBytes >= 1 else {
                 throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
             }
 
-            readLength = byteBuffer.readInteger()! + 2
+            readLength = byteBuffer.readInteger()! + INET_PORTLEN / 4
         }
 
         guard byteBuffer.readableBytes >= readLength else {
             throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
         }
 
-        byteBuffer.moveReaderIndex(forwardBy: readLength)
+        byteBuffer.moveReaderIndex(forwardBy: Int(readLength))
     }
 }
 
