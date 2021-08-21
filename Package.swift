@@ -1,69 +1,92 @@
-// swift-tools-version:5.0
+// swift-tools-version:5.4
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
 
 let package = Package(
-    name: "swift-nio-Netbot",
+    name: "swift-nio-netbot",
+    platforms: [
+        .macOS(.v10_15),
+        .iOS(.v13),
+    ],
     products: [
+//        .executable(name: "Run", targets: ["Run"]),
         .library(name: "Netbot", targets: ["Netbot"]),
         .library(name: "NIOVPNProtoHTTP", targets: ["NIOVPNProtoHTTP"]),
         .library(name: "NIOVPNProtoSOCKS5", targets: ["NIOVPNProtoSOCKS5"]),
-        .library(name: "NIOSecurity", targets: ["NIOSecurity"])
+        .library(name: "NIOSecurity", targets: ["NIOSecurity"]),
+        .library(name: "CNELibsscrypto", targets: ["CNELibsscrypto"]),
+        .library(name: "CNELibmbedcrypto", targets: ["CNELibmbedcrypto"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0")
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "1.1.6"),
     ],
     targets: [
-        .target(name: "CNIOLibsodium",
-                path: "Sources/CNIOLibsodium/src/libsodium",
-                cSettings: [
-                    .headerSearchPath("$(SRCROOT)/Sources/CNIOLibsodium/src/libsodium/include/CNIOLibsodium")
-            ]),
-        .target(name: "CNIOLibmbedcrypto",
-                exclude: [
-                    "programs"
-            ],
-                cSettings: [
-                    .headerSearchPath("$(SRCROOT)/Sources/CNIOLibmbedcrypto/include/mbedtls"),
-                    .headerSearchPath("$(SRCROOT)/Sources/CNIOLibmbedcrypto/include/psa")
-            ]),
-        .target(name: "CNIOSecurityShims",
-                dependencies: ["CNIOLibsodium"]),
+        .systemLibrary(
+            name: "CNELibsodiumcrypto",
+            pkgConfig: "libsodium",
+            providers: [
+                .brew(["libsodium"]),
+                .apt(["libsodium-dev"])
+            ]
+        ),
+        .target(name: "CNELibmbedcrypto"),
+        .target(name: "CNESecurityShims",
+                dependencies: [
+                    .target(name: "CNELibsodiumcrypto"),
+                ]),
+        .target(name: "CNELibsscrypto",
+                dependencies: [
+                    .target(name: "CNELibsodiumcrypto"),
+                    .target(name: "CNELibmbedcrypto")
+                ]),
         .target(name: "NIOSecurity",
                 dependencies: [
-                    "CNIOLibmbedcrypto",
-                    "CNIOSecurityShims"
-            ]),
+                    .product(name: "Crypto", package: "swift-crypto"),
+                    .target(name: "CNELibmbedcrypto"),
+                    .target(name: "CNESecurityShims"),
+                ]),
         .target(name: "NIOVPNProtoHTTP",
                 dependencies: [
-                    "NIO",
-                    "NIOHTTP1"
-        ]),
+                    .product(name: "NIO", package: "swift-nio"),
+                    .product(name: "NIOHTTP1", package: "swift-nio")
+                ]),
         .target(name: "NIOVPNProtoSOCKS5",
-                dependencies: ["NIO"]),
+                dependencies: [
+                    .product(name: "NIO", package: "swift-nio")
+                ]),
         .target(name: "NIOVPNProtoShadowsocks",
                 dependencies: [
-                    "NIO",
-                    "NIOSecurity",
-                    "NIOVPNProtoSOCKS5"
-        ]),
+                    .product(name: "NIO", package: "swift-nio"),
+                    .product(name: "Crypto", package: "swift-crypto"),
+                    .target(name: "NIOSecurity"),
+                    .target(name: "NIOVPNProtoSOCKS5")
+                ]),
         .target(name: "Netbot",
                 dependencies: [
-                    "NIO",
-                    "NIOHTTP1",
-                    "NIOVPNProtoHTTP",
-                    "NIOVPNProtoSOCKS5",
-                    "NIOVPNProtoShadowsocks"
-        ]),
+                    .product(name: "NIO", package: "swift-nio"),
+                    .product(name: "NIOHTTP1", package: "swift-nio"),
+                    .target(name: "NIOVPNProtoHTTP"),
+                    .target(name: "NIOVPNProtoSOCKS5"),
+                    .target(name: "NIOVPNProtoShadowsocks")
+                ]),
         .testTarget(name: "NetbotTests",
-                    dependencies: ["Netbot"]),
+                    dependencies: [
+                        .target(name: "Netbot")
+                    ]),
         .testTarget(name: "NIOVPNProtoHTTPTests",
-                    dependencies: ["NIOVPNProtoHTTP"]),
+                    dependencies: [
+                        .target(name: "NIOVPNProtoHTTP")
+                    ]),
         .testTarget(name: "NIOSecurityTests",
-                    dependencies: ["NIOSecurity"]),
+                    dependencies: [
+                        .target(name: "NIOSecurity"),
+                        .product(name: "Crypto", package: "swift-crypto")
+                    ]),
         .testTarget(name: "NIOVPNProtoShadowsocksTests",
-                    dependencies: ["NIOVPNProtoShadowsocks"])
+                    dependencies: [.target(name: "NIOVPNProtoShadowsocks")
+                    ])
     ],
     swiftLanguageVersions: [.v5]
 )
