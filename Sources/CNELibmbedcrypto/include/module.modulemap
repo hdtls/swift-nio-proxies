@@ -1,4 +1,0 @@
-module CNELibmbedcrypto {
-    header "CNELibmbedcrypto.h"
-    export *
-}
