@@ -11,6 +11,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import NWHTTPProxy
-@_exported import NWSOCKSProxy
-@_exported import NWSSProxy
+#ifndef CNELibsodiumcrypto_h
+#define CNELibsodiumcrypto_h
+
+#include <sodium.h>
+
+#endif /* CNELibsodiumcrypto_h */
+

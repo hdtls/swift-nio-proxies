@@ -1,0 +1,4 @@
+module CNWLibmbedcrypto {
+    header "CNWLibmbedcrypto.h"
+    export *
+}

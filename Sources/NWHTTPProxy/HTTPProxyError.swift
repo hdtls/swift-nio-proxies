@@ -1,8 +1,8 @@
 //===----------------------------------------------------------------------===//
 //
-// This source file is part of the Netbot open source project
+// This source file is part of the swift-nio-Netbot open source project
 //
-// Copyright © 2019 Netbot Ltd. and the Netbot project authors
+// Copyright © 2019 Netbot Ltd. and the swift-nio-Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -11,6 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import NWHTTPProxy
-@_exported import NWSOCKSProxy
-@_exported import NWSSProxy
+enum HTTPProxyError: Error {
+    case invalidProxyResponse
+}

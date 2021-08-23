@@ -1,0 +1,5 @@
+module CNWLibsodiumcrypto [system] {
+    header "CNWLibsodiumcrypto.h"
+    link "sodium"
+    export *
+}
