@@ -23,9 +23,9 @@ public final class SOCKS5ServerProxyHandler: SOCKS5ProxyHandler {
 
     public var configuration: ProxyConfiguration
 
-    public init(configuration: ProxyConfiguration, completion: @escaping (SLPNResult) -> EventLoopFuture<Void>) {
+    public init(configuration: ProxyConfiguration) {
         self.configuration = configuration
-        super.init(completion: completion)
+        super.init()
     }
 
     override public func recvHMsg(context: ChannelHandlerContext, byteBuffer: inout ByteBuffer) throws {

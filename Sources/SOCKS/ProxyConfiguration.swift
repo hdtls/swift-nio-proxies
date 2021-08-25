@@ -54,15 +54,15 @@ public struct ProxyConfiguration {
     /// certificate verification.
     public var skipServerCertificateVerification: Bool = false
 
-    public var taskAddress: SocketAddress?
-
+    public var baseAddress: SocketAddress
+    
     public init(basicAuthorization: BasicAuthorization? = nil,
                 customTLSSNI: String? = nil,
                 skipServerCertificateVerification: Bool = false,
-                taskAddress: SocketAddress? = nil) {
+                baseAddress: SocketAddress) {
         self.basicAuthorization = basicAuthorization
         self.customTLSSNI = customTLSSNI
         self.skipServerCertificateVerification = skipServerCertificateVerification
-        self.taskAddress = taskAddress
+        self.baseAddress = baseAddress
     }
 }

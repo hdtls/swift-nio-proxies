@@ -12,9 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 import XCTest
-@testable import NIO
-@testable import NIOHTTP1
-@testable import NWHTTPProxy
+@testable import Netbot
 
 class ArrayAccumulationHandler<T>: ChannelInboundHandler {
     typealias InboundIn = T
@@ -155,13 +153,6 @@ private func setupHTTPProxy(pipelining: Bool = false,
                                     completion: completion)
 }
 
-extension ByteBuffer {
-    static func writeString(_ str: String) -> ByteBuffer {
-        var buffer = ByteBufferAllocator().buffer(capacity: str.utf8.count)
-        buffer.writeString(str)
-        return buffer
-    }
-}
 
 class EventRecord<T>: ChannelInboundHandler {
     typealias InboundIn = Any

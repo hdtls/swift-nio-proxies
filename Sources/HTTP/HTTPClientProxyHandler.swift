@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
-import NIOHTTP1
+@_exported import NIO
+@_exported import NIOHTTP1
 
 public final class HTTPClientProxyHandler: ChannelDuplexHandler, RemovableChannelHandler {
 

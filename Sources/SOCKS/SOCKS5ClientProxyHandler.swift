@@ -18,17 +18,22 @@ import NIO
     /// in the SOCKS5 dialog. For server connections, use the `SOCKS5ClientProxyHandler`.
 public final class SOCKS5ClientProxyHandler: SOCKS5ProxyHandler {
     
-    public var configuration: ProxyConfiguration
+    public let configuration: ProxyConfiguration
+    public let taskAddress: SocketAddress
+        
+    private var state: ClientStateMachine = ClientStateMachine()
+    private var removalToken: ChannelHandlerContext.RemovalToken?
+    private var inboundBuffer: ByteBuffer?
     
-    private var remoteChannel: Channel?
+    private var bufferedWrites: MarkedCircularBuffer<(NIOAny, EventLoopPromise<Void>?)> = .init(initialCapacity: 8)
     
-    public init(configuration: ProxyConfiguration, completion: @escaping (SLPNResult) -> EventLoopFuture<Void>) {
+    public init(configuration: ProxyConfiguration, taskAddress: SocketAddress) {
         self.configuration = configuration
-
-        super.init(completion: completion)
+        self.taskAddress = taskAddress
+        super.init()
     }
     
-    public func handlerAdded(context: ChannelHandlerContext) {
+    override public func handlerAdded(context: ChannelHandlerContext) {
         super.handlerAdded(context: context)
         
             // If channel active event has been fired already, which means `channelActive` will
@@ -38,11 +43,11 @@ public final class SOCKS5ClientProxyHandler: SOCKS5ProxyHandler {
         }
     }
     
-    public func channelActive(context: ChannelHandlerContext) {
+    override public func channelActive(context: ChannelHandlerContext) {
         context.fireChannelActive()
         writeHMsg(context: context)
     }
-    
+        
     override public func writeHMsg(context: ChannelHandlerContext) {
             // The client connects to the server, and sends a version
             // identifier/method selection message:
@@ -57,16 +62,12 @@ public final class SOCKS5ClientProxyHandler: SOCKS5ProxyHandler {
             // NMETHODS field contains the number of method identifier octets that
             // appear in the METHODS field.
         
-        var byteBuffer = context.channel.allocator.buffer(capacity: 3)
-        
-        byteBuffer.writeInteger(Version.v5.rawValue)
-        byteBuffer.writeInteger(UInt8(1))
-        if configuration.basicAuthorization != nil {
-            byteBuffer.writeInteger(Method.basicAuth.rawValue)
-        } else {
-            byteBuffer.writeInteger(Method.noAuth.rawValue)
-        }
-        
+        let greeting = ClientGreeting(methods: [
+            configuration.basicAuthorization != nil ? .usernamePassword : .noneRequired]
+        )
+        let capacity = 3
+        var byteBuffer = context.channel.allocator.buffer(capacity: capacity)
+        byteBuffer.writeClientGreeting(greeting)
         context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
     }
     
@@ -92,17 +93,11 @@ public final class SOCKS5ClientProxyHandler: SOCKS5ProxyHandler {
             // o  X'80' to X'FE' RESERVED FOR PRIVATE METHODS
             // o  X'FF' NO ACCEPTABLE METHODS
         
-        guard byteBuffer.readableBytes >= 2 else {
+        guard let greeting = try byteBuffer.readClientGreeting() else {
             throw SOCKS5ProxyError.serializeFailed(reason: .needMoreBytes)
         }
         
-        byteBuffer.moveReaderIndex(forwardBy: 1)
-        
-        guard let method = Method.init(rawValue: byteBuffer.readInteger()!) else {
-            throw SOCKS5ProxyError.serializeFailed(reason: .invalidInputBytes)
-        }
-        
-        self.method = method
+//        self.method = greeting
         
         guard method != .noAuth else {
             writeRELMsg(context: context)
@@ -172,35 +167,10 @@ public final class SOCKS5ClientProxyHandler: SOCKS5ProxyHandler {
             // The SOCKS server will typically evaluate the request based on source
             // and destination addresses, and return one or more reply messages, as
             // appropriate for the request type.
-        var byteBuffer = context.channel.allocator.buffer(capacity: 6)
-        
-        byteBuffer.writeInteger(Version.v5.rawValue)
-        byteBuffer.writeInteger(CMD.connect.rawValue)
-        byteBuffer.writeInteger(SOCKS5_HANDSHAKE_REL_RSV_CODE)
-        
-        guard let taskAddress = configuration.taskAddress else {
-            assertionFailure("This should never happen.")
-            return
-        }
-        switch taskAddress {
-            case .v4(let addr):
-                byteBuffer.writeInteger(ATYP.ipv4.rawValue)
-                _ = withUnsafeBytes(of: addr.address.sin_addr) {
-                    byteBuffer.writeBytes($0)
-                }
-            case .v6(let addr):
-                byteBuffer.writeInteger(ATYP.ipv6.rawValue)
-                _ = withUnsafeBytes(of: addr.address.sin6_addr) {
-                    byteBuffer.writeBytes($0)
-                }
-            default:
-                assertionFailure("This should never happen.")
-        }
-        
-        _ = withUnsafeBytes(of: in_port_t(taskAddress.port!)) {
-            byteBuffer.writeBytes($0)
-        }
-        
+        let request = SOCKSRequest(command: .connect, addressType: SOCKSAddress.address(taskAddress))
+        let capacity = 6
+        var byteBuffer = context.channel.allocator.buffer(capacity: capacity)
+        byteBuffer.writeClientRequest(request)
         context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
     }
     
@@ -307,17 +277,11 @@ extension SOCKS5ClientProxyHandler: RFC1919 {
             assertionFailure("Username/Password authentication protocol require authorization info.")
             return
         }
-        
-        let uLength = auth.username.utf8.count
-        let pLength = auth.password.utf8.count
-        
-        var byteBuffer = context.channel.allocator.buffer(capacity: 2 + uLength + 1 + pLength)
-        
-        byteBuffer.writeInteger(SOCKS5_BASIC_AUTH_VERSION)
-        byteBuffer.writeInteger(UInt8(uLength))
-        byteBuffer.writeString(auth.username)
-        byteBuffer.writeInteger(UInt8(pLength))
-        byteBuffer.writeString(auth.password)
+
+        let authentication = ClientBasicAuthentication(username: auth.username, password: auth.password)
+        let capacity = 3 + auth.username.count + auth.password.count
+        var byteBuffer = context.channel.allocator.buffer(capacity: capacity)
+        byteBuffer.writeClientBasicAuthentication(authentication)
         
         context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
     }
@@ -344,44 +308,5 @@ extension SOCKS5ClientProxyHandler: RFC1919 {
         guard byteBuffer.readInteger()! == SOCKS5_BASIC_AUTH_SUCCESS_CODE else {
             throw SOCKS5ProxyError.authenticationFailed(reason: .incorrectUsernameOrPassword)
         }
-    }
-}
-
-class __BufferForwardHandler: ChannelDuplexHandler {
-    
-    typealias InboundIn = NIOAny
-    
-    typealias OutboundIn = NIOAny
-    
-    var remoteChannel: Channel?
-    
-    let configuration: ProxyConfiguration
-    
-    init(configuration: ProxyConfiguration) {
-        self.configuration = configuration
-    }
-    
-    func channelActive(context: ChannelHandlerContext) {
-        let bootstrap = ClientBootstrap(group: context.eventLoop.next())
-            // Enable SO_REUSEADDR.
-            .channelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
-            .channelInitializer {
-                $0.pipeline.addHandler(RemoteToLocalForwardHandler(channel: context.channel))
-            }
-        do {
-            remoteChannel = try bootstrap.connect(to: configuration.taskAddress!).wait()
-            try remoteChannel?.closeFuture.wait()
-        } catch {
-            context.fireErrorCaught(error)
-        }
-    }
-    
-    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        guard let channel = remoteChannel else {
-            return
-        }
-        
-        _ = channel.writeAndFlush(data)
-        // TODO: Handle write error
     }
 }

@@ -10,8 +10,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
-
+/*
 import XCTest
+
 @testable import NWSecurity
 
 func makeEncryptor(with algorithm: Algorithm) throws -> Cryptor & Updatable {
@@ -151,3 +152,4 @@ final class NIOSecurityTests: XCTestCase {
         XCTAssertEqual(metadata, plaintext)
     }
 }
+*/

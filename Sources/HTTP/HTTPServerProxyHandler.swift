@@ -1,8 +1,10 @@
 import NIO
 import NIOHTTP1
 import Logging
+import Helpers
 
 public class HTTPServerProxyHandler: ChannelInboundHandler, RemovableChannelHandler {
+    
     public typealias InboundIn = HTTPServerRequestPart
     public typealias OutboundOut = HTTPServerResponsePart
     
@@ -81,11 +83,11 @@ public class HTTPServerProxyHandler: ChannelInboundHandler, RemovableChannelHand
         /// do pipeline will cause dynamic resizing of the buffer, which is generally acceptable.
     private var eventBuffer = CircularBuffer<BufferedEvent>(initialCapacity: 0)
     
-    private let logger: Logger
+    public let logger: Logger
     
     public let completion: (Result<HTTPRequestHead, HTTPProxyError>) -> EventLoopFuture<Channel>
     
-    public init(configuration: ProxyConfiguration, logger: Logger, completion: @escaping (Result<HTTPRequestHead, HTTPProxyError>) -> EventLoopFuture<Channel>) {
+    public init(logger: Logger = .init(label: "com.netbot.socks-logging"), completion: @escaping (Result<HTTPRequestHead, HTTPProxyError>) -> EventLoopFuture<Channel>) {
         self.logger = logger
         self.completion = completion
     }
@@ -97,6 +99,8 @@ public class HTTPServerProxyHandler: ChannelInboundHandler, RemovableChannelHand
         ], position: .before(self))
     }
     
+    var filtered = true
+    
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         if eventBuffer.count != 0 || self.state == .responseEndPending {
             eventBuffer.append(.channelRead(data))
@@ -104,10 +108,13 @@ public class HTTPServerProxyHandler: ChannelInboundHandler, RemovableChannelHand
         } else {
             switch unwrapInboundIn(data) {
                 case .head(let head):
+//                    guard head.uri == "www.baidu.com:443" else { return }
+//                    filtered = false
                     deliverOneHTTPHeadMsg(context: context, head: head)
                 case .body:
                     ()
                 case .end(let headers):
+//                    guard !filtered else { return }
                     deliverOneHTTPEndMsg(context: context, headers: headers)
             }
         }

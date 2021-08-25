@@ -43,4 +43,5 @@ public struct ProxyConfiguration {
         self.basicAuthorization = basicAuthorization
         self.alwaysUseCONNECT = alwaysUseCONNECT
         self.taskAddress = taskAddress
-    }}
+    }
+}

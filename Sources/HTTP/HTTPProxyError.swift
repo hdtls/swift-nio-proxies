@@ -11,6 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-enum HTTPProxyError: Error {
+public enum HTTPProxyError: Error {
     case invalidProxyResponse
+    case invalidHTTPOrdering
+    case unsupportedHTTPProxyMethod
 }

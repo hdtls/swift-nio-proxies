@@ -12,21 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 import NIO
-
-/// The result of an SLPN negotiation.
-///
-/// In a system expecting an SLPN negotiation to occur, a wide range of
-/// possible things can happen. In the best case scenario it is possible for
-/// the server and client to agree on a SOCKS5 connection to speak, in which case this
-/// will be `success`. However, if for any reason it was not possible to negotiate SOCKS5
-/// handshake, we should `failure` to a default choice of some kind.
-///
-/// Exactly what to do when failed is the responsibility of a specific
-/// implementation.
-public enum SLPNResult {
-    case success
-    case failure(Error)
-}
+import Logging
 
 private let SOCKS5_MAX_RECORD_SIZE = 16 * 1024
 /// The base class for all SOCKS5 proxy handlers. This class cannot actually be instantiated by
@@ -42,8 +28,6 @@ public class SOCKS5ProxyHandler: ChannelDuplexHandler, RemovableChannelHandler, 
     public typealias OutboundOut = ByteBuffer
     public typealias OutboundIn = ByteBuffer
 
-    public let completion: (SLPNResult) -> EventLoopFuture<Void>
-
     var method: Method = .noAuth
 
     enum ConnectionState {
@@ -57,28 +41,37 @@ public class SOCKS5ProxyHandler: ChannelDuplexHandler, RemovableChannelHandler, 
         case authentication
         case reply
     }
+    
+    let logger = Logger.init(label: "me.akii.socks5-logging")
 
-    var state: ConnectionState
+    var connectionState: ConnectionState
     private var handshakeState: HandshakeState
     private var recvBuffer: ByteBuffer
     private var writeBuffer: MarkedCircularBuffer<BufferedWrite>
 
-    init(completion: @escaping (SLPNResult) -> EventLoopFuture<Void>) {
+    init() {
         self.recvBuffer = ByteBufferAllocator.init().buffer(capacity: SOCKS5_MAX_RECORD_SIZE)
-        self.state = .handshaking
+        self.connectionState = .handshaking
         self.handshakeState = .hello
-        self.completion = completion
         self.writeBuffer = .init(initialCapacity: 20)
     }
 
+    public func handlerAdded(context: ChannelHandlerContext) {
+        
+    }
+    
+    public func channelActive(context: ChannelHandlerContext) {
+        
+    }
+    
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        if case .handshaking = state {
+        if case .handshaking = connectionState {
             doHandshakeStep(context: context, data: data)
         }
     }
 
     public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
-        guard state != .completion else {
+        guard connectionState != .completion else {
             context.write(data, promise: promise)
             return
         }
@@ -88,7 +81,7 @@ public class SOCKS5ProxyHandler: ChannelDuplexHandler, RemovableChannelHandler, 
     }
 
     public func flush(context: ChannelHandlerContext) {
-        guard state != .completion else {
+        guard connectionState != .completion else {
             context.flush()
             return
         }
@@ -113,11 +106,9 @@ public class SOCKS5ProxyHandler: ChannelDuplexHandler, RemovableChannelHandler, 
                 try recvRELMsg(context: context, byteBuffer: &recvBuffer)
 
                 // Notify that handshake finished.
-                completion(.success).whenComplete { (_) in
-                    self.unbufferWrites(context: context)
-                    self.state = .completion
-                    context.pipeline.removeHandler(self, promise: nil)
-                }
+                unbufferWrites(context: context)
+                connectionState = .completion
+                context.pipeline.removeHandler(self, promise: nil)
             }
 
             // Discard readed byte to make readIndex begin with zero.
@@ -176,15 +167,12 @@ extension SOCKS5ProxyHandler {
     }
 
     private func unbufferWrites(context: ChannelHandlerContext) {
-
-        if writeBuffer.hasMark {
-            while !writeBuffer.isEmpty && writeBuffer.hasMark {
-                let write = writeBuffer.removeFirst()
-                context.write(write.data, promise: write.promise)
-            }
-            context.flush()
+        while writeBuffer.hasMark && !writeBuffer.isEmpty {
+            let write = writeBuffer.removeFirst()
+            context.write(write.data, promise: write.promise)
         }
-
+        context.flush()
+        
         while !writeBuffer.isEmpty {
             let write = writeBuffer.removeFirst()
             context.write(write.data, promise: write.promise)

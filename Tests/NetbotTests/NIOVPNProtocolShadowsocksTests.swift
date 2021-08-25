@@ -12,8 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 import XCTest
-@testable import NIO
-@testable import NWSSProxy
+@testable import Netbot
 
 extension ByteBuffer {
     static func writeString(_ str: String) -> ByteBuffer {
