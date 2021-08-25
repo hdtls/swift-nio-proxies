@@ -11,6 +11,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import NWHTTPProxy
-@_exported import NWSOCKSProxy
-@_exported import NWSSProxy
+@_exported import NIO
+@_exported import NIOSSL
+@_exported import Logging
+@_exported import HTTP
+@_exported import SOCKS
+@_exported import Shadowsocks
