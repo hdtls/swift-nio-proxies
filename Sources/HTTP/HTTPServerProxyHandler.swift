@@ -83,6 +83,8 @@ public class HTTPServerProxyHandler: ChannelInboundHandler, RemovableChannelHand
         /// do pipeline will cause dynamic resizing of the buffer, which is generally acceptable.
     private var eventBuffer = CircularBuffer<BufferedEvent>(initialCapacity: 0)
     
+    private var bufferedWrites: MarkedCircularBuffer<(NIOAny, EventLoopPromise<Void>?)> = .init(initialCapacity: 8)
+
     public let logger: Logger
     
     public let completion: (Result<HTTPRequestHead, HTTPProxyError>) -> EventLoopFuture<Channel>
@@ -98,9 +100,7 @@ public class HTTPServerProxyHandler: ChannelInboundHandler, RemovableChannelHand
             ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes))
         ], position: .before(self))
     }
-    
-    var filtered = true
-    
+        
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         if eventBuffer.count != 0 || self.state == .responseEndPending {
             eventBuffer.append(.channelRead(data))
@@ -144,9 +144,9 @@ public class HTTPServerProxyHandler: ChannelInboundHandler, RemovableChannelHand
     func deliverOneHTTPEndMsg(context: ChannelHandlerContext, headers: HTTPHeaders?) {
             // New request is complete. We don't want any more data from now on.
         state.requestEndReceived()
-        _ = context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
-            .flatMap { httpDecoder in
-                context.pipeline.removeHandler(httpDecoder)
+        context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
+            .whenSuccess { httpDecoder in
+                context.pipeline.removeHandler(httpDecoder, promise: nil)
             }
     }
     
@@ -156,7 +156,7 @@ public class HTTPServerProxyHandler: ChannelInboundHandler, RemovableChannelHand
             // This content-length header is MUST NOT, but we need to workaround NIO's insistence that we set one.
         let headers = HTTPHeaders([("Content-Length", "0")])
         let head = HTTPResponseHead(version: .http1_1, status: .ok, headers: headers)
-        self.logger.info("sending establish message...")
+        logger.info("sending establish message...")
         
         context.write(self.wrapOutboundOut(.head(head)), promise: nil)
         context.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: nil)

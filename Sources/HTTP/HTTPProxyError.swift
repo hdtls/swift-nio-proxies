@@ -12,7 +12,10 @@
 //===----------------------------------------------------------------------===//
 
 public enum HTTPProxyError: Error {
+    case invalidClientState
     case invalidProxyResponse
     case invalidHTTPOrdering
     case unsupportedHTTPProxyMethod
+    case unexpectedRead
+    case proxyAuthenticationRequired
 }

@@ -22,7 +22,7 @@ extension ByteBuffer {
     }
 }
 
-final class NIOVPNProtoShadowsocksTests: XCTestCase {
+final class ShadowsocksProxyProtocolTests: XCTestCase {
 
     func testSSClientHandlerRead() throws {
         let channel = EmbeddedChannel()
