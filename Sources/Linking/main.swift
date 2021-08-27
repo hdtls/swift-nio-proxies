@@ -34,7 +34,7 @@ extension String {
 }
 
 let baseAddress = try SocketAddress(ipAddress: "172.105.214.180", port: 8385)
-let socksCredential = SOCKSClientHandler.Credential(user: "Netbot", password: "netbot.akii.me")
+let socksCredential = SOCKS.Credential(identity: "Netbot", identityTokenString: "netbot.akii.me")
 
 let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 
@@ -42,16 +42,20 @@ let bootstrap = ServerBootstrap(group: eventLoopGroup)
     .serverChannelOption(ChannelOptions.backlog, value: Int32(1024))
     .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: SocketOptionValue(1))
     .childChannelInitializer { channel in
-        return channel.pipeline.addHandler(HTTPServerProxyHandler { result in
-            return ClientBootstrap(group: channel.eventLoop.next())
-                .channelInitializer { peerChannel in
-                    peerChannel.pipeline.addHandlers([
-                        SOCKSClientHandler(credential: socksCredential, targetAddress: .address(try! result.get().uri.asSocketAddress())),
-                        LogHandler()
-                    ])
-                }
-                .connect(to: baseAddress)
-        })
+        return channel.pipeline.addHandlers([
+            HTTPResponseEncoder(),
+            ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)),
+            RuleFilterHandler(),
+            HTTP1ServerCONNECTTunnelHandler { result in
+                ClientBootstrap(group: channel.eventLoop.next())
+                    .channelInitializer { client in
+                        client.pipeline.addHandlers([
+                            SOCKSClientHandler(credential: socksCredential, targetAddress: .address(try! result.asSocketAddress())),
+                        ])
+                    }
+                    .connect(to: baseAddress)
+            }
+        ])
     }
     .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: SocketOptionValue(1))
     .childChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: SocketOptionValue(1))

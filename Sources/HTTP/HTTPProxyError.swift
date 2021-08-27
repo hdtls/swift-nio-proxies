@@ -13,6 +13,7 @@
 
 public enum HTTPProxyError: Error {
     case invalidClientState
+    case invalidServerState
     case invalidProxyResponse
     case invalidHTTPOrdering
     case unsupportedHTTPProxyMethod
