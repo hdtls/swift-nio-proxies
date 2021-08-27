@@ -13,7 +13,9 @@
 
 @_exported import NIO
 @_exported import NIOSSL
+@_exported import NIOHTTP1
 @_exported import Logging
 @_exported import HTTP
 @_exported import SOCKS
 @_exported import Shadowsocks
+@_exported import Helpers
