@@ -3,64 +3,47 @@ import Crypto
 import Helpers
 import Foundation
 
-/*
- * Spec: http://shadowsocks.org/en/spec/AEAD-Ciphers.html
- *
- * The way Shadowsocks using AEAD ciphers is specified in SIP004 and amended in SIP007. SIP004 was proposed by @Mygod
- * with design inspirations from @wongsyrone, @Noisyfox and @breakwa11. SIP007 was proposed by @riobard with input from
- * @madeye, @Mygod, @wongsyrone, and many others.
- *
- * Key Derivation
- *
- * HKDF_SHA1 is a function that takes a secret key, a non-secret salt, an info string, and produces a subkey that is
- * cryptographically strong even if the input secret key is weak.
- *
- *      HKDF_SHA1(key, salt, info) => subkey
- *
- * The info string binds the generated subkey to a specific application context. In our case, it must be the string
- * "ss-subkey" without quotes.
- *
- * We derive a per-session subkey from a pre-shared master key using HKDF_SHA1. Salt must be unique through the entire
- * life of the pre-shared master key.
- *
- * TCP
- *
- * An AEAD encrypted TCP stream starts with a randomly generated salt to derive the per-session subkey, followed by any
- * number of encrypted chunks. Each chunk has the following structure:
- *
- *      [encrypted payload length][length tag][encrypted payload][payload tag]
- *
- * Payload length is a 2-byte big-endian unsigned integer capped at 0x3FFF. The higher two bits are reserved and must be
- * set to zero. Payload is therefore limited to 16*1024 - 1 bytes.
- *
- * The first AEAD encrypt/decrypt operation uses a counting nonce starting from 0. After each encrypt/decrypt operation,
- * the nonce is incremented by one as if it were an unsigned little-endian integer. Note that each TCP chunk involves
- * two AEAD encrypt/decrypt operation: one for the payload length, and one for the payload. Therefore each chunk
- * increases the nonce twice.
- *
- * UDP
- *
- * An AEAD encrypted UDP packet has the following structure:
- *
- *      [salt][encrypted payload][tag]
- *
- * The salt is used to derive the per-session subkey and must be generated randomly to ensure uniqueness. Each UDP
- * packet is encrypted/decrypted independently, using the derived subkey and a nonce with all zero bytes.
- *
- */
+///
+/// Spec: http://shadowsocks.org/en/wiki/AEAD-Ciphers.html
+///
+/// TCP
+///
+/// An AEAD encrypted TCP stream starts with a randomly generated salt to derive the per-session subkey, followed by any
+/// number of encrypted chunks. Each chunk has the following structure:
+///
+///      [encrypted payload length][length tag][encrypted payload][payload tag]
+///
+/// Payload length is a 2-byte big-endian unsigned integer capped at 0x3FFF. The higher two bits are reserved and must be
+/// set to zero. Payload is therefore limited to 16*1024 - 1 bytes.
+///
+/// The first AEAD encrypt/decrypt operation uses a counting nonce starting from 0. After each encrypt/decrypt operation,
+/// the nonce is incremented by one as if it were an unsigned little-endian integer. Note that each TCP chunk involves
+/// two AEAD encrypt/decrypt operation: one for the payload length, and one for the payload. Therefore each chunk
+/// increases the nonce twice.
+///
+/// UDP
+///
+/// An AEAD encrypted UDP packet has the following structure:
+///
+///      [salt][encrypted payload][tag]
+///
+/// The salt is used to derive the per-session subkey and must be generated randomly to ensure uniqueness. Each UDP
+/// packet is encrypted/decrypted i`ndependently, using the derived subkey and a nonce with all zero bytes.
+///
+///
 
 public class SSAEADClientResponseDecoder: ByteToMessageDecoder {
     
     public typealias InboundOut = ByteBuffer
     
-    public let configuration: ProxyConfiguration
+    public let secretKey: String
     
     private var symmetricKey: SymmetricKey!
     
     private var nonce: [UInt8]
-            
-    public init(configuration: ProxyConfiguration) {
-        self.configuration = configuration
+    
+    public init(secretKey: String) {
+        self.secretKey = secretKey
         self.nonce = .init(repeating: 0, count: 12)
     }
     
@@ -72,7 +55,7 @@ public class SSAEADClientResponseDecoder: ByteToMessageDecoder {
                 return .needMoreData
             }
             let salt = buffer.readBytes(length: saltByteCount)!
-            symmetricKey = hkdfDerivedSymmetricKey(password: configuration.password, salt: salt, outputByteCount: keyByteCount)
+            symmetricKey = hkdfDerivedSymmetricKey(secretKey: secretKey, salt: salt, outputByteCount: keyByteCount)
         }
         
         let tagByteCount = 16
@@ -87,6 +70,7 @@ public class SSAEADClientResponseDecoder: ByteToMessageDecoder {
         var combined = nonce + buffer.readBytes(length: copyLength)!
         var sealedBox = try ChaChaPoly.SealedBox.init(combined: combined)
         var bytes = try ChaChaPoly.open(sealedBox, using: symmetricKey)
+        
         copyLength = bytes.withUnsafeBytes {
             Int($0.bindMemory(to: UInt16.self).baseAddress!.pointee.bigEndian) + tagByteCount
         }
@@ -106,12 +90,19 @@ public class SSAEADClientResponseDecoder: ByteToMessageDecoder {
         
         context.fireChannelRead(wrapInboundOut(ByteBuffer(bytes: bytes)))
         
-        return .needMoreData
+        
+        // Each decoding loop may contain multiple payload packets,
+        // so we need invoke this method again by return `.continue`.
+        if buffer.readableBytes >= trunkSize + tagByteCount * 2 {
+            return .continue
+        } else {
+            return .needMoreData
+        }
     }
     
 }
 
-public enum SSServerRequestPart {
+enum Packet {
     case address(Endpoint)
     case buffer(ByteBuffer)
 }
@@ -120,14 +111,14 @@ public class SSAEADServerRequestDecoder: ByteToMessageDecoder {
     
     public typealias InboundOut = ByteBuffer
     
-    public let configuration: ProxyConfiguration
-
+    public let secretKey: String
+    
     private var symmetricKey: SymmetricKey!
-
+    
     private var nonce: [UInt8]
-
-    public init(configuration: ProxyConfiguration) {
-        self.configuration = configuration
+    
+    public init(secretKey: String) {
+        self.secretKey = secretKey
         self.nonce = .init(repeating: 0, count: 12)
     }
     
@@ -140,7 +131,7 @@ public class SSAEADServerRequestDecoder: ByteToMessageDecoder {
                 return .needMoreData
             }
             let salt = buffer.readBytes(length: saltByteCount)!
-            symmetricKey = hkdfDerivedSymmetricKey(password: configuration.password, salt: salt, outputByteCount: keyByteCount)
+            symmetricKey = hkdfDerivedSymmetricKey(secretKey: secretKey, salt: salt, outputByteCount: keyByteCount)
         }
         
         let tagByteCount = 16
@@ -174,9 +165,9 @@ public class SSAEADServerRequestDecoder: ByteToMessageDecoder {
         
         if self.symmetricKey == nil {
             self.symmetricKey = symmetricKey
-            context.fireChannelRead(NIOAny(SSServerRequestPart.address(try! bytes.asEndpoint()!)))
+            context.fireChannelRead(NIOAny(Packet.address(try! bytes.asEndpoint()!)))
         } else {
-            context.fireChannelRead(NIOAny(SSServerRequestPart.buffer(ByteBuffer(bytes: bytes))))
+            context.fireChannelRead(NIOAny(Packet.buffer(ByteBuffer(bytes: bytes))))
         }
         return .needMoreData
     }

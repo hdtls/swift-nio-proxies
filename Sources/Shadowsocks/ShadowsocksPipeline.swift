@@ -5,7 +5,7 @@ extension ChannelPipeline {
     
     public func addSSClientHandlers(logger: Logger = .init(label: "com.netbot.shadowsocks"),
                                     taskAddress: Endpoint,
-                                    configuration: ProxyConfiguration,
+                                    secretKey: String,
                                     position: Position = .last) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
         
@@ -13,7 +13,7 @@ extension ChannelPipeline {
             let result = Result<Void, Error> {
                 try syncOperations.addSSClientHandlers(logger: logger,
                                                        taskAddress: taskAddress,
-                                                       configuration: configuration,
+                                                       secretKey: secretKey,
                                                        position: position)
             }
             eventLoopFuture = eventLoop.makeCompletedFuture(result)
@@ -21,7 +21,7 @@ extension ChannelPipeline {
             eventLoopFuture = eventLoop.submit({
                 try self.syncOperations.addSSClientHandlers(logger: logger,
                                                             taskAddress: taskAddress,
-                                                            configuration: configuration,
+                                                            secretKey: secretKey,
                                                             position: position)
             })
         }
@@ -34,11 +34,11 @@ extension ChannelPipeline.SynchronousOperations {
     
     public func addSSClientHandlers(logger: Logger = .init(label: "com.netbot.shadowsocks"),
                                     taskAddress: Endpoint,
-                                    configuration: ProxyConfiguration,
+                                    secretKey: String,
                                     position: ChannelPipeline.Position = .last) throws {
         eventLoop.assertInEventLoop()
-        let inboundDecoder = SSAEADClientResponseDecoder(configuration: configuration)
-        let outboundEncoder = SSAEADEncoder(taskAddress: taskAddress, configuration: configuration)
+        let inboundDecoder = SSAEADClientResponseDecoder(secretKey: secretKey)
+        let outboundEncoder = SSAEADEncoder(taskAddress: taskAddress, secretKey: secretKey)
         let handlers: [ChannelHandler] = [ByteToMessageHandler(inboundDecoder), MessageToByteHandler(outboundEncoder)]
         try addHandlers(handlers, position: position)
     }

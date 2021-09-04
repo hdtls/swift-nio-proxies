@@ -13,7 +13,6 @@
 
 import CNWLibmbedcrypto
 import CNWLibsodiumcrypto
-import CNWLibsscrypto
 
 let NIOSecurity_AEAD_CHUNK_SIZE_MASK = 0x3FFF
 let NIOSecurity_AEAD_CHUNK_SIZE = 2

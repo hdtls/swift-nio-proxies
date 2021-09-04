@@ -1,6 +1,6 @@
-import NIOCore
-import Crypto
 import Foundation
+import Crypto
+import NIOCore
 import Logging
 
 public class SSAEADEncoder: MessageToByteEncoder {
@@ -9,14 +9,14 @@ public class SSAEADEncoder: MessageToByteEncoder {
     
     public var logger: Logger
     public let taskAddress: Endpoint
-    public let configuration: ProxyConfiguration
+    public let secretKey: String
     private var symmetricKey: SymmetricKey!
     private var nonce: [UInt8]!
     
-    public init(logger: Logger = .init(label: "com.netbot.shadowsocks"), taskAddress: Endpoint, configuration: ProxyConfiguration) {
+    public init(logger: Logger = .init(label: "com.netbot.shadowsocks"), taskAddress: Endpoint, secretKey: String) {
         self.logger = logger
         self.taskAddress = taskAddress
-        self.configuration = configuration
+        self.secretKey = secretKey
     }
     
     public func encode(data: ByteBuffer, out: inout ByteBuffer) throws {
@@ -32,7 +32,7 @@ public class SSAEADEncoder: MessageToByteEncoder {
             let salt = Array<UInt8>(repeating: 0, count: saltByteCount).map({ _ in
                 UInt8.random(in: UInt8.min...UInt8.max)
             })
-            symmetricKey = hkdfDerivedSymmetricKey(password: configuration.password, salt: salt, outputByteCount: keyByteCount)
+            symmetricKey = hkdfDerivedSymmetricKey(secretKey: secretKey, salt: salt, outputByteCount: keyByteCount)
             
             packet.applying(taskAddress)
             packet = try seal(packet, using: symmetricKey)
