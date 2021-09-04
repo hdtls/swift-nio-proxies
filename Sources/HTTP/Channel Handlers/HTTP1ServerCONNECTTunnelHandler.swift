@@ -21,7 +21,7 @@ public final class HTTP1ServerCONNECTTunnelHandler: ChannelInboundHandler, Remov
     
     public let completion: (String) -> EventLoopFuture<Channel>
     
-    public init(logger: Logger = .init(label: "com.netbot.http-tunnel-logging"), completion: @escaping (String) -> EventLoopFuture<Channel>) {
+    public init(logger: Logger = .init(label: "com.netbot.http-server-tunnel"), completion: @escaping (String) -> EventLoopFuture<Channel>) {
         self.logger = logger
         self.completion = completion
         self.state = ServerStateMachine()

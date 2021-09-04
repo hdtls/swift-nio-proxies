@@ -1,22 +1,22 @@
-    //===----------------------------------------------------------------------===//
-    //
-    // This source file is part of the swift-nio-netbot open source project
-    //
-    // Copyright © 2021 Netbot Ltd. and the swift-nio-netbot project authors
-    // Licensed under Apache License v2.0
-    //
-    // See LICENSE for license information
-    //
-    // SPDX-License-Identifier: Apache-2.0
-    //
-    //===----------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the swift-nio-netbot open source project
+//
+// Copyright © 2021 Netbot Ltd. and the swift-nio-netbot project authors
+// Licensed under Apache License v2.0
+//
+// See LICENSE for license information
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
 
 import NIO
 import NIOHTTP1
 import Foundation
 import Logging
 
-    /// Credential use for username and password authentication.
+/// Credential use for username and password authentication.
 public struct Credential {
     
     public let identity: String
@@ -40,7 +40,7 @@ public final class HTTP1ClientCONNECTTunnelHandler: ChannelInboundHandler, Remov
     
     private var state: ClientStateMachine
     
-    public init(logger: Logger = .init(label: "com.netbot.http-tunnel-logging"), credential: Credential? = nil,
+    public init(logger: Logger = .init(label: "com.netbot.http-client-tunnel"), credential: Credential? = nil,
                 targetAddress: SocketAddress,
                 established: EventLoopPromise<Void>? = nil) {
         self.logger = logger
