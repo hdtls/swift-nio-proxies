@@ -12,16 +12,29 @@
 //
 //===----------------------------------------------------------------------===//
 
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang
+// Licensed under Apache License v2.0
+//
+// See LICENSE.txt for license information
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
 import NIO
 
-// MARK: - SOCKSResponse
+// MARK: - Response
 
 /// The SOCKS Server's response to the client's request
 /// indicating if the request succeeded or failed.
-public struct SOCKSResponse: Hashable {
+public struct Response: Hashable {
     
     /// The SOCKS protocol version - we currently only support v5.
-    public let version: UInt8 = 5
+    public let version: SOCKSProtocolVersion = .v5
     
     /// The status of the connection - used to check if the request
     /// succeeded or failed.
@@ -30,7 +43,7 @@ public struct SOCKSResponse: Hashable {
     /// The host address.
     public var boundAddress: SOCKSAddress
     
-    /// Creates a new `SOCKSResponse`.
+    /// Creates a new `Response`.
     /// - parameter reply: The status of the connection - used to check if the request
     /// succeeded or failed.
     /// - parameter boundAddress: The host address.
@@ -42,13 +55,13 @@ public struct SOCKSResponse: Hashable {
 
 extension ByteBuffer {
     
-    mutating func readServerResponse() throws -> SOCKSResponse? {
+    mutating func readServerResponse() throws -> Response? {
         return try parseUnwindingIfNeeded { buffer in
             guard
                 try buffer.readAndValidateProtocolVersion() != nil,
                 let reply = buffer.readInteger(as: UInt8.self).map({ SOCKSServerReply(value: $0) }),
                 try buffer.readAndValidateReserved() != nil,
-                let boundAddress = try buffer.readAddressType()
+                let boundAddress = try buffer.readAddress()
             else {
                 return nil
             }
@@ -56,11 +69,11 @@ extension ByteBuffer {
         }
     }
     
-    @discardableResult mutating func writeServerResponse(_ response: SOCKSResponse) -> Int {
-        return writeInteger(response.version) +
+    @discardableResult mutating func writeServerResponse(_ response: Response) -> Int {
+        return writeInteger(response.version.rawValue) +
             writeInteger(response.reply.value) +
             writeInteger(0, as: UInt8.self) +
-            writeAddressType(response.boundAddress)
+            writeAddress(response.boundAddress)
     }
     
 }
@@ -75,7 +88,7 @@ public struct SOCKSServerReply: Hashable {
     public static let succeeded = SOCKSServerReply(value: 0x00)
     
     /// The SOCKS server encountered an internal failure.
-    public static let serverFailure = SOCKSServerReply(value: 0x01)
+    public static let generalSOCKSServerFailure = SOCKSServerReply(value: 0x01)
     
     /// The connection to the host was not allowed.
     public static let notAllowed = SOCKSServerReply(value: 0x02)
@@ -96,7 +109,7 @@ public struct SOCKSServerReply: Hashable {
     public static let commandUnsupported = SOCKSServerReply(value: 0x07)
     
     /// The provided address type is not supported.
-    public static let addressUnsupported = SOCKSServerReply(value: 0x08)
+    public static let addressTypeUnsupported = SOCKSServerReply(value: 0x08)
     
     /// The raw `UInt8` status code.
     public var value: UInt8

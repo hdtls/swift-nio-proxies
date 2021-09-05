@@ -12,75 +12,88 @@
 //
 //===----------------------------------------------------------------------===//
 
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang
+// Licensed under Apache License v2.0
+//
+// See LICENSE.txt for license information
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
 import NIO
 
 // MARK: - ClientRequest
 
 /// Instructs the SOCKS proxy server of the target host,
 /// and how to connect.
-public struct SOCKSRequest: Hashable {
+public struct Request: Hashable {
     
     /// The SOCKS protocol version - we currently only support v5.
-    public let version: UInt8 = 5
+    public let version: SOCKSProtocolVersion = .v5
     
     /// How to connect to the host.
-    public var command: SOCKSCommand
+    public var command: Command
     
     /// The target host address.
-    public var addressType: SOCKSAddress
+    public var address: SOCKSAddress
     
-    /// Creates a new `SOCKSRequest`.
+    /// Creates a new `Request`.
     /// - parameter command: How to connect to the host.
-    /// - parameter addressType: The target host address.
-    public init(command: SOCKSCommand, addressType: SOCKSAddress) {
+    /// - parameter address: The target host address.
+    public init(command: Command, address: SOCKSAddress) {
         self.command = command
-        self.addressType = addressType
+        self.address = address
     }
     
 }
 
 extension ByteBuffer {
     
-    @discardableResult mutating func writeClientRequest(_ request: SOCKSRequest) -> Int {
-        var written = writeInteger(request.version)
+    @discardableResult mutating func writeClientRequest(_ request: Request) -> Int {
+        var written = writeInteger(request.version.rawValue)
         written += writeInteger(request.command.value)
         written += writeInteger(UInt8(0))
-        written += writeAddressType(request.addressType)
+        written += writeAddress(request.address)
         return written
     }
     
-    @discardableResult mutating func readClientRequest() throws -> SOCKSRequest? {
-        return try parseUnwindingIfNeeded { buffer -> SOCKSRequest? in
+    @discardableResult mutating func readClientRequest() throws -> Request? {
+        return try parseUnwindingIfNeeded { buffer -> Request? in
             guard
                 try buffer.readAndValidateProtocolVersion() != nil,
                 let command = buffer.readInteger(as: UInt8.self),
                 try buffer.readAndValidateReserved() != nil,
-                let address = try buffer.readAddressType()
+                let address = try buffer.readAddress()
             else {
                 return nil
             }
-            return .init(command: .init(value: command), addressType: address)
+            return .init(command: .init(value: command), address: address)
         }
     }
     
 }
 
-// MARK: - SOCKSCommand
+// MARK: - Command
 
 /// What type of connection the SOCKS server should establish with
 /// the target host.
-public struct SOCKSCommand: Hashable {
+public struct Command: Hashable {
     
     /// Typically the primary connection type, suitable for HTTP.
-    public static let connect = SOCKSCommand(value: 0x01)
+    public static let connect = Command(value: 0x01)
     
     /// Used in protocols that require the client to accept connections
     /// from the server, e.g. FTP.
-    public static let bind = SOCKSCommand(value: 0x02)
+    public static let bind = Command(value: 0x02)
     
     /// Used to establish an association within the UDP relay process to
     /// handle UDP datagrams.
-    public static let udpAssociate = SOCKSCommand(value: 0x03)
+    public static let udpAssociate = Command(value: 0x03)
     
     public var value: UInt8
     
@@ -122,7 +135,7 @@ public enum SOCKSAddress: Hashable {
 
 extension ByteBuffer {
     
-    mutating func readAddressType() throws -> SOCKSAddress? {
+    mutating func readAddress() throws -> SOCKSAddress? {
         return try parseUnwindingIfNeeded { buffer in
             guard let type = buffer.readInteger(as: UInt8.self) else {
                 return nil
@@ -136,7 +149,7 @@ extension ByteBuffer {
             case SOCKSAddress.ipv6IdentifierByte:
                 return try buffer.readIPv6Address()
             default:
-                throw SOCKSError.InvalidAddressType(actual: type)
+                throw SOCKSError.invalidAddressType(actual: type)
             }
         }
     }
@@ -185,7 +198,8 @@ extension ByteBuffer {
         return Int(port)
     }
     
-    @discardableResult mutating func writeAddressType(_ type: SOCKSAddress) -> Int {
+    @discardableResult
+    mutating func writeAddress(_ type: SOCKSAddress) -> Int {
         switch type {
         case .address(.v4(let address)):
             return writeInteger(SOCKSAddress.ipv4IdentifierByte)
@@ -206,13 +220,15 @@ extension ByteBuffer {
         }
     }
     
-    @discardableResult mutating func writeIPv6Address(_ addr: sockaddr_in6) -> Int {
+    @discardableResult
+    mutating func writeIPv6Address(_ addr: sockaddr_in6) -> Int {
         return withUnsafeBytes(of: addr.sin6_addr) { pointer in
             return writeBytes(pointer)
         }
     }
     
-    @discardableResult mutating func writeIPv4Address(_ addr: sockaddr_in) -> Int {
+    @discardableResult
+    mutating func writeIPv4Address(_ addr: sockaddr_in) -> Int {
         return withUnsafeBytes(of: addr.sin_addr) { pointer in
             return writeBytes(pointer)
         }

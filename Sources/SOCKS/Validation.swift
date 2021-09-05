@@ -12,6 +12,19 @@
 //
 //===----------------------------------------------------------------------===//
 
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang
+// Licensed under Apache License v2.0
+//
+// See LICENSE.txt for license information
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
 import NIO
 
 extension ByteBuffer {
@@ -22,7 +35,7 @@ extension ByteBuffer {
                 return nil
             }
             guard version == 0x05 else {
-                throw SOCKSError.InvalidProtocolVersion(actual: version)
+                throw SOCKSError.invalidProtocolVersion(actual: version)
             }
             return version
         }
@@ -34,7 +47,7 @@ extension ByteBuffer {
                 return nil
             }
             guard reserved == 0x00 else {
-                throw SOCKSError.InvalidReservedByte(actual: reserved)
+                throw SOCKSError.invalidReservedByte(actual: reserved)
             }
             return reserved
         }

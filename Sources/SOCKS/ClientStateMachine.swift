@@ -12,6 +12,19 @@
 //
 //===----------------------------------------------------------------------===//
 
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang
+// Licensed under Apache License v2.0
+//
+// See LICENSE.txt for license information
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
 import NIO
 
 private enum ClientState: Hashable {
@@ -21,7 +34,7 @@ private enum ClientState: Hashable {
     case waitingForClientAuthentication
     case waitingForServerAuthenticationResponse
     case waitingForClientRequest
-    case waitingForServerResponse(SOCKSRequest)
+    case waitingForServerResponse(Request)
     case active
     case error
 }
@@ -84,7 +97,7 @@ extension ClientStateMachine {
                 }
                 return action
             case .active, .error, .inactive, .waitingForClientGreeting, .waitingForClientAuthentication, .waitingForClientRequest:
-                throw SOCKSError.UnexpectedRead()
+                throw SOCKSError.unexpectedRead
             }
         } catch {
             state = .error
@@ -98,7 +111,7 @@ extension ClientStateMachine {
                 return nil
             }
             guard greeting.methods.contains(selected.method) else {
-                throw SOCKSError.InvalidAuthenticationSelection(selection: selected.method)
+                throw SOCKSError.invalidAuthenticationSelection(selected.method)
             }
                 
             // we don't current support any form of authentication
@@ -108,12 +121,12 @@ extension ClientStateMachine {
     
     mutating func handleAuthentication(_ buffer: inout ByteBuffer) throws -> ClientAction? {
         return try buffer.parseUnwindingIfNeeded { buffer -> ClientAction? in
-            guard let auth = try buffer.readClientBasicAuthenticationResponse() else {
+            guard let auth = try buffer.readUsernamePasswordAuthenticationResponse() else {
                 return nil
             }
             
             guard auth.isSuccess else {
-                throw SOCKSError.invalidCredential
+                throw SOCKSError.authenticationFailed(reason: .incorrectUsernameOrPassword)
             }
             
             state = .waitingForClientRequest
@@ -121,13 +134,13 @@ extension ClientStateMachine {
         }
     }
     
-    mutating func handleServerResponse(_ buffer: inout ByteBuffer, request: SOCKSRequest) throws -> ClientAction? {
+    mutating func handleServerResponse(_ buffer: inout ByteBuffer, request: Request) throws -> ClientAction? {
         return try buffer.parseUnwindingIfNeeded { buffer -> ClientAction? in
             guard let response = try buffer.readServerResponse() else {
                 return nil
             }
             guard response.reply == .succeeded else {
-                throw SOCKSError.ConnectionFailed(reply: response.reply)
+                throw SOCKSError.replyFailed(reason: .withReply(response.reply))
             }
             state = .active
             return .proxyEstablished
@@ -135,10 +148,10 @@ extension ClientStateMachine {
     }
     
     mutating func authenticate(_ buffer: inout ByteBuffer, method: AuthenticationMethod) -> ClientAction {
-        precondition(method == .noneRequired || method == .usernamePassword, "No authentication mechanism is supported. Use .noneRequired only.")
+        precondition(method == .noRequired || method == .usernamePassword, "No authentication mechanism is supported. Use .noRequired only.")
         
         switch method {
-            case .noneRequired:
+            case .noRequired:
                 state = .waitingForClientRequest
                 return .sendRequest
             case .usernamePassword:
@@ -160,7 +173,7 @@ extension ClientStateMachine {
     
     mutating func connectionEstablished() throws -> ClientAction {
         guard state == .inactive else {
-            throw SOCKSError.InvalidClientState()
+            throw SOCKSError.invalidClientState
         }
         state = .waitingForClientGreeting
         return .sendGreeting
@@ -168,21 +181,21 @@ extension ClientStateMachine {
 
     mutating func sendClientGreeting(_ greeting: ClientGreeting) throws {
         guard state == .waitingForClientGreeting else {
-            throw SOCKSError.InvalidClientState()
+            throw SOCKSError.invalidClientState
         }
         state = .waitingForAuthenticationMethod(greeting)
     }
     
-    mutating func sendClientAuthentication(_ auth: ClientBasicAuthentication) throws {
+    mutating func sendClientAuthentication(_ auth: UsernamePasswordAuthentication) throws {
         guard state == .waitingForClientAuthentication else {
-            throw SOCKSError.InvalidClientState()
+            throw SOCKSError.invalidClientState
         }
         state = .waitingForServerAuthenticationResponse
     }
 
-    mutating func sendClientRequest(_ request: SOCKSRequest) throws {
+    mutating func sendClientRequest(_ request: Request) throws {
         guard state == .waitingForClientRequest else {
-            throw SOCKSError.InvalidClientState()
+            throw SOCKSError.invalidClientState
         }
         state = .waitingForServerResponse(request)
     }

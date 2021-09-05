@@ -12,10 +12,22 @@
 //
 //===----------------------------------------------------------------------===//
 
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang
+// Licensed under Apache License v2.0
+//
+// See LICENSE.txt for license information
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
 import NIO
 
-
-    /// Credential use for username and password authentication.
+/// Credential use for username and password authentication.
 public struct Credential {
     
     public let identity: String
@@ -27,11 +39,11 @@ public struct Credential {
     }
 }
 
-    /// Connects to a SOCKS server to establish a proxied connection
-    /// to a host. This handler should be inserted at the beginning of a
-    /// channel's pipeline. Note that SOCKS only supports fully-qualified
-    /// domain names and IPv4 or IPv6 sockets, and not UNIX sockets.
-public final class SOCKSClientHandler: ChannelDuplexHandler, RemovableChannelHandler {
+/// Connects to a SOCKS server to establish a proxied connection
+/// to a host. This handler should be inserted at the beginning of a
+/// channel's pipeline. Note that SOCKS only supports fully-qualified
+/// domain names and IPv4 or IPv6 sockets, and not UNIX sockets.
+public final class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHandler {
     
     public typealias InboundIn = ByteBuffer
     public typealias InboundOut = ByteBuffer
@@ -47,10 +59,10 @@ public final class SOCKSClientHandler: ChannelDuplexHandler, RemovableChannelHan
     private var bufferedWrites: MarkedCircularBuffer<(NIOAny, EventLoopPromise<Void>?)> = .init(initialCapacity: 8)
     
     private let credential: Credential?
-
-        /// Creates a new `SOCKSClientHandler` that connects to a server
-        /// and instructs the server to connect to `targetAddress`.
-        /// - parameter targetAddress: The desired end point - note that only IPv4, IPv6, and FQDNs are supported.
+    
+    /// Creates a new `SOCKS5ClientHandler` that connects to a server
+    /// and instructs the server to connect to `targetAddress`.
+    /// - parameter targetAddress: The desired end point - note that only IPv4, IPv6, and FQDNs are supported.
     public init(credential: Credential? = nil, targetAddress: SOCKSAddress) {
         
         switch targetAddress {
@@ -75,7 +87,7 @@ public final class SOCKSClientHandler: ChannelDuplexHandler, RemovableChannelHan
     
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         
-            // if we've established the connection then forward on the data
+        // if we've established the connection then forward on the data
         if state.proxyEstablished {
             context.fireChannelRead(data)
             return
@@ -85,8 +97,8 @@ public final class SOCKSClientHandler: ChannelDuplexHandler, RemovableChannelHan
         
         self.inboundBuffer.setOrWriteBuffer(&inboundBuffer)
         do {
-                // Safe to bang, `setOrWrite` above means there will
-                // always be a value.
+            // Safe to bang, `setOrWrite` above means there will
+            // always be a value.
             let action = try state.receiveBuffer(&self.inboundBuffer!)
             try handleAction(action, context: context)
         } catch {
@@ -111,7 +123,8 @@ public final class SOCKSClientHandler: ChannelDuplexHandler, RemovableChannelHan
             let (data, promise) = bufferedWrites.removeFirst()
             context.write(data, promise: promise)
         }
-        context.flush() // safe to flush otherwise we wouldn't have the mark
+        // safe to flush otherwise we wouldn't have the mark
+        context.flush()
         
         while !bufferedWrites.isEmpty {
             let (data, promise) = bufferedWrites.removeFirst()
@@ -130,17 +143,17 @@ public final class SOCKSClientHandler: ChannelDuplexHandler, RemovableChannelHan
             return
         }
         
-            // We must clear the buffers here before we are removed, since the
-            // handler removal may be triggered as a side effect of the
-            // `SOCKSProxyEstablishedEvent`. In this case we may end up here,
-            // before the buffer empty method in `handleProxyEstablished` is
-            // invoked.
+        // We must clear the buffers here before we are removed, since the
+        // handler removal may be triggered as a side effect of the
+        // `SOCKSProxyEstablishedEvent`. In this case we may end up here,
+        // before the buffer empty method in `handleProxyEstablished` is
+        // invoked.
         emptyInboundAndOutboundBuffer(context: context)
         context.leavePipeline(removalToken: removalToken)
     }
 }
 
-extension SOCKSClientHandler {
+extension SOCKS5ClientHandler {
     
     private func beginHandshake(context: ChannelHandlerContext) {
         guard context.channel.isActive, state.shouldBeginHandshake else {
@@ -171,7 +184,7 @@ extension SOCKSClientHandler {
     
     private func handleActionSendClientGreeting(context: ChannelHandlerContext) throws {
         let greeting = ClientGreeting(methods: [
-            credential == nil ? .noneRequired : .usernamePassword
+            credential == nil ? .noRequired : .usernamePassword
         ]) // no authentication currently supported
         let capacity = 3 // [version, #methods, methods...]
         var buffer = context.channel.allocator.buffer(capacity: capacity)
@@ -183,31 +196,27 @@ extension SOCKSClientHandler {
     private func handleProxyEstablished(context: ChannelHandlerContext) {
         context.fireUserInboundEventTriggered(SOCKSProxyEstablishedEvent())
         
-        emptyInboundAndOutboundBuffer(context: context)
-        
-        if let removalToken = removalToken {
-            context.leavePipeline(removalToken: removalToken)
-        }
+        context.pipeline.removeHandler(context: context, promise: nil)
     }
     
     private func handleActionSendClientAuthentication(context: ChannelHandlerContext) throws {
         guard let credential = credential else {
-            throw SOCKSError.MissingCredential()
+            throw SOCKSError.missingCredential
         }
-        let authentication = ClientBasicAuthentication(username: credential.identity, password: credential.identityTokenString)
+        let authentication = UsernamePasswordAuthentication(username: credential.identity, password: credential.identityTokenString)
         let capacity = 3 + credential.identity.count + credential.identityTokenString.count
         var byteBuffer = context.channel.allocator.buffer(capacity: capacity)
-        byteBuffer.writeClientBasicAuthentication(authentication)
+        byteBuffer.writeUsernamePasswordAuthentication(authentication)
         try state.sendClientAuthentication(authentication)
         context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
     }
     
     private func handleActionSendRequest(context: ChannelHandlerContext) throws {
-        let request = SOCKSRequest(command: .connect, addressType: targetAddress)
+        let request = Request(command: .connect, address: targetAddress)
         try state.sendClientRequest(request)
         
-            // the client request is always 6 bytes + the address info
-            // [protocol_version, command, reserved, address type, <address>, port (2bytes)]
+        // the client request is always 6 bytes + the address info
+        // [protocol_version, command, reserved, address type, <address>, port (2bytes)]
         let capacity = 6 + targetAddress.size
         var buffer = context.channel.allocator.buffer(capacity: capacity)
         buffer.writeClientRequest(request)
@@ -216,21 +225,21 @@ extension SOCKSClientHandler {
     
     private func emptyInboundAndOutboundBuffer(context: ChannelHandlerContext) {
         if let inboundBuffer = inboundBuffer, inboundBuffer.readableBytes > 0 {
-                // after the SOCKS handshake message we already received further bytes.
-                // so let's send them down the pipe
+            // after the SOCKS handshake message we already received further bytes.
+            // so let's send them down the pipe
             self.inboundBuffer = nil
             context.fireChannelRead(wrapInboundOut(inboundBuffer))
         }
         
-            // If we have any buffered writes, we must send them before we are removed from the pipeline
+        // If we have any buffered writes, we must send them before we are removed from the pipeline
         writeBufferedData(context: context)
     }
     
 }
 
-    /// A `Channel` user event that is sent when a SOCKS connection has been established
-    ///
-    /// After this event has been received it is save to remove the `SOCKSClientHandler` from the channel pipeline.
+/// A `Channel` user event that is sent when a SOCKS connection has been established
+///
+/// After this event has been received it is save to remove the `SOCKS5ClientHandler` from the channel pipeline.
 public struct SOCKSProxyEstablishedEvent {
     public init() {}
 }

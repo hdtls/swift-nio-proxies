@@ -12,13 +12,26 @@
 //
 //===----------------------------------------------------------------------===//
 
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang
+// Licensed under Apache License v2.0
+//
+// See LICENSE.txt for license information
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
 import NIO
 
 /// The SOCKS authentication method to use, defined in RFC 1928.
 public struct AuthenticationMethod: Hashable {
     
     /// No authentication required
-    public static let noneRequired = AuthenticationMethod(value: 0x00)
+    public static let noRequired = AuthenticationMethod(value: 0x00)
     
     /// Use GSSAPI
     public static let gssapi = AuthenticationMethod(value: 0x01)
@@ -27,7 +40,7 @@ public struct AuthenticationMethod: Hashable {
     public static let usernamePassword = AuthenticationMethod(value: 0x02)
     
     /// No acceptable authentication methods
-    public static let noneAcceptable = AuthenticationMethod(value: 0xFF)
+    public static let noAcceptable = AuthenticationMethod(value: 0xFF)
     
     /// The method identifier, valid values are in the range 0:255.
     public var value: UInt8

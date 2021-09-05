@@ -1,12 +1,11 @@
 //===----------------------------------------------------------------------===//
 //
-// This source file is part of the SwiftNIO open source project
+// This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Apple Inc. and the SwiftNIO project authors
+// Copyright (c) 2021 Junfeng Zhang
 // Licensed under Apache License v2.0
 //
 // See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of SwiftNIO project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -15,36 +14,23 @@
 import NIO
 import Helpers
 
-/// Clients begin the SOCKS handshake process
-/// by providing an array of suggested authentication
-/// methods.
-
-/// Once the SOCKS V5 server has started, and the client has selected the
-/// Username/Password Authentication protocol, the Username/Password
-/// subnegotiation begins.  This begins with the client producing a
-/// Username/Password request:
-///
-/// +----+------+----------+------+----------+
-/// |VER | ULEN |  UNAME   | PLEN |  PASSWD  |
-/// +----+------+----------+------+----------+
-/// | 1  |  1   | 1 to 255 |  1   | 1 to 255 |
-/// +----+------+----------+------+----------+
-///
-/// The VER field contains the current version of the subnegotiation,
-/// which is X'01'. The ULEN field contains the length of the UNAME field
-/// that follows. The UNAME field contains the username as known to the
-/// source operating system. The PLEN field contains the length of the
-/// PASSWD field that follows. The PASSWD field contains the password
-/// association with the given UNAME.
-public struct ClientBasicAuthentication: Hashable {
-        
-    // The current version of the subnegotiation
+/// The SOCKS V5 Username/Password Authentication request, defined in RFC 1929.
+public struct UsernamePasswordAuthentication: Hashable {
+    
+    /// The VER field contains the current version of the subnegotiation, which is X'01'.
     public let version: UInt8
-        
+    
+    /// The UNAME field contains the username as known to the source operating system.
     public let username: String
-        
+    
+    /// The PASSWD field contains the password association with the given UNAME.
     public let password: String
     
+    /// Create a new `UsernamePasswordAuthentication`
+    /// - Parameters:
+    ///   - version: The authentication subnegotiation version
+    ///   - username: The authentication username
+    ///   - password: The authentication password
     public init(version: UInt8 = 1, username: String, password: String) {
         self.version = version
         self.username = username
@@ -52,21 +38,16 @@ public struct ClientBasicAuthentication: Hashable {
     }
 }
 
-/// The server verifies the supplied UNAME and PASSWD, and sends the
-/// following response:
-///
-/// +----+--------+
-/// |VER | STATUS |
-/// +----+--------+
-/// | 1  |   1    |
-/// +----+--------+
-///
-/// A STATUS field of X'00' indicates success. If the server returns a
-/// `failure' (STATUS value other than X'00') status, it MUST close the connection.
-public struct ClientBasicAuthenticationResponse: Hashable {
+/// The SOCKS V5 Username/Password Authentication response.
+public struct UsernamePasswordAuthenticationResponse: Hashable {
     
+    /// The version of the subnegotiation
     public let version: UInt8
     
+    /// The status of authentication
+    /// A STATUS field of X'00' indicates success.
+    /// If the server returns a `failure' (STATUS value other than X'00') status,
+    /// it MUST close the connection.
     public let status: UInt8
     
     public var isSuccess: Bool {
@@ -81,7 +62,7 @@ public struct ClientBasicAuthenticationResponse: Hashable {
 
 extension ByteBuffer {
     
-    mutating func readClientBasicAuthentication() throws -> ClientBasicAuthentication? {
+    mutating func readUsernamePasswordAuthentication() throws -> UsernamePasswordAuthentication? {
         return parseUnwindingIfNeeded { buffer in
             guard
                 let version = buffer.readInteger(as: UInt8.self),
@@ -106,7 +87,7 @@ extension ByteBuffer {
         }
     }
     
-    @discardableResult mutating func writeClientBasicAuthentication(_ authentication: ClientBasicAuthentication) -> Int {
+    @discardableResult mutating func writeUsernamePasswordAuthentication(_ authentication: UsernamePasswordAuthentication) -> Int {
         var written = 0
         
         written += writeInteger(authentication.version)
@@ -114,22 +95,22 @@ extension ByteBuffer {
         written += writeString(authentication.username)
         written += writeInteger(UInt8(authentication.password.count))
         written += writeString(authentication.password)
-
+        
         return written
     }
     
-    mutating func readClientBasicAuthenticationResponse() throws -> ClientBasicAuthenticationResponse? {
+    mutating func readUsernamePasswordAuthenticationResponse() throws -> UsernamePasswordAuthenticationResponse? {
         return parseUnwindingIfNeeded { buffer in
             guard let version = buffer.readInteger(as: UInt8.self),
-                    let status = buffer.readInteger(as: UInt8.self) else {
-                    return nil
-            }
+                  let status = buffer.readInteger(as: UInt8.self) else {
+                      return nil
+                  }
             
             return .init(version: version, status: status)
         }
     }
     
-    @discardableResult mutating func writeClientBasicAuthenticationResponse(_ response: ClientBasicAuthenticationResponse) -> Int {
+    @discardableResult mutating func writeClientBasicAuthenticationResponse(_ response: UsernamePasswordAuthenticationResponse) -> Int {
         var written = 0
         
         written += writeInteger(response.version)

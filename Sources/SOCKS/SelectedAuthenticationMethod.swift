@@ -12,6 +12,19 @@
 //
 //===----------------------------------------------------------------------===//
 
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang
+// Licensed under Apache License v2.0
+//
+// See LICENSE.txt for license information
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
 import NIO
 
 /// Used by the SOCKS server to inform the client which
@@ -20,7 +33,7 @@ import NIO
 public struct SelectedAuthenticationMethod: Hashable {
     
     /// The SOCKS protocol version - we currently only support v5.
-    public let version: UInt8 = 5
+    public let version: SOCKSProtocolVersion = .v5
     
     /// The server's selected authentication method.
     public var method: AuthenticationMethod
@@ -47,7 +60,7 @@ extension ByteBuffer {
     }
     
     @discardableResult mutating func writeMethodSelection(_ method: SelectedAuthenticationMethod) -> Int {
-        return writeInteger(method.version) + writeInteger(method.method.value)
+        return writeInteger(method.version.rawValue) + writeInteger(method.method.value)
     }
     
 }
