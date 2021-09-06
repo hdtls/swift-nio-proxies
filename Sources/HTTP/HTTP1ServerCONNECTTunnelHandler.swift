@@ -24,8 +24,8 @@ public final class HTTP1ServerCONNECTTunnelHandler: ChannelInboundHandler, Remov
     
     private var state: ServerStateMachine
     
-    /// The task uri for truly http request. this value is updated after  `head` part received.
-    private var uri: String?
+    /// The task address for truly http request. this value is updated after  `head` part received.
+    private var taskAddress: NetAddress?
     
     /// When a proxy request is received, we will send a new request to the target server.
     /// During the request is established, we need to cache the proxy request data.
@@ -33,9 +33,9 @@ public final class HTTP1ServerCONNECTTunnelHandler: ChannelInboundHandler, Remov
     
     public let logger: Logger
     
-    public let completion: (String) -> EventLoopFuture<Channel>
+    public let completion: (NetAddress) -> EventLoopFuture<Channel>
     
-    public init(logger: Logger = .init(label: "com.netbot.http-server-tunnel"), completion: @escaping (String) -> EventLoopFuture<Channel>) {
+    public init(logger: Logger = .init(label: "com.netbot.http-server-tunnel"), completion: @escaping (NetAddress) -> EventLoopFuture<Channel>) {
         self.logger = logger
         self.completion = completion
         self.state = ServerStateMachine()
@@ -101,13 +101,13 @@ extension HTTP1ServerCONNECTTunnelHandler {
     private func handleAction(_ action: ServerAction, context: ChannelHandlerContext) throws {
         switch action {
             case .deliverOneHTTPRequestHeadPart(head: let head):
-                try handleHTTPHeadPartReceive(head)
+                try handleHTTPHeadPartReceive(head, context: context)
             case .deliverOneHTTPRequestEndPart(headers: let headers):
                 try handleHTTPEndPartReceive(headers, context: context)
         }
     }
     
-    private func handleHTTPHeadPartReceive(_ head: HTTPRequestHead) throws {
+    private func handleHTTPHeadPartReceive(_ head: HTTPRequestHead, context: ChannelHandlerContext) throws {
         logger.info("\(head.method) \(head.uri) \(head.version)")
         
         guard head.method == .CONNECT else {
@@ -115,7 +115,16 @@ extension HTTP1ServerCONNECTTunnelHandler {
             throw HTTPProxyError.unsupportedHTTPProxyMethod
         }
         
-        uri = head.uri
+        let splits = head.uri.split(separator: ":")
+        guard !splits.isEmpty else {
+            // TODO: Invalid uri error handling
+            deliverOneError(HTTPProxyError.unexpectedRead, context: context)
+            return
+        }
+        
+        let ipAddr = String(splits.first!)
+        let port = Int(splits.last!) ?? 80
+        taskAddress = ipAddr.isIPAddr() ? .socketAddress(try! .init(ipAddress: ipAddr, port: port)) : .domainPort(ipAddr, port)
     }
     
     private func handleHTTPEndPartReceive(_ headers: HTTPHeaders?, context: ChannelHandlerContext) throws {
@@ -125,13 +134,14 @@ extension HTTP1ServerCONNECTTunnelHandler {
                 context.pipeline.removeHandler(httpDecoder, promise: nil)
             }
         
-        guard let uri = uri else {
+        guard let taskAddress = taskAddress else {
             // TODO: Invalid uri error handling
             deliverOneError(HTTPProxyError.unexpectedRead, context: context)
             return
         }
         
-        let client = completion(uri)
+        let client = completion(taskAddress)
+        
         logger.info("connecting to proxy server...")
         
         client.whenSuccess { channel in

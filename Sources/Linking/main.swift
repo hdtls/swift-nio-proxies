@@ -21,14 +21,8 @@ LoggingSystem.bootstrap { label in
     return handler
 }
 
-extension String {
-    func asSocketAddress() throws -> SocketAddress {
-        let splitted = split(separator: ":")
-        let host = String(splitted.first!)
-        let port = Int(splitted.last!) ?? 80
-        return try SocketAddress.makeAddressResolvingHost(host, port: port)
-    }
-}
+//let baseAddress = try SocketAddress(ipAddress: "127.0.0.1", port: 8389)
+let baseAddress = try SocketAddress(ipAddress: "127.0.0.1", port: 8385)
 
 //let baseAddress = try "127.0.0.1:8389".asSocketAddress()
 let baseAddress = try "127.0.0.1:8385".asSocketAddress()
@@ -44,12 +38,11 @@ let bootstrap = ServerBootstrap(group: eventLoopGroup)
             HTTPResponseEncoder(),
             ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)),
             RuleFilterHandler(),
-            HTTP1ServerCONNECTTunnelHandler { result in
+            HTTP1ServerCONNECTTunnelHandler { taskAddress in
                 ClientBootstrap(group: channel.eventLoop.next())
                     .channelInitializer { client in
-                        client.pipeline.addHandlers([
-                            SOCKSClientHandler(credential: socksCredential, targetAddress: .address(try! result.asSocketAddress())),
-                        ])
+                        client.pipeline.addSSClientHandlers(taskAddress: taskAddress, secretKey: credential.identityTokenString)
+//                        client.pipeline.addSOCKSClientHandlers(taskAddress: taskAddress, credential: credential)
                     }
                     .connect(to: baseAddress)
             }
