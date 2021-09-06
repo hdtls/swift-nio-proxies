@@ -1,11 +1,25 @@
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Licensed under Apache License v2.0
+//
+// See LICENSE for license information
+// See CONTRIBUTORS.txt for the list of Netbot project authors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
 import NIOCore
 import Logging
 
 extension ChannelPipeline {
     
     public func addHTTPProxyClientHandlers(logger: Logger = .init(label: "com.netbot.http-client-tunnel"),
-                                    credential: Credential? = nil,
-                                    position: Position = .last) -> EventLoopFuture<Void> {
+                                           credential: Credential? = nil,
+                                           position: Position = .last) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
         
         if eventLoop.inEventLoop {
@@ -39,7 +53,7 @@ extension ChannelPipeline {
                 try self.syncOperations.configureHTTPProxyServerHandlers(logger: logger, credential: credential, position: position, proxyProtocol: proxyProtocol, completion: completion)
             })
         }
-
+        
         return eventLoopFuture
     }
 }
@@ -53,8 +67,8 @@ public enum ProxyProtocol {
 extension ChannelPipeline.SynchronousOperations {
     
     public func addHTTPProxyClientHandlers(logger: Logger = .init(label: "com.netbot.http-client-tunnel"),
-                                    credential: Credential? = nil,
-                                    position: ChannelPipeline.Position = .last) throws {
+                                           credential: Credential? = nil,
+                                           position: ChannelPipeline.Position = .last) throws {
         eventLoop.assertInEventLoop()
         let handlers: [ChannelHandler] = []
         try addHandlers(handlers, position: position)

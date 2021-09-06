@@ -1,28 +1,25 @@
-    //===----------------------------------------------------------------------===//
-    //
-    // This source file is part of the Netbot open source project
-    //
-    // Copyright © 2019 Netbot Ltd. and the Netbot project authors
-    // Licensed under Apache License v2.0
-    //
-    // See LICENSE for license information
-    //
-    // SPDX-License-Identifier: Apache-2.0
-    //
-    //===----------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Licensed under Apache License v2.0
+//
+// See LICENSE for license information
+// See CONTRIBUTORS.txt for the list of Netbot project authors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
 
 import Netbot
+import Crypto
 
-let logger = Logger.init(label: "com.netbot.client-logging")
-
-class LogHandler: ChannelInboundHandler {
-    typealias InboundIn = NIOAny
-    
-    func errorCaught(context: ChannelHandlerContext, error: Error) {
-        logger.error("\(error)")
-    }
+LoggingSystem.bootstrap { label in
+    var handler = StreamLogHandler.standardOutput(label: label)
+    handler.logLevel = .debug
+    return handler
 }
-
 
 extension String {
     func asSocketAddress() throws -> SocketAddress {
@@ -33,8 +30,9 @@ extension String {
     }
 }
 
-let baseAddress = try SocketAddress(ipAddress: "172.105.214.180", port: 8385)
-let socksCredential = SOCKS.Credential(identity: "Netbot", identityTokenString: "netbot.akii.me")
+//let baseAddress = try "127.0.0.1:8389".asSocketAddress()
+let baseAddress = try "127.0.0.1:8385".asSocketAddress()
+let credential = SOCKS.Credential(identity: "Netbot", identityTokenString: "com.netbot.credential")
 
 let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 

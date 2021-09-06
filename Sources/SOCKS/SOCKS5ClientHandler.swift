@@ -16,10 +16,11 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang
+// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
 // Licensed under Apache License v2.0
 //
-// See LICENSE.txt for license information
+// See LICENSE for license information
+// See CONTRIBUTORS.txt for the list of Netbot project authors
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -172,17 +173,17 @@ extension SOCKS5ClientHandler {
             case .waitForMoreData:
                 break // do nothing, we've already buffered the data
             case .sendGreeting:
-                try handleActionSendClientGreeting(context: context)
+                try sendClientGreeting(context: context)
             case .sendAuthentication:
-                try handleActionSendClientAuthentication(context: context)
+                try sendUsernamePasswordAuthentication(context: context)
             case .sendRequest:
-                try handleActionSendRequest(context: context)
+                try sendClientRequest(context: context)
             case .proxyEstablished:
                 handleProxyEstablished(context: context)
         }
     }
     
-    private func handleActionSendClientGreeting(context: ChannelHandlerContext) throws {
+    private func sendClientGreeting(context: ChannelHandlerContext) throws {
         let greeting = ClientGreeting(methods: [
             credential == nil ? .noRequired : .usernamePassword
         ]) // no authentication currently supported
@@ -199,7 +200,7 @@ extension SOCKS5ClientHandler {
         context.pipeline.removeHandler(context: context, promise: nil)
     }
     
-    private func handleActionSendClientAuthentication(context: ChannelHandlerContext) throws {
+    private func sendUsernamePasswordAuthentication(context: ChannelHandlerContext) throws {
         guard let credential = credential else {
             throw SOCKSError.missingCredential
         }
@@ -211,7 +212,7 @@ extension SOCKS5ClientHandler {
         context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
     }
     
-    private func handleActionSendRequest(context: ChannelHandlerContext) throws {
+    private func sendClientRequest(context: ChannelHandlerContext) throws {
         let request = Request(command: .connect, address: targetAddress)
         try state.sendClientRequest(request)
         

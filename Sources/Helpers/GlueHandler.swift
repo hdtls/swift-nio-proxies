@@ -1,25 +1,25 @@
-
-    ///===----------------------------------------------------------------------===//
-    //
-    // This source file is part of the SwiftNIO open source project
-    //
-    // Copyright (c) 2019 Apple Inc. and the SwiftNIO project authors
-    // Licensed under Apache License v2.0
-    //
-    // See LICENSE.txt for license information
-    // See CONTRIBUTORS.txt for the list of SwiftNIO project authors
-    //
-    // SPDX-License-Identifier: Apache-2.0
-    //
-    //===----------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Licensed under Apache License v2.0
+//
+// See LICENSE for license information
+// See CONTRIBUTORS.txt for the list of Netbot project authors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
 
 import NIO
 @_exported import Logging
 
 public final class GlueHandler: ChannelDuplexHandler {
-    public typealias InboundIn = NIOAny
-    public typealias OutboundIn = NIOAny
-    public typealias OutboundOut = NIOAny
+    
+    public typealias InboundIn = ByteBuffer
+    public typealias OutboundIn = ByteBuffer
+    public typealias OutboundOut = ByteBuffer
     
     private var partner: GlueHandler?
     
@@ -27,12 +27,14 @@ public final class GlueHandler: ChannelDuplexHandler {
     
     private var pendingRead: Bool = false
     
-    public let logger: Logger = .init(label: "me.akii.glue-logging")
+    public var logger: Logger = .init(label: "com.netbot.glue")
     
     private init() { }
     
     public func handlerAdded(context: ChannelHandlerContext) {
         self.context = context
+        logger[metadataKey: "local"] = "\(context.channel.localAddress!)"
+        logger[metadataKey: "remote"] = "\(context.channel.remoteAddress!)"
     }
     
     public func handlerRemoved(context: ChannelHandlerContext) {
@@ -60,6 +62,8 @@ public final class GlueHandler: ChannelDuplexHandler {
     }
     
     public func errorCaught(context: ChannelHandlerContext, error: Error) {
+        context.fireErrorCaught(error)
+        logger.error("\(error)")
         self.partner?.partnerCloseFull()
     }
     
@@ -97,7 +101,12 @@ extension GlueHandler {
 extension GlueHandler {
     
     private func partnerWrite(_ data: NIOAny) {
-        self.context?.write(data, promise: nil)
+        guard let context = context else {
+            return
+        }
+        
+        logger.debug("write \(unwrapOutboundIn(data).readableBytes) bytes")
+        context.write(data, promise: nil)
     }
     
     private func partnerFlush() {
