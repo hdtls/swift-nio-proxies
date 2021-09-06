@@ -1,5 +1,17 @@
-    // swift-tools-version:5.4
-    // The swift-tools-version declares the minimum version of Swift required to build this package.
+// swift-tools-version:5.4
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright  2021 Junfeng Zhang. and the Netbot project authors
+// Licensed under Apache License v2.0
+//
+// See LICENSE for license information
+// See CONTRIBUTORS.txt for the list of Netbot project authors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
 
 import PackageDescription
 
@@ -20,9 +32,28 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0")
     ],
     targets: [
+        .systemLibrary(
+            name: "CNWLibsodiumcrypto",
+            pkgConfig: "libsodium",
+            providers: [
+                .brew(["libsodium"]),
+                .apt(["libsodium-dev"])
+            ]
+        ),
+        .target(name: "CNWLibmbedcrypto",
+                cSettings: [
+                    .headerSearchPath("library")
+                ]),
+        .target(name: "CNWLibsscrypto"),
+        .target(name: "NWSecurity",
+                dependencies: [
+                    .target(name: "CNWLibsodiumcrypto"),
+                    .target(name: "CNWLibmbedcrypto")
+                ]),
         .target(name: "Helpers",
                 dependencies: [
                     .product(name: "NIO", package: "swift-nio"),
+                    .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "Logging", package: "swift-log")
                 ]),
         .target(name: "HTTP",
@@ -57,8 +88,10 @@ let package = Package(
                           dependencies: [
                             .product(name: "NIO", package: "swift-nio"),
                             .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                            .product(name: "NIOSOCKS", package: "swift-nio-extras"),
                             .product(name: "Logging", package: "swift-log"),
-                            .target(name: "Netbot")
+                            .target(name: "Netbot"),
+                            .target(name: "NWSecurity")
                           ]),
         .testTarget(name: "NetbotTests", dependencies: [ .product(name: "NIOEmbedded", package: "swift-nio"), .target(name: "Netbot") ])
     ],

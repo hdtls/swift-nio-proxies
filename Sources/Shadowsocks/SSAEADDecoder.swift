@@ -104,20 +104,13 @@ public class SSAEADClientResponseDecoder: ByteToMessageDecoder {
         
         context.fireChannelRead(wrapInboundOut(ByteBuffer(bytes: bytes)))
         
-        
-        // Each decoding loop may contain multiple payload packets,
-        // so we need invoke this method again by return `.continue`.
-        if buffer.readableBytes >= trunkSize + tagByteCount * 2 {
-            return .continue
-        } else {
-            return .needMoreData
-        }
+        return .continue
     }
     
 }
 
 enum Packet {
-    case address(Endpoint)
+    case address(NetAddress)
     case buffer(ByteBuffer)
 }
 
@@ -179,7 +172,7 @@ public class SSAEADServerRequestDecoder: ByteToMessageDecoder {
         
         if self.symmetricKey == nil {
             self.symmetricKey = symmetricKey
-            context.fireChannelRead(NIOAny(Packet.address(try! bytes.asEndpoint()!)))
+            context.fireChannelRead(NIOAny(Packet.address(try! bytes.readNetAddress()!)))
         } else {
             context.fireChannelRead(NIOAny(Packet.buffer(ByteBuffer(bytes: bytes))))
         }

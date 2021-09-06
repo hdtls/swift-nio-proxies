@@ -14,11 +14,12 @@
 
 import NIOCore
 import Logging
+import Helpers
 
 extension ChannelPipeline {
     
     public func addSSClientHandlers(logger: Logger = .init(label: "com.netbot.shadowsocks"),
-                                    taskAddress: Endpoint,
+                                    taskAddress: NetAddress,
                                     secretKey: String,
                                     position: Position = .last) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
@@ -47,7 +48,7 @@ extension ChannelPipeline {
 extension ChannelPipeline.SynchronousOperations {
     
     public func addSSClientHandlers(logger: Logger = .init(label: "com.netbot.shadowsocks"),
-                                    taskAddress: Endpoint,
+                                    taskAddress: NetAddress,
                                     secretKey: String,
                                     position: ChannelPipeline.Position = .last) throws {
         eventLoop.assertInEventLoop()

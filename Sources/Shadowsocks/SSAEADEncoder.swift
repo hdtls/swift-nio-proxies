@@ -16,18 +16,19 @@ import Foundation
 import Crypto
 import NIOCore
 import Logging
+import Helpers
 
 public class SSAEADEncoder: MessageToByteEncoder {
     
     public typealias OutboundIn = ByteBuffer
     
     public var logger: Logger
-    public let taskAddress: Endpoint
+    public let taskAddress: NetAddress
     public let secretKey: String
     private var symmetricKey: SymmetricKey!
     private var nonce: [UInt8]!
     
-    public init(logger: Logger = .init(label: "com.netbot.shadowsocks"), taskAddress: Endpoint, secretKey: String) {
+    public init(logger: Logger = .init(label: "com.netbot.shadowsocks"), taskAddress: NetAddress, secretKey: String) {
         self.logger = logger
         self.taskAddress = taskAddress
         self.secretKey = secretKey

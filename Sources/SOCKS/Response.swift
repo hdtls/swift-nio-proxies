@@ -27,6 +27,7 @@
 //===----------------------------------------------------------------------===//
 
 import NIO
+import Helpers
 
 // MARK: - Response
 
@@ -42,13 +43,13 @@ public struct Response: Hashable {
     public var reply: SOCKSServerReply
     
     /// The host address.
-    public var boundAddress: SOCKSAddress
+    public var boundAddress: NetAddress
     
     /// Creates a new `Response`.
     /// - parameter reply: The status of the connection - used to check if the request
     /// succeeded or failed.
     /// - parameter boundAddress: The host address.
-    public init(reply: SOCKSServerReply, boundAddress: SOCKSAddress) {
+    public init(reply: SOCKSServerReply, boundAddress: NetAddress) {
         self.reply = reply
         self.boundAddress = boundAddress
     }
@@ -62,7 +63,7 @@ extension ByteBuffer {
                 try buffer.readAndValidateProtocolVersion() != nil,
                 let reply = buffer.readInteger(as: UInt8.self).map({ SOCKSServerReply(value: $0) }),
                 try buffer.readAndValidateReserved() != nil,
-                let boundAddress = try buffer.readAddress()
+                let boundAddress = try buffer.readNetAddress()
             else {
                 return nil
             }
@@ -74,7 +75,7 @@ extension ByteBuffer {
         return writeInteger(response.version.rawValue) +
             writeInteger(response.reply.value) +
             writeInteger(0, as: UInt8.self) +
-            writeAddress(response.boundAddress)
+            applying(response.boundAddress)
     }
     
 }

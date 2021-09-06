@@ -27,6 +27,7 @@
 //===----------------------------------------------------------------------===//
 
 import NIO
+import Helpers
 
 /// Credential use for username and password authentication.
 public struct Credential {
@@ -51,7 +52,7 @@ public final class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
     public typealias OutboundIn = ByteBuffer
     public typealias OutboundOut = ByteBuffer
     
-    private let targetAddress: SOCKSAddress
+    private let targetAddress: NetAddress
     
     private var state: ClientStateMachine
     private var removalToken: ChannelHandlerContext.RemovalToken?
@@ -64,12 +65,12 @@ public final class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
     /// Creates a new `SOCKS5ClientHandler` that connects to a server
     /// and instructs the server to connect to `targetAddress`.
     /// - parameter targetAddress: The desired end point - note that only IPv4, IPv6, and FQDNs are supported.
-    public init(credential: Credential? = nil, targetAddress: SOCKSAddress) {
+    public init(credential: Credential? = nil, targetAddress: NetAddress) {
         
         switch targetAddress {
-            case .address(.unixDomainSocket):
+            case .socketAddress(.unixDomainSocket):
                 preconditionFailure("UNIX domain sockets are not supported.")
-            case .domain, .address(.v4), .address(.v6):
+            case .domainPort, .socketAddress(.v4), .socketAddress(.v6):
                 break
         }
         
@@ -218,7 +219,21 @@ extension SOCKS5ClientHandler {
         
         // the client request is always 6 bytes + the address info
         // [protocol_version, command, reserved, address type, <address>, port (2bytes)]
-        let capacity = 6 + targetAddress.size
+        let capacity: Int
+        switch targetAddress {
+            case .domainPort(let domain, _):
+                capacity = 6 + domain.utf8.count + 1
+            case .socketAddress(let addr):
+                switch addr {
+                    case .v4:
+                        capacity = 6 + 4
+                    case .v6:
+                        capacity = 6 + 16
+                    case .unixDomainSocket:
+                        capacity = 0
+                        fatalError("Unsupported")
+                }
+        }
         var buffer = context.channel.allocator.buffer(capacity: capacity)
         buffer.writeClientRequest(request)
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
