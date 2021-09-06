@@ -73,10 +73,10 @@ class NetAddressTests: XCTestCase {
         packet.removeFirst(4)
         XCTAssertEqual(buffer.readBytes(length: 4), [0x7F, 0x00, 0x00, 0x01])
         packet.prefix(MemoryLayout<in_port_t>.size).withUnsafeBytes {
-            XCTAssertEqual($0.bindMemory(to: in_port_t.self).baseAddress?.pointee.bigEndian, 80)
+            XCTAssertEqual($0.bindMemory(to: in_port_t.self).baseAddress?.pointee, 80)
         }
         packet.removeFirst(MemoryLayout<in_port_t>.size)
-        XCTAssertEqual(buffer.readInteger(as: in_port_t.self), 80)
+        XCTAssertEqual(buffer.readInteger(as: in_port_t.self), UInt16(bigEndian: 80))
         XCTAssertEqual(packet.count, 0)
         XCTAssertEqual(buffer.readableBytes, 0)
     }
@@ -95,10 +95,10 @@ class NetAddressTests: XCTestCase {
         packet.removeFirst(16)
         XCTAssertEqual(buffer.readBytes(length: 16), [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01])
         packet.prefix(MemoryLayout<in_port_t>.size).withUnsafeBytes {
-            XCTAssertEqual($0.bindMemory(to: in_port_t.self).baseAddress?.pointee.bigEndian, 80)
+            XCTAssertEqual($0.bindMemory(to: in_port_t.self).baseAddress?.pointee, 80)
         }
         packet.removeFirst(MemoryLayout<in_port_t>.size)
-        XCTAssertEqual(buffer.readInteger(as: in_port_t.self), 80)
+        XCTAssertEqual(buffer.readInteger(as: in_port_t.self), UInt16(bigEndian: 80))
         XCTAssertEqual(packet.count, 0)
         XCTAssertEqual(buffer.readableBytes, 0)
     }

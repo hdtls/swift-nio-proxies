@@ -80,16 +80,16 @@ extension ByteBuffer {
         switch address {
             case .socketAddress(.v4(let address)):
                 return writeInteger(__SOCKSAddrID.v4.rawValue)
-                + withUnsafeBytes(of: address.address.sin_addr) { pointer in
-                    writeBytes(pointer)
+                + withUnsafeBytes(of: address.address.sin_addr) { ptr in
+                    writeBytes(ptr)
                 }
-                + writeInteger(address.address.sin_port.bigEndian)
+                + writeInteger(address.address.sin_port)
             case .socketAddress(.v6(let address)):
                 return writeInteger(__SOCKSAddrID.v6.rawValue)
-                + withUnsafeBytes(of: address.address.sin6_addr) { pointer in
-                    writeBytes(pointer)
+                + withUnsafeBytes(of: address.address.sin6_addr) { ptr in
+                    writeBytes(ptr)
                 }
-                + writeInteger(address.address.sin6_port.bigEndian)
+                + writeInteger(address.address.sin6_port)
             case .socketAddress(.unixDomainSocket):
                 // enforced in the channel initalisers.
                 fatalError("UNIX domain sockets are not supported")
@@ -126,5 +126,20 @@ extension Data {
             append(contentsOf: byteBuffer.readBytes(length: byteBuffer.readableBytes)!)
         }
         return byteBuffer.applying(address)
+    }
+}
+
+extension String {
+    
+    public func isIPv4Addr() -> Bool {
+        (try? SocketAddress(ipAddress: self, port: 0).protocol) == .inet
+    }
+    
+    public func isIPv6Addr() -> Bool {
+        (try? SocketAddress(ipAddress: self, port: 0).protocol) == .inet6
+    }
+    
+    public func isIPAddr() -> Bool {
+        (try? SocketAddress(ipAddress: self, port: 0)) != nil
     }
 }
