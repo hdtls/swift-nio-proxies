@@ -1,19 +1,5 @@
 //===----------------------------------------------------------------------===//
 //
-// This source file is part of the SwiftNIO open source project
-//
-// Copyright (c) 2021 Apple Inc. and the SwiftNIO project authors
-// Licensed under Apache License v2.0
-//
-// See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of SwiftNIO project authors
-//
-// SPDX-License-Identifier: Apache-2.0
-//
-//===----------------------------------------------------------------------===//
-
-//===----------------------------------------------------------------------===//
-//
 // This source file is part of the Netbot open source project
 //
 // Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
@@ -52,21 +38,18 @@ public final class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
     public typealias OutboundIn = ByteBuffer
     public typealias OutboundOut = ByteBuffer
     
-    private let targetAddress: NetAddress
+    private var state: HandshakeState
+    private var readBuffer: ByteBuffer!
+    private var bufferedWrites: MarkedCircularBuffer<BufferedWrite>
     
-    private var state: ClientStateMachine
-    private var removalToken: ChannelHandlerContext.RemovalToken?
-    private var inboundBuffer: ByteBuffer?
-    
-    private var bufferedWrites: MarkedCircularBuffer<(NIOAny, EventLoopPromise<Void>?)> = .init(initialCapacity: 8)
-    
-    private let credential: Credential?
+    public let logger: Logger
+    public let credential: Credential?
+    public let targetAddress: NetAddress
     
     /// Creates a new `SOCKS5ClientHandler` that connects to a server
     /// and instructs the server to connect to `targetAddress`.
     /// - parameter targetAddress: The desired end point - note that only IPv4, IPv6, and FQDNs are supported.
-    public init(credential: Credential? = nil, targetAddress: NetAddress) {
-        
+    public init(logger: Logger = .init(label: "com.netbot.socks"), credential: Credential? = nil, targetAddress: NetAddress) {
         switch targetAddress {
             case .socketAddress(.unixDomainSocket):
                 preconditionFailure("UNIX domain sockets are not supported.")
@@ -74,183 +57,214 @@ public final class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
                 break
         }
         
-        self.state = ClientStateMachine()
+        self.logger = logger
         self.credential = credential
         self.targetAddress = targetAddress
-    }
-    
-    public func channelActive(context: ChannelHandlerContext) {
-        beginHandshake(context: context)
+        self.state = .idle
+        self.bufferedWrites = .init(initialCapacity: 6)
     }
     
     public func handlerAdded(context: ChannelHandlerContext) {
-        beginHandshake(context: context)
+        startHandshaking(context: context)
+    }
+    
+    public func channelActive(context: ChannelHandlerContext) {
+        startHandshaking(context: context)
+        context.fireChannelActive()
     }
     
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        var byteBuffer = unwrapInboundIn(data)
         
         // if we've established the connection then forward on the data
-        if state.proxyEstablished {
-            context.fireChannelRead(data)
+        guard !state.isActive else {
+            context.fireChannelRead(wrapInboundOut(byteBuffer))
             return
         }
         
-        var inboundBuffer = unwrapInboundIn(data)
+        readBuffer.setOrWriteBuffer(&byteBuffer)
         
-        self.inboundBuffer.setOrWriteBuffer(&inboundBuffer)
         do {
-            // Safe to bang, `setOrWrite` above means there will
-            // always be a value.
-            let action = try state.receiveBuffer(&self.inboundBuffer!)
-            try handleAction(action, context: context)
+            switch state {
+                case .greeting:
+                    try evaluateServerGreeting(context: context)
+                case .authorizing:
+                    try evaluateServerAuthenticationMsg(context: context)
+                case .addressing:
+                    try evaluateServerReplies(context: context)
+                default:
+                    break
+            }
         } catch {
-            context.fireErrorCaught(error)
-            context.close(promise: nil)
+            deliverOneError(error, context: context)
         }
     }
     
     public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
-        if state.proxyEstablished && bufferedWrites.count == 0 {
-            context.write(data, promise: promise)
-        } else {
-            bufferedWrites.append((data, promise))
-        }
-    }
-    
-    private func writeBufferedData(context: ChannelHandlerContext) {
-        guard state.proxyEstablished else {
-            return
-        }
-        while bufferedWrites.hasMark {
-            let (data, promise) = bufferedWrites.removeFirst()
-            context.write(data, promise: promise)
-        }
-        // safe to flush otherwise we wouldn't have the mark
-        context.flush()
-        
-        while !bufferedWrites.isEmpty {
-            let (data, promise) = bufferedWrites.removeFirst()
-            context.write(data, promise: promise)
-        }
+        bufferWrite(data: unwrapOutboundIn(data), promise: promise)
     }
     
     public func flush(context: ChannelHandlerContext) {
-        bufferedWrites.mark()
-        writeBufferedData(context: context)
-    }
-    
-    public func removeHandler(context: ChannelHandlerContext, removalToken: ChannelHandlerContext.RemovalToken) {
-        guard state.proxyEstablished else {
-            self.removalToken = removalToken
+        bufferFlush()
+        
+        // Unbuffer writes when handshake is success.
+        guard state.isActive else {
             return
         }
-        
-        // We must clear the buffers here before we are removed, since the
-        // handler removal may be triggered as a side effect of the
-        // `SOCKSProxyEstablishedEvent`. In this case we may end up here,
-        // before the buffer empty method in `handleProxyEstablished` is
-        // invoked.
-        emptyInboundAndOutboundBuffer(context: context)
-        context.leavePipeline(removalToken: removalToken)
+        unbufferWrites(context: context)
     }
 }
 
 extension SOCKS5ClientHandler {
     
-    private func beginHandshake(context: ChannelHandlerContext) {
-        guard context.channel.isActive, state.shouldBeginHandshake else {
+    private typealias BufferedWrite = (data: ByteBuffer, promise: EventLoopPromise<Void>?)
+    
+    private func bufferWrite(data: ByteBuffer, promise: EventLoopPromise<Void>?) {
+        guard data.readableBytes > 0 else {
+            // We don't care about empty buffer.
+            return
+        }
+        bufferedWrites.append((data: data, promise: promise))
+    }
+    
+    private func bufferFlush() {
+        bufferedWrites.mark()
+    }
+    
+    private func unbufferWrites(context: ChannelHandlerContext) {
+        while bufferedWrites.hasMark {
+            let bufferedWrite = bufferedWrites.removeFirst()
+            context.write(wrapOutboundOut(bufferedWrite.data), promise: bufferedWrite.promise)
+        }
+        context.flush()
+        
+        while !bufferedWrites.isEmpty {
+            let bufferedWrite = bufferedWrites.removeFirst()
+            context.write(wrapOutboundOut(bufferedWrite.data), promise: bufferedWrite.promise)
+        }
+    }
+}
+
+extension SOCKS5ClientHandler {
+    
+    private func startHandshaking(context: ChannelHandlerContext) {
+        guard context.channel.isActive, state == .idle else {
             return
         }
         do {
-            try handleAction(state.connectionEstablished(), context: context)
+            try state.idle()
+            try sendClientGreeting(context: context)
         } catch {
-            context.fireErrorCaught(error)
-            context.close(promise: nil)
-        }
-    }
-    
-    private func handleAction(_ action: ClientAction, context: ChannelHandlerContext) throws {
-        switch action {
-            case .waitForMoreData:
-                break // do nothing, we've already buffered the data
-            case .sendGreeting:
-                try sendClientGreeting(context: context)
-            case .sendAuthentication:
-                try sendUsernamePasswordAuthentication(context: context)
-            case .sendRequest:
-                try sendClientRequest(context: context)
-            case .proxyEstablished:
-                handleProxyEstablished(context: context)
+            deliverOneError(error, context: context)
         }
     }
     
     private func sendClientGreeting(context: ChannelHandlerContext) throws {
-        let greeting = ClientGreeting(methods: [
-            credential == nil ? .noRequired : .usernamePassword
-        ]) // no authentication currently supported
-        let capacity = 3 // [version, #methods, methods...]
+        
+        let method: AuthenticationMethod = credential == nil ? .noRequired : .usernamePassword
+        
+        let greeting = ClientGreeting(methods: [method])
+        
+        // [version, #methods, methods...]
+        let capacity = 3
         var buffer = context.channel.allocator.buffer(capacity: capacity)
         buffer.writeClientGreeting(greeting)
-        try state.sendClientGreeting(greeting)
+        
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
     }
     
-    private func handleProxyEstablished(context: ChannelHandlerContext) {
-        context.fireUserInboundEventTriggered(SOCKSProxyEstablishedEvent())
+    private func evaluateServerGreeting(context: ChannelHandlerContext) throws {
+        guard let authentication = try readBuffer?.readMethodSelection() else {
+            return
+        }
         
-        context.pipeline.removeHandler(context: context, promise: nil)
+        try state.greeting(authentication.method)
+        
+        switch authentication.method {
+            case .noRequired:
+                try sendClientRequest(context: context)
+            case .usernamePassword:
+                try sendUsernamePasswordAuthentication(context: context)
+            case .noAcceptable:
+                state.failure()
+                throw SOCKSError.authenticationFailed(reason: .noValidAuthenticationMethod)
+            default:
+                state.failure()
+                throw SOCKSError.authenticationFailed(reason: .noMethodImpl)
+        }
+    }
+    
+    private func evaluateServerAuthenticationMsg(context: ChannelHandlerContext) throws {
+        guard let authMsg = try readBuffer?.readUsernamePasswordAuthenticationResponse() else {
+            return
+        }
+        
+        try state.authorizing()
+        
+        guard authMsg.isSuccess else {
+            state.failure()
+            throw SOCKSError.authenticationFailed(reason: .incorrectUsernameOrPassword)
+        }
+        
+        try sendClientRequest(context: context)
     }
     
     private func sendUsernamePasswordAuthentication(context: ChannelHandlerContext) throws {
         guard let credential = credential else {
             throw SOCKSError.missingCredential
         }
+        
         let authentication = UsernamePasswordAuthentication(username: credential.identity, password: credential.identityTokenString)
+        
         let capacity = 3 + credential.identity.count + credential.identityTokenString.count
         var byteBuffer = context.channel.allocator.buffer(capacity: capacity)
         byteBuffer.writeUsernamePasswordAuthentication(authentication)
-        try state.sendClientAuthentication(authentication)
+        
         context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
     }
     
     private func sendClientRequest(context: ChannelHandlerContext) throws {
         let request = Request(command: .connect, address: targetAddress)
-        try state.sendClientRequest(request)
         
         // the client request is always 6 bytes + the address info
         // [protocol_version, command, reserved, address type, <address>, port (2bytes)]
-        let capacity: Int
-        switch targetAddress {
-            case .domainPort(let domain, _):
-                capacity = 6 + domain.utf8.count + 1
-            case .socketAddress(let addr):
-                switch addr {
-                    case .v4:
-                        capacity = 6 + 4
-                    case .v6:
-                        capacity = 6 + 16
-                    case .unixDomainSocket:
-                        capacity = 0
-                        fatalError("Unsupported")
-                }
-        }
+        let capacity = 6
         var buffer = context.channel.allocator.buffer(capacity: capacity)
         buffer.writeClientRequest(request)
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
     }
     
-    private func emptyInboundAndOutboundBuffer(context: ChannelHandlerContext) {
-        if let inboundBuffer = inboundBuffer, inboundBuffer.readableBytes > 0 {
-            // after the SOCKS handshake message we already received further bytes.
-            // so let's send them down the pipe
-            self.inboundBuffer = nil
-            context.fireChannelRead(wrapInboundOut(inboundBuffer))
+    private func evaluateServerReplies(context: ChannelHandlerContext) throws {
+        guard let response = try readBuffer?.readServerResponse() else {
+            return
         }
         
-        // If we have any buffered writes, we must send them before we are removed from the pipeline
-        writeBufferedData(context: context)
+        try state.addressing()
+        
+        guard response.reply == .succeeded else {
+            state.failure()
+            throw SOCKSError.replyFailed(reason: .withReply(response.reply))
+        }
+        
+        context.pipeline.removeHandler(self, promise: nil)
+        
+        // After handshake success we need remove handler and clear buffers.
+        unbufferWrites(context: context)
+        
+        if let byteBuffer = readBuffer {
+            readBuffer.clear()
+            context.fireChannelRead(wrapInboundOut(byteBuffer))
+        }
+        
+        try state.establish()
+    
+        context.fireUserInboundEventTriggered(SOCKSProxyEstablishedEvent.init())
     }
     
+    private func deliverOneError(_ error: Error, context: ChannelHandlerContext) {
+        logger.error("\(error)")
+        context.close(promise: nil)
+    }
 }
 
 /// A `Channel` user event that is sent when a SOCKS connection has been established
