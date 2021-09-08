@@ -172,7 +172,7 @@ public class SSAEADServerRequestDecoder: ByteToMessageDecoder {
         
         if self.symmetricKey == nil {
             self.symmetricKey = symmetricKey
-            context.fireChannelRead(NIOAny(Packet.address(try! bytes.readNetAddress()!)))
+            context.fireChannelRead(NIOAny(Packet.address(try! bytes.readAddressIfPossible()!)))
         } else {
             context.fireChannelRead(NIOAny(Packet.buffer(ByteBuffer(bytes: bytes))))
         }

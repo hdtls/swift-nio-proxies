@@ -43,7 +43,7 @@ extension ByteBuffer {
     /// Read `NetAddress` from buffer.
     /// - Throws: May throw  `NetAddressError.invalidAddressType` if address type is illegal.
     /// - Returns: If success return `NetAddress` else return nil for need more bytes.
-    public mutating func readNetAddress() throws -> NetAddress? {
+    public mutating func readAddressIfPossible() throws -> NetAddress? {
         return try parseUnwindingIfNeeded { buffer in
             guard let rawValue = buffer.readInteger(as: UInt8.self) else {
                 return nil
@@ -83,13 +83,13 @@ extension ByteBuffer {
                 + withUnsafeBytes(of: address.address.sin_addr) { ptr in
                     writeBytes(ptr)
                 }
-                + writeInteger(address.address.sin_port)
+                + writeInteger(address.address.sin_port.bigEndian)
             case .socketAddress(.v6(let address)):
                 return writeInteger(__SOCKSAddrID.v6.rawValue)
                 + withUnsafeBytes(of: address.address.sin6_addr) { ptr in
                     writeBytes(ptr)
                 }
-                + writeInteger(address.address.sin6_port)
+                + writeInteger(address.address.sin6_port.bigEndian)
             case .socketAddress(.unixDomainSocket):
                 // enforced in the channel initalisers.
                 fatalError("UNIX domain sockets are not supported")
@@ -107,13 +107,13 @@ extension Data {
     /// Read `NetAddress` from buffer.
     /// - Throws: May throw  `NetAddressError.invalidAddressType` if address type is illegal.
     /// - Returns: If success return `NetAddress` else return nil for need more bytes.
-    public mutating func readNetAddress() throws -> NetAddress? {
+    public mutating func readAddressIfPossible() throws -> NetAddress? {
         let data = self
         var byteBuffer = ByteBuffer(bytes: data)
         defer {
             self = Data(byteBuffer.readBytes(length: byteBuffer.readableBytes)!)
         }
-        return try byteBuffer.readNetAddress()
+        return try byteBuffer.readAddressIfPossible()
     }
     
     /// Apply `NetAddress` to `ByteBuffer`.
@@ -130,14 +130,6 @@ extension Data {
 }
 
 extension String {
-    
-    public func isIPv4Addr() -> Bool {
-        (try? SocketAddress(ipAddress: self, port: 0).protocol) == .inet
-    }
-    
-    public func isIPv6Addr() -> Bool {
-        (try? SocketAddress(ipAddress: self, port: 0).protocol) == .inet6
-    }
     
     public func isIPAddr() -> Bool {
         (try? SocketAddress(ipAddress: self, port: 0)) != nil

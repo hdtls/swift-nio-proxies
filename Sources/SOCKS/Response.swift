@@ -57,13 +57,13 @@ public struct Response: Hashable {
 
 extension ByteBuffer {
     
-    mutating func readServerResponse() throws -> Response? {
+    mutating func readServerResponseIfPossible() throws -> Response? {
         return try parseUnwindingIfNeeded { buffer in
             guard
                 try buffer.readAndValidateProtocolVersion() != nil,
                 let reply = buffer.readInteger(as: UInt8.self).map({ SOCKSServerReply(value: $0) }),
                 try buffer.readAndValidateReserved() != nil,
-                let boundAddress = try buffer.readNetAddress()
+                let boundAddress = try buffer.readAddressIfPossible()
             else {
                 return nil
             }

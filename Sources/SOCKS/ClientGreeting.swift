@@ -46,7 +46,7 @@ public struct ClientGreeting: Hashable {
 
 extension ByteBuffer {
     
-    mutating func readClientGreeting() throws -> ClientGreeting? {
+    mutating func readClientGreetingIfPossible() throws -> ClientGreeting? {
         return try parseUnwindingIfNeeded { buffer in
             guard
                 try buffer.readAndValidateProtocolVersion() != nil,

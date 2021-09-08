@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
 import Helpers
+@_exported import NIO
 
 /// Credential use for username and password authentication.
 public struct Credential {
@@ -74,14 +74,15 @@ public final class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
     }
     
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        var byteBuffer = unwrapInboundIn(data)
         
         // if we've established the connection then forward on the data
         guard !state.isActive else {
-            context.fireChannelRead(wrapInboundOut(byteBuffer))
+            context.fireChannelRead(data)
             return
         }
         
+        var byteBuffer = unwrapInboundIn(data)
+
         readBuffer.setOrWriteBuffer(&byteBuffer)
         
         do {
@@ -174,7 +175,7 @@ extension SOCKS5ClientHandler {
     }
     
     private func evaluateServerGreeting(context: ChannelHandlerContext) throws {
-        guard let authentication = try readBuffer?.readMethodSelection() else {
+        guard let authentication = try readBuffer?.readMethodSelectionIfPossible() else {
             return
         }
         
@@ -235,7 +236,7 @@ extension SOCKS5ClientHandler {
     }
     
     private func evaluateServerReplies(context: ChannelHandlerContext) throws {
-        guard let response = try readBuffer?.readServerResponse() else {
+        guard let response = try readBuffer?.readServerResponseIfPossible() else {
             return
         }
         
@@ -245,9 +246,7 @@ extension SOCKS5ClientHandler {
             state.failure()
             throw SOCKSError.replyFailed(reason: .withReply(response.reply))
         }
-        
-        context.pipeline.removeHandler(self, promise: nil)
-        
+                
         // After handshake success we need remove handler and clear buffers.
         unbufferWrites(context: context)
         
@@ -259,6 +258,8 @@ extension SOCKS5ClientHandler {
         try state.establish()
     
         context.fireUserInboundEventTriggered(SOCKSProxyEstablishedEvent.init())
+
+        context.pipeline.removeHandler(self, promise: nil)
     }
     
     private func deliverOneError(_ error: Error, context: ChannelHandlerContext) {

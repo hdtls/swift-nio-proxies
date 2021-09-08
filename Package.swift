@@ -93,7 +93,9 @@ let package = Package(
                             .target(name: "Netbot"),
                             .target(name: "NWSecurity")
                           ]),
-        .testTarget(name: "NetbotTests", dependencies: [ .product(name: "NIOEmbedded", package: "swift-nio"), .target(name: "Netbot") ])
+        .testTarget(name: "HelperTests", dependencies: [ .product(name: "NIOCore", package: "swift-nio"), .target(name: "Helpers") ]),
+        .testTarget(name: "NetbotTests", dependencies: [ .product(name: "NIOEmbedded", package: "swift-nio"), .target(name: "Netbot") ]),
+        .testTarget(name: "SOCKSTests", dependencies: [ .target(name: "SOCKS") ])
     ],
     swiftLanguageVersions: [.v5]
 )

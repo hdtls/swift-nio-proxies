@@ -48,7 +48,7 @@ public struct SelectedAuthenticationMethod: Hashable {
 
 extension ByteBuffer {
     
-    mutating func readMethodSelection() throws -> SelectedAuthenticationMethod? {
+    mutating func readMethodSelectionIfPossible() throws -> SelectedAuthenticationMethod? {
         return try parseUnwindingIfNeeded { buffer in
             guard
                 try buffer.readAndValidateProtocolVersion() != nil,

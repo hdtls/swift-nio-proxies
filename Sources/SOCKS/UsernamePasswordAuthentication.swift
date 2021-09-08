@@ -63,7 +63,7 @@ public struct UsernamePasswordAuthenticationResponse: Hashable {
 
 extension ByteBuffer {
     
-    mutating func readUsernamePasswordAuthentication() throws -> UsernamePasswordAuthentication? {
+    mutating func readUsernamePasswordAuthenticationIfPossible() throws -> UsernamePasswordAuthentication? {
         return parseUnwindingIfNeeded { buffer in
             guard
                 let version = buffer.readInteger(as: UInt8.self),

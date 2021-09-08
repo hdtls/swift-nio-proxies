@@ -64,13 +64,13 @@ extension ByteBuffer {
         return written
     }
     
-    @discardableResult mutating func readClientRequest() throws -> Request? {
+    @discardableResult mutating func readClientRequestIfPossible() throws -> Request? {
         return try parseUnwindingIfNeeded { buffer -> Request? in
             guard
                 try buffer.readAndValidateProtocolVersion() != nil,
                 let command = buffer.readInteger(as: UInt8.self),
                 try buffer.readAndValidateReserved() != nil,
-                let address = try buffer.readNetAddress()
+                let address = try buffer.readAddressIfPossible()
             else {
                 return nil
             }
