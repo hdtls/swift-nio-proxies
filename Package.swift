@@ -32,24 +32,28 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0")
     ],
     targets: [
-        .systemLibrary(
-            name: "CNWLibsodiumcrypto",
-            pkgConfig: "libsodium",
-            providers: [
-                .brew(["libsodium"]),
-                .apt(["libsodium-dev"])
-            ]
-        ),
-        .target(name: "CNWLibmbedcrypto",
-                cSettings: [
-                    .headerSearchPath("library")
-                ]),
-        .target(name: "CNWLibsscrypto"),
-        .target(name: "NWSecurity",
-                dependencies: [
-                    .target(name: "CNWLibsodiumcrypto"),
-                    .target(name: "CNWLibmbedcrypto")
-                ]),
+        .target(name: "CNWLibsodiumcrypto",
+               linkerSettings: [
+                .linkedLibrary("sodium")
+               ]),
+//        .systemLibrary(
+//            name: "CNWLibsodiumcrypto",
+//            pkgConfig: "libsodium",
+//            providers: [
+//                .brew(["libsodium"]),
+//                .apt(["libsodium-dev"])
+//            ]
+//        ),
+//        .target(name: "CNWLibmbedcrypto",
+//                cSettings: [
+//                    .headerSearchPath("library")
+//                ]),
+//        .target(name: "CNWLibsscrypto"),
+//        .target(name: "NWSecurity",
+//                dependencies: [
+//                    .target(name: "CNWLibsodiumcrypto"),
+//                    .target(name: "CNWLibmbedcrypto")
+//                ]),
         .target(name: "Helpers",
                 dependencies: [
                     .product(name: "NIO", package: "swift-nio"),
@@ -71,10 +75,17 @@ let package = Package(
                 ]),
         .target(name: "Shadowsocks",
                 dependencies: [
-                    .product(name: "NIO", package: "swift-nio"),
                     .product(name: "Crypto", package: "swift-crypto"),
+                    .product(name: "NIO", package: "swift-nio"),
                     .target(name: "Helpers")
                 ]),
+        .target(name: "VMESS",
+               dependencies: [
+                    .product(name: "Crypto", package: "swift-crypto"),
+                    .product(name: "NIO", package: "swift-nio"),
+                    .target(name: "Helpers"),
+                    .target(name: "CNWLibsodiumcrypto")
+               ]),
         .target(name: "Netbot",
                 dependencies: [
                     .product(name: "NIO", package: "swift-nio"),
@@ -82,7 +93,8 @@ let package = Package(
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
                     .target(name: "HTTP"),
                     .target(name: "SOCKS"),
-                    .target(name: "Shadowsocks")
+                    .target(name: "Shadowsocks"),
+                    .target(name: "VMESS")
                 ]),
         .executableTarget(name: "Linking",
                           dependencies: [
@@ -90,12 +102,12 @@ let package = Package(
                             .product(name: "NIOSSL", package: "swift-nio-ssl"),
                             .product(name: "NIOSOCKS", package: "swift-nio-extras"),
                             .product(name: "Logging", package: "swift-log"),
-                            .target(name: "Netbot"),
-                            .target(name: "NWSecurity")
+                            .target(name: "Netbot")
                           ]),
         .testTarget(name: "HelperTests", dependencies: [ .product(name: "NIOCore", package: "swift-nio"), .target(name: "Helpers") ]),
         .testTarget(name: "NetbotTests", dependencies: [ .product(name: "NIOEmbedded", package: "swift-nio"), .target(name: "Netbot") ]),
-        .testTarget(name: "SOCKSTests", dependencies: [ .target(name: "SOCKS") ])
+        .testTarget(name: "SOCKSTests", dependencies: [ .target(name: "SOCKS") ]),
+        .testTarget(name: "VMESSTests", dependencies: [ .target(name: "VMESS") ])
     ],
     swiftLanguageVersions: [.v5]
 )
