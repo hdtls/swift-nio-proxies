@@ -32,28 +32,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0")
     ],
     targets: [
-        .target(name: "CNWLibsodiumcrypto",
-               linkerSettings: [
-                .linkedLibrary("sodium")
-               ]),
-//        .systemLibrary(
-//            name: "CNWLibsodiumcrypto",
-//            pkgConfig: "libsodium",
-//            providers: [
-//                .brew(["libsodium"]),
-//                .apt(["libsodium-dev"])
-//            ]
-//        ),
-//        .target(name: "CNWLibmbedcrypto",
-//                cSettings: [
-//                    .headerSearchPath("library")
-//                ]),
-//        .target(name: "CNWLibsscrypto"),
-//        .target(name: "NWSecurity",
-//                dependencies: [
-//                    .target(name: "CNWLibsodiumcrypto"),
-//                    .target(name: "CNWLibmbedcrypto")
-//                ]),
         .target(name: "Helpers",
                 dependencies: [
                     .product(name: "NIO", package: "swift-nio"),
@@ -83,8 +61,8 @@ let package = Package(
                dependencies: [
                     .product(name: "Crypto", package: "swift-crypto"),
                     .product(name: "NIO", package: "swift-nio"),
-                    .target(name: "Helpers"),
-                    .target(name: "CNWLibsodiumcrypto")
+                    .product(name: "NIOWebSocket", package: "swift-nio"),
+                    .target(name: "Helpers")
                ]),
         .target(name: "Netbot",
                 dependencies: [
