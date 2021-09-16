@@ -37,8 +37,8 @@ final class ShadowsocksCodecTests: XCTestCase {
     }
     
     func testCodec() throws {
-        let shadowsocksEncoder = SSAEADEncoder(taskAddress: .socketAddress(try .init(ipAddress: "127.0.0.1", port: 0)), secretKey: "password")
-        let shadowsocksDecoder = SSAEADServerRequestDecoder(secretKey: "password")
+        let shadowsocksEncoder = RequestEncoder(taskAddress: .socketAddress(try .init(ipAddress: "127.0.0.1", port: 0)), secretKey: "password")
+        let shadowsocksDecoder = RequestDecoder(secretKey: "password")
         
         XCTAssertNoThrow(try channel.pipeline.addHandler(MessageToByteHandler(shadowsocksEncoder)).wait())
         let peer = EmbeddedChannel()

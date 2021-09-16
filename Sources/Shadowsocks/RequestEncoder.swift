@@ -18,7 +18,7 @@ import NIOCore
 import Logging
 import Helpers
 
-public class SSAEADEncoder: MessageToByteEncoder {
+public class RequestEncoder: MessageToByteEncoder {
     
     public typealias OutboundIn = ByteBuffer
     

@@ -46,7 +46,7 @@ import Foundation
 ///
 ///
 
-public class SSAEADClientResponseDecoder: ByteToMessageDecoder {
+public class ResponseDecoder: ByteToMessageDecoder {
     
     public typealias InboundOut = ByteBuffer
     
@@ -114,7 +114,7 @@ enum Packet {
     case buffer(ByteBuffer)
 }
 
-public class SSAEADServerRequestDecoder: ByteToMessageDecoder {
+public class RequestDecoder: ByteToMessageDecoder {
     
     public typealias InboundOut = ByteBuffer
     

@@ -52,8 +52,8 @@ extension ChannelPipeline.SynchronousOperations {
                                     secretKey: String,
                                     position: ChannelPipeline.Position = .last) throws {
         eventLoop.assertInEventLoop()
-        let inboundDecoder = SSAEADClientResponseDecoder(secretKey: secretKey)
-        let outboundEncoder = SSAEADEncoder(taskAddress: taskAddress, secretKey: secretKey)
+        let inboundDecoder = ResponseDecoder(secretKey: secretKey)
+        let outboundEncoder = RequestEncoder(taskAddress: taskAddress, secretKey: secretKey)
         let handlers: [ChannelHandler] = [ByteToMessageHandler(inboundDecoder), MessageToByteHandler(outboundEncoder)]
         try addHandlers(handlers, position: position)
     }
