@@ -57,13 +57,6 @@ let package = Package(
                     .product(name: "NIO", package: "swift-nio"),
                     .target(name: "Helpers")
                 ]),
-        .target(name: "VMESS",
-               dependencies: [
-                    .product(name: "Crypto", package: "swift-crypto"),
-                    .product(name: "NIO", package: "swift-nio"),
-                    .product(name: "NIOWebSocket", package: "swift-nio"),
-                    .target(name: "Helpers")
-               ]),
         .target(name: "Netbot",
                 dependencies: [
                     .product(name: "NIO", package: "swift-nio"),

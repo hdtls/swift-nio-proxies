@@ -18,8 +18,7 @@ import XCTest
 fileprivate func setupHTTPProxyClient(
     group: EventLoopGroup,
     credential: HTTP.Credential? = nil,
-    targetAddress: SocketAddress,
-    established: EventLoopPromise<Void>? = nil
+    targetAddress: SocketAddress
 ) -> EventLoopFuture<Channel> {
     ServerBootstrap(group: group)
         .serverChannelOption(ChannelOptions.backlog, value: Int32(1024))
@@ -28,7 +27,7 @@ fileprivate func setupHTTPProxyClient(
             channel.pipeline.addHandlers([
                 HTTPResponseEncoder(),
                 ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)),
-                HTTP1ClientCONNECTTunnelHandler(credential: credential, targetAddress: targetAddress, established: established)
+                HTTP1ClientCONNECTTunnelHandler(credential: credential, targetAddress: targetAddress)
             ])
         }
         .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: SocketOptionValue(1))
