@@ -22,10 +22,10 @@ public final class HTTP1ServerCONNECTTunnelHandler: ChannelInboundHandler, Remov
     public typealias InboundIn = HTTPServerRequestPart
     public typealias OutboundOut = HTTPServerResponsePart
     
-    private var state: ServerStateMachine
+    private var state: ConnectionState
     
-    /// The task address for truly http request. this value is updated after  `head` part received.
-    private var taskAddress: NetAddress?
+    /// The task request head part. this value is updated after `head` part received.
+    private var requestHead: HTTPRequestHead?
     
     /// When a proxy request is received, we will send a new request to the target server.
     /// During the request is established, we need to cache the proxy request data.
@@ -38,20 +38,20 @@ public final class HTTP1ServerCONNECTTunnelHandler: ChannelInboundHandler, Remov
     public init(logger: Logger = .init(label: "com.netbot.http-server-tunnel"), completion: @escaping (NetAddress) -> EventLoopFuture<Channel>) {
         self.logger = logger
         self.completion = completion
-        self.state = ServerStateMachine()
+        self.state = .idle
     }
     
     public func handlerAdded(context: ChannelHandlerContext) {
-        beginHandshake(context: context)
+        startHandshaking(context: context)
     }
     
     public func channelActive(context: ChannelHandlerContext) {
-        beginHandshake(context: context)
+        startHandshaking(context: context)
         context.fireChannelActive()
     }
     
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        guard !state.shouldBufferRead, readBuffers.isEmpty else {
+        guard state != .active, readBuffers.isEmpty else {
             if readBuffers.isEmpty {
                 context.fireChannelRead(data)
             } else {
@@ -61,8 +61,14 @@ public final class HTTP1ServerCONNECTTunnelHandler: ChannelInboundHandler, Remov
         }
         
         do {
-            let action = try state.receiveHTTPPart(unwrapInboundIn(data))
-            try handleAction(action, context: context)
+            switch unwrapInboundIn(data) {
+                case .head(let head) where state == .evaluating:
+                    requestHead = head
+                case .end where requestHead != nil:
+                    try evaluateClientGreeting(context: context)
+                default:
+                    throw HTTPProxyError.unexpectedRead
+            }
         } catch {
             deliverOneError(error, context: context)
         }
@@ -73,7 +79,7 @@ public final class HTTP1ServerCONNECTTunnelHandler: ChannelInboundHandler, Remov
             context.leavePipeline(removalToken: removalToken)
         }
         
-        guard state.proxyEstablished, !readBuffers.isEmpty else {
+        guard state == .active, !readBuffers.isEmpty else {
             return
         }
         
@@ -87,58 +93,42 @@ public final class HTTP1ServerCONNECTTunnelHandler: ChannelInboundHandler, Remov
 
 extension HTTP1ServerCONNECTTunnelHandler {
     
-    private func beginHandshake(context: ChannelHandlerContext) {
-        guard context.channel.isActive else {
+    private func startHandshaking(context: ChannelHandlerContext) {
+        guard context.channel.isActive, state == .idle else {
             return
         }
         do {
-            try state.connectionEstablished()
+            try state.evaluating()
         } catch {
             deliverOneError(error, context: context)
         }
     }
     
-    private func handleAction(_ action: ServerAction, context: ChannelHandlerContext) throws {
-        switch action {
-            case .deliverOneHTTPRequestHeadPart(head: let head):
-                try handleHTTPHeadPartReceive(head, context: context)
-            case .deliverOneHTTPRequestEndPart(headers: let headers):
-                try handleHTTPEndPartReceive(headers, context: context)
+    private func evaluateClientGreeting(context: ChannelHandlerContext) throws {
+        guard let head = requestHead else {
+            throw HTTPProxyError.unexpectedRead
         }
-    }
-    
-    private func handleHTTPHeadPartReceive(_ head: HTTPRequestHead, context: ChannelHandlerContext) throws {
+        
         logger.info("\(head.method) \(head.uri) \(head.version)")
         
         guard head.method == .CONNECT else {
-            logger.debug("unsupported HTTP proxy method: \(head.method)")
             throw HTTPProxyError.unsupportedHTTPProxyMethod
         }
         
         let splits = head.uri.split(separator: ":")
         guard !splits.isEmpty else {
-            // TODO: Invalid uri error handling
-            deliverOneError(HTTPProxyError.unexpectedRead, context: context)
-            return
+            throw HTTPProxyError.invalidURL(url: head.uri)
         }
         
         let ipAddr = String(splits.first!)
         let port = Int(splits.last!) ?? 80
-        taskAddress = ipAddr.isIPAddr() ? .socketAddress(try! .init(ipAddress: ipAddr, port: port)) : .domainPort(ipAddr, port)
-    }
+        let taskAddress: NetAddress = ipAddr.isIPAddr() ? .socketAddress(try! .init(ipAddress: ipAddr, port: port)) : .domainPort(ipAddr, port)
     
-    private func handleHTTPEndPartReceive(_ headers: HTTPHeaders?, context: ChannelHandlerContext) throws {
         // New request is complete. We don't want any more data from now on.
         context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
             .whenSuccess { httpDecoder in
                 context.pipeline.removeHandler(httpDecoder, promise: nil)
             }
-        
-        guard let taskAddress = taskAddress else {
-            // TODO: Invalid uri error handling
-            deliverOneError(HTTPProxyError.unexpectedRead, context: context)
-            return
-        }
         
         let client = completion(taskAddress)
         
@@ -157,17 +147,17 @@ extension HTTP1ServerCONNECTTunnelHandler {
         logger.info("proxy server connected \(peerChannel.remoteAddress?.description ?? "")")
         
         do {
-            try state.sendServerGreeting()
+            try state.established()
         } catch {
             deliverOneError(error, context: context)
         }
         
         logger.info("sending establish message to \(String(describing: context.channel.localAddress))...")
         // Ok, upgrade has completed! We now need to begin the upgrade process.
-        // First, send the 200 message.
+        // First, send the 200 connection established message.
         // This content-length header is MUST NOT, but we need to workaround NIO's insistence that we set one.
         let headers = HTTPHeaders([("Content-Length", "0")])
-        let head = HTTPResponseHead(version: .http1_1, status: .ok, headers: headers)
+        let head = HTTPResponseHead(version: .http1_1, status: .custom(code: 200, reasonPhrase: "Connection Established"), headers: headers)
         context.write(wrapOutboundOut(.head(head)), promise: nil)
         context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
         

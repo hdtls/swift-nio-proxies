@@ -71,8 +71,7 @@ let package = Package(
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
                     .target(name: "HTTP"),
                     .target(name: "SOCKS"),
-                    .target(name: "Shadowsocks"),
-                    .target(name: "VMESS")
+                    .target(name: "Shadowsocks")
                 ]),
         .executableTarget(name: "Linking",
                           dependencies: [
@@ -84,8 +83,7 @@ let package = Package(
                           ]),
         .testTarget(name: "HelperTests", dependencies: [ .product(name: "NIOCore", package: "swift-nio"), .target(name: "Helpers") ]),
         .testTarget(name: "NetbotTests", dependencies: [ .product(name: "NIOEmbedded", package: "swift-nio"), .target(name: "Netbot") ]),
-        .testTarget(name: "SOCKSTests", dependencies: [ .target(name: "SOCKS") ]),
-        .testTarget(name: "VMESSTests", dependencies: [ .target(name: "VMESS") ])
+        .testTarget(name: "SOCKSTests", dependencies: [ .target(name: "SOCKS") ])
     ],
     swiftLanguageVersions: [.v5]
 )

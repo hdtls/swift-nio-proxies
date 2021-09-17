@@ -37,78 +37,73 @@ public final class HTTP1ClientCONNECTTunnelHandler: ChannelInboundHandler, Remov
     public let logger: Logger
     public let targetAddress: SocketAddress
     public let credential: Credential?
-    public let established: EventLoopPromise<Void>?
     
-    private var state: ClientStateMachine
+    private var state: ConnectionState
+    private var requestHead: HTTPResponseHead?
     
     public init(logger: Logger = .init(label: "com.netbot.http-client-tunnel"), credential: Credential? = nil,
-                targetAddress: SocketAddress,
-                established: EventLoopPromise<Void>? = nil) {
+                targetAddress: SocketAddress) {
         self.logger = logger
         self.credential = credential
         self.targetAddress = targetAddress
-        self.established = established
-        self.state = ClientStateMachine()
+        self.state = .idle
     }
     
     public func handlerAdded(context: ChannelHandlerContext) {
-        beginHandshake(context: context)
+        startHandshaking(context: context)
     }
     
     public func channelActive(context: ChannelHandlerContext) {
-        beginHandshake(context: context)
+        startHandshaking(context: context)
+        context.fireChannelActive()
     }
     
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        guard !state.proxyEstablished else {
+        guard state != .active else {
             context.fireChannelRead(data)
             return
         }
         
         do {
-            let action = try state.receiveHTTPPart(unwrapInboundIn(data))
-            try handleAction(action, context: context)
+            switch unwrapInboundIn(data) {
+                case .head(let head) where state == .active:
+                    switch head.status.code {
+                        case 200..<300:
+                            requestHead = head
+                        case 407:
+                            throw HTTPProxyError.proxyAuthenticationRequired
+                        default:
+                            throw HTTPProxyError.invalidProxyResponse
+                    }
+                case .end where requestHead != nil:
+                    try established(context: context)
+                default:
+                    throw HTTPProxyError.invalidHTTPOrdering
+            }
+        } catch {
+            deliverOneError(error, context: context)
+        }
+    }
+
+}
+
+extension HTTP1ClientCONNECTTunnelHandler {
+    
+    private func startHandshaking(context: ChannelHandlerContext) {
+        guard context.channel.isActive, state == .idle else {
+            return
+        }
+        do {
+            try state.evaluating()
+            try sendClientGreeting(context: context)
         } catch {
             deliverOneError(error, context: context)
         }
     }
     
-    private func deliverOneError(_ error: Error, context: ChannelHandlerContext) {
-        established?.fail(error)
-        context.fireErrorCaught(error)
-    }
-}
-
-extension HTTP1ClientCONNECTTunnelHandler {
-    
-    private func beginHandshake(context: ChannelHandlerContext) {
-        guard context.channel.isActive, state.shouldBeginHandshake else {
-            return
-        }
-        do {
-            try handleAction(state.connectionEstablished(), context: context)
-        } catch {
-            context.fireErrorCaught(error)
-            context.close(promise: nil)
-        }
-    }
-    
-    private func handleAction(_ action: ClientAction, context: ChannelHandlerContext) throws {
-        switch action {
-            case .waitForMoreData:
-                break // do nothing, we've already buffered the data
-            case .sendGreeting:
-                try sendClientGreeting(context: context)
-            case .deliverOneHead, .deliverOneEnd:
-                break
-            case .proxyEstablished:
-                handleEstablished(context: context)
-        }
-    }
-    
     private func sendClientGreeting(context: ChannelHandlerContext) throws {
         guard let ipAddress = targetAddress.ipAddress else {
-            throw HTTPProxyError.invalidClientState
+            throw HTTPProxyError.invalidURL(url: "nil")
         }
         
         var head = HTTPRequestHead(
@@ -121,14 +116,17 @@ extension HTTP1ClientCONNECTTunnelHandler {
             let authorization = "Basic " + "\(credential.identity):\(credential.identityTokenString)".data(using: .utf8)!.base64EncodedString()
             head.headers.replaceOrAdd(name: "proxy-authorization", value: authorization)
         }
-        
-        try state.sendClientGreeting()
-        
+                
         context.write(wrapOutboundOut(.head(head)), promise: nil)
         context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
     }
     
-    private func handleEstablished(context: ChannelHandlerContext) {
-        established?.succeed(())
+    private func established(context: ChannelHandlerContext) throws {
+        try state.established()
+    }
+    
+    private func deliverOneError(_ error: Error, context: ChannelHandlerContext) {
+        context.fireErrorCaught(error)
+        context.close(promise: nil)
     }
 }

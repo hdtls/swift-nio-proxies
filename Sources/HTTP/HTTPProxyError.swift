@@ -20,4 +20,5 @@ public enum HTTPProxyError: Error {
     case unsupportedHTTPProxyMethod
     case unexpectedRead
     case proxyAuthenticationRequired
+    case invalidURL(url: String)
 }
