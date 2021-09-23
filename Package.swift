@@ -29,7 +29,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-log.git", from: "1.4.2"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
-        .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0")
+        .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
     ],
     targets: [
         .target(name: "Helpers",
@@ -43,6 +43,7 @@ let package = Package(
                     .product(name: "NIO", package: "swift-nio"),
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                    .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
                     .target(name: "Helpers")
                 ]),
         .target(name: "SOCKS",

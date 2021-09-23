@@ -12,10 +12,17 @@
 //
 //===----------------------------------------------------------------------===//
 
+#if compiler(>=5.1)
+@_implementationOnly import CNIOBoringSSL
+#else
+import CNIOBoringSSL
+#endif
+import Foundation
+import Helpers
+import Logging
 import NIO
 import NIOHTTP1
-import Logging
-import Helpers
+import NIOSSL
 
 public final class HTTP1ServerCONNECTTunnelHandler: ChannelInboundHandler, RemovableChannelHandler {
     
@@ -34,6 +41,14 @@ public final class HTTP1ServerCONNECTTunnelHandler: ChannelInboundHandler, Remov
     public let logger: Logger
     
     public let completion: (NetAddress) -> EventLoopFuture<Channel>
+    
+    /// Enable this to allow MitM decrypt https triffic.
+    public let isMitMEnabled: Bool = false
+    
+    /// Enable this to capture http body.
+    public let isHTTPCaptureEnabled: Bool = true
+    
+    public let hostnames: [String] = ["*.ietf.org", "*.baidu.com", "*.akii.me"]
     
     public init(logger: Logger = .init(label: "com.netbot.http-server-tunnel"), completion: @escaping (NetAddress) -> EventLoopFuture<Channel>) {
         self.logger = logger
@@ -88,7 +103,6 @@ public final class HTTP1ServerCONNECTTunnelHandler: ChannelInboundHandler, Remov
             context.fireChannelRead(readBuffers.removeFirst())
         }
     }
-    
 }
 
 extension HTTP1ServerCONNECTTunnelHandler {
@@ -106,7 +120,14 @@ extension HTTP1ServerCONNECTTunnelHandler {
     
     private func evaluateClientGreeting(context: ChannelHandlerContext) throws {
         guard let head = requestHead else {
-            throw HTTPProxyError.unexpectedRead
+            throw HTTPProxyError.invalidURL(url: String(describing: requestHead?.uri))
+        }
+        
+        let passingTests = hostnames.contains { hostname in
+            head.uri.contains(hostname.replacingOccurrences(of: "*", with: ""))
+        }
+        guard passingTests else {
+            throw HTTPProxyError.invalidURL(url: head.uri)
         }
         
         logger.info("\(head.method) \(head.uri) \(head.version)")
@@ -120,10 +141,10 @@ extension HTTP1ServerCONNECTTunnelHandler {
             throw HTTPProxyError.invalidURL(url: head.uri)
         }
         
-        let ipAddr = String(splits.first!)
+        let serverHostname = String(splits.first!)
         let port = Int(splits.last!) ?? 80
-        let taskAddress: NetAddress = ipAddr.isIPAddr() ? .socketAddress(try! .init(ipAddress: ipAddr, port: port)) : .domainPort(ipAddr, port)
-    
+        let taskAddress: NetAddress = .domainPort(serverHostname, port)
+        
         // New request is complete. We don't want any more data from now on.
         context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
             .whenSuccess { httpDecoder in
@@ -135,7 +156,7 @@ extension HTTP1ServerCONNECTTunnelHandler {
         logger.info("connecting to proxy server...")
         
         client.whenSuccess { channel in
-            self.handleRemoteConnect(peerChannel: channel, context: context)
+            self.remoteDidConnected(serverHostname, channel: channel, context: context)
         }
         
         client.whenFailure { error in
@@ -143,8 +164,8 @@ extension HTTP1ServerCONNECTTunnelHandler {
         }
     }
     
-    private func handleRemoteConnect(peerChannel: Channel, context: ChannelHandlerContext) {
-        logger.info("proxy server connected \(peerChannel.remoteAddress?.description ?? "")")
+    private func remoteDidConnected(_ serverHostname: String, channel: Channel, context: ChannelHandlerContext) {
+        logger.info("proxy server connected \(channel.remoteAddress?.description ?? "")")
         
         do {
             try state.established()
@@ -161,23 +182,41 @@ extension HTTP1ServerCONNECTTunnelHandler {
         context.write(wrapOutboundOut(.head(head)), promise: nil)
         context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
         
-        let (localGlue, peerGlue) = GlueHandler.matchedPair()
-        
         context.pipeline.handler(type: HTTPResponseEncoder.self)
             .flatMap {
                 context.pipeline.removeHandler($0)
             }
-            .flatMap {
-                // Now we need to glue our channel and the peer channel together.
-                context.channel.pipeline.addHandler(localGlue)
-                    .and(peerChannel.pipeline.addHandler(peerGlue))
+            .flatMapThrowing {
+                let (localGlue, peerGlue) = GlueHandler.matchedPair()
+                
+                let shouldConfigMitMPipeline = self.isMitMEnabled && self.hostnames.contains { hostname in
+                    serverHostname.contains(hostname.replacingOccurrences(of: "*", with: ""))
+                }
+                
+                guard shouldConfigMitMPipeline else {
+                    try context.pipeline.syncOperations.addHandler(localGlue)
+                    try channel.pipeline.syncOperations.addHandler(peerGlue)
+                    return
+                }
+                
+                // Add ssl handlers to decrypt https request.
+                let boringSSLIssuedCertificate = try boringSSLIssueSelfSignedCertificate(hostname: serverHostname)
+                try context.pipeline.syncOperations.configureSSLServerHandlers(certificateChain: [.certificate(boringSSLIssuedCertificate.0)], privateKey: .privateKey(boringSSLIssuedCertificate.1))
+                try context.pipeline.syncOperations.configureHTTPServerPipeline(withPipeliningAssistance: false, withErrorHandling: false)
+                try context.pipeline.syncOperations.addHandler(HTTPContentCatcher<HTTPRequestHead>.init(enableHTTPCapture: self.isHTTPCaptureEnabled))
+                try context.pipeline.syncOperations.addHandlers([HTTPIOTransformer<HTTPRequestHead>(), localGlue])
+                
+                try channel.pipeline.syncOperations.addSSLClientHandlers(serverHostname: serverHostname)
+                try channel.pipeline.syncOperations.addHTTPClientHandlers()
+                try channel.pipeline.syncOperations.addHandler(HTTPContentCatcher<HTTPResponseHead>.init(enableHTTPCapture: self.isHTTPCaptureEnabled))
+                try channel.pipeline.syncOperations.addHandlers([HTTPIOTransformer<HTTPResponseHead>(), peerGlue])
             }
-            .flatMap { _ in
+            .flatMap {
                 context.pipeline.removeHandler(self)
             }
             .whenFailure { error in
                 // Close connected peer channel before closing our channel.
-                peerChannel.close(mode: .all, promise: nil)
+                channel.close(mode: .all, promise: nil)
                 self.deliverOneError(error, context: context)
             }
     }

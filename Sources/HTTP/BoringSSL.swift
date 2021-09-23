@@ -20,6 +20,8 @@ import CNIOBoringSSL
 import Foundation
 import NIOSSL
 
+// TODO: Use PKCS#12 bundle instead.
+
 // This function generates a random number suitable for use in an X509
 // serial field. This needs to be a positive number less than 2^159
 // (such that it will fit into 20 ASN.1 bytes).
@@ -201,7 +203,7 @@ func boringSSLIssueCACertificate() -> (OpaquePointer, UnsafeMutablePointer<EVP_P
     let name = CNIOBoringSSL_X509_get_subject_name(x)
     
     boringSSLX509NameAddEntry(name: name, nid: NID_organizationName, value: "Netbot")
-    boringSSLX509NameAddEntry(name: name, nid: NID_commonName, value: "Netbot Generated CA")
+    boringSSLX509NameAddEntry(name: name, nid: NID_commonName, value: "Netbot Generated Root CA")
     
     CNIOBoringSSL_X509_set_issuer_name(x, name)
     
@@ -312,4 +314,65 @@ extension UnsafeMutablePointer where Pointee == EVP_PKEY {
         
         return Array(bytes)
     }
+}
+
+func boringSSLIssueSelfSignedCertificate(hostname: String) throws -> (NIOSSLCertificate, NIOSSLPrivateKey) {
+    
+    let fileURLForCA: URL
+    let fileURLForCAPrivateKey: URL
+    let fileURLForPrivateKey: URL
+    let fileURLForSelfSignedCertificate: URL
+    
+    let autoGen = true
+    if autoGen {
+        fileURLForCA = URL(fileURLWithPath: "/Users/Paul/Developer/certificate/test/boringssl.ca.der")
+        fileURLForCAPrivateKey = URL(fileURLWithPath: "/Users/Paul/Developer/certificate/test/boringssl.ca.privateKey.der")
+        fileURLForPrivateKey = URL(fileURLWithPath: "/Users/Paul/Developer/certificate/test/boringssl.privateKey.der")
+        fileURLForSelfSignedCertificate = URL(fileURLWithPath: "/Users/Paul/Developer/certificate/test/boringssl.\(hostname).der")
+    } else {
+        fileURLForCA = URL(fileURLWithPath: "/Users/Paul/Developer/certificate/boringssl.ca.der")
+        fileURLForCAPrivateKey = URL(fileURLWithPath: "/Users/Paul/Developer/certificate/boringssl.ca.privateKey.der")
+        fileURLForPrivateKey = URL(fileURLWithPath: "/Users/Paul/Developer/certificate/test.privateKey.der")
+        fileURLForSelfSignedCertificate = URL(fileURLWithPath: "/Users/Paul/Developer/certificate/boringssl.\(hostname).der")
+    }
+    
+    let boringSSLIssuedCACertificate: (OpaquePointer, UnsafeMutablePointer<EVP_PKEY>)
+    if FileManager.default.fileExists(atPath: fileURLForCA.path) {
+        boringSSLIssuedCACertificate = (
+            try boringSSLDERBytesToX509(bytes: Data(contentsOf: fileURLForCA)),
+            try boringSSLDERBytesToRSAKey(bytes: Data(contentsOf: fileURLForCAPrivateKey))
+        )
+    } else {
+        boringSSLIssuedCACertificate = boringSSLIssueCACertificate()
+    }
+    
+    let key: UnsafeMutablePointer<EVP_PKEY>
+    if FileManager.default.fileExists(atPath: fileURLForPrivateKey.path) {
+        key = try boringSSLDERBytesToRSAKey(bytes: Data(contentsOf: fileURLForPrivateKey))
+    } else {
+        key = boringSSLGenerateRSAPrivateKey()
+    }
+    
+    let boringSSLIssuedSelfSignedCertificate: ([UInt8], [UInt8])
+    if FileManager.default.fileExists(atPath: fileURLForSelfSignedCertificate.path) {
+        boringSSLIssuedSelfSignedCertificate = (
+            Array(try Data(contentsOf: fileURLForSelfSignedCertificate)),
+            try key.toDERBytes()
+        )
+    } else {
+        let certKeyPairs = boringSSLIssueSelfSignedCertificate(key: key, ca: boringSSLIssuedCACertificate, hostname: hostname)
+        boringSSLIssuedSelfSignedCertificate = (try certKeyPairs.0.toDERBytes(), try certKeyPairs.1.toDERBytes())
+    }
+    
+    DispatchQueue.global().async {
+        try? Data(boringSSLIssuedCACertificate.0.toDERBytes()).write(to: fileURLForCA)
+        try? Data(boringSSLIssuedCACertificate.1.toDERBytes()).write(to: fileURLForCAPrivateKey)
+        try? Data(boringSSLIssuedSelfSignedCertificate.0).write(to: fileURLForSelfSignedCertificate)
+        try? Data(boringSSLIssuedSelfSignedCertificate.1).write(to: fileURLForPrivateKey)
+    }
+    
+    return (
+        try NIOSSLCertificate(bytes: boringSSLIssuedSelfSignedCertificate.0, format: .der),
+        try NIOSSLPrivateKey(bytes: boringSSLIssuedSelfSignedCertificate.1, format: .der)
+    )
 }

@@ -17,9 +17,9 @@ import NIO
 
 public final class GlueHandler: ChannelDuplexHandler {
     
-    public typealias InboundIn = ByteBuffer
-    public typealias OutboundIn = ByteBuffer
-    public typealias OutboundOut = ByteBuffer
+    public typealias InboundIn = NIOAny
+    public typealias OutboundIn = NIOAny
+    public typealias OutboundOut = NIOAny
     
     private var partner: GlueHandler?
     
@@ -27,14 +27,10 @@ public final class GlueHandler: ChannelDuplexHandler {
     
     private var pendingRead: Bool = false
     
-    public var logger: Logger = .init(label: "com.netbot.glue")
-    
     private init() { }
     
     public func handlerAdded(context: ChannelHandlerContext) {
         self.context = context
-        logger[metadataKey: "local"] = "\(context.channel.localAddress!)"
-        logger[metadataKey: "remote"] = "\(context.channel.remoteAddress!)"
     }
     
     public func handlerRemoved(context: ChannelHandlerContext) {
@@ -63,7 +59,6 @@ public final class GlueHandler: ChannelDuplexHandler {
     
     public func errorCaught(context: ChannelHandlerContext, error: Error) {
         context.fireErrorCaught(error)
-        logger.error("\(error)")
         self.partner?.partnerCloseFull()
     }
     
@@ -104,8 +99,6 @@ extension GlueHandler {
         guard let context = context else {
             return
         }
-        
-        logger.debug("write \(unwrapOutboundIn(data).readableBytes) bytes")
         context.write(data, promise: nil)
     }
     
