@@ -32,6 +32,12 @@ extension ChannelPipeline {
         }
     }
     
+    func configureSSLServerHandlers(pkcs12Bundle: NIOSSLPKCS12Bundle, position: ChannelPipeline.Position = .last) -> EventLoopFuture<Void> {
+        configureSSLServerHandlers(certificateChain: pkcs12Bundle.certificateChain.reduce(into: [], { partialResult, certificate in
+            partialResult.append(.certificate(certificate))
+        }), privateKey: .privateKey(pkcs12Bundle.privateKey))
+    }
+
     func configureSSLServerHandlers(certificateChain: [NIOSSLCertificateSource], privateKey: NIOSSLPrivateKeySource, position: ChannelPipeline.Position = .last) -> EventLoopFuture<Void> {
         let tlsConfiguration = TLSConfiguration.makeServerConfiguration(certificateChain: certificateChain, privateKey: privateKey)
         return configureSSLServerHandlers(tlsConfiguration: tlsConfiguration, position: position)
@@ -66,11 +72,14 @@ extension ChannelPipeline.SynchronousOperations {
         try addHandlers(handlers, position: position)
     }
     
+    func configureSSLServerHandlers(pkcs12Bundle: NIOSSLPKCS12Bundle, position: ChannelPipeline.Position = .last) throws {
+        try configureSSLServerHandlers(certificateChain: pkcs12Bundle.certificateChain.reduce(into: [], { partialResult, certificate in
+            partialResult.append(.certificate(certificate))
+        }), privateKey: .privateKey(pkcs12Bundle.privateKey))
+    }
+    
     func configureSSLServerHandlers(certificateChain: [NIOSSLCertificateSource], privateKey: NIOSSLPrivateKeySource, position: ChannelPipeline.Position = .last) throws {
-        eventLoop.assertInEventLoop()
-        
         let tlsConfiguration = TLSConfiguration.makeServerConfiguration(certificateChain: certificateChain, privateKey: privateKey)
-        
         try configureSSLServerHandlers(tlsConfiguration: tlsConfiguration, position: position)
     }
     
