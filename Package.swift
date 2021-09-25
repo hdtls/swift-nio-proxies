@@ -62,6 +62,7 @@ let package = Package(
                 ]),
         .target(name: "Netbot",
                 dependencies: [
+                    .product(name: "ArgumentParser", package: "swift-argument-parser"),
                     .product(name: "NIO", package: "swift-nio"),
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
