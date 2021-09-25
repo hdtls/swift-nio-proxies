@@ -18,7 +18,6 @@
 import CNIOBoringSSL
 #endif
 import Foundation
-import NIOSSL
 
 /// This function generates a random number suitable for use in an X509
 /// serial field. This needs to be a positive number less than 2^159
@@ -160,8 +159,7 @@ func boringSSLCreatePKCS12Bundle(passphrase: String, name: String, certificate: 
     }
     
     guard let p12 = p12 else {
-        // TODO: Error handling
-        throw BoringSSLError.unknownError([])
+        throw BoringSSLError.unknownError(BoringSSLError.buildErrorStack())
     }
     return p12
 }
@@ -247,7 +245,6 @@ func boringSSLPKCS12Bundle(base64EncodedString: String) throws -> OpaquePointer 
     CNIOBoringSSL_CRYPTO_library_init()
     
     guard let buffer = Data(base64Encoded: base64EncodedString) else {
-        // TODO: Error handling
         throw BoringSSLError.unknownError([])
     }
     
@@ -260,8 +257,7 @@ func boringSSLPKCS12Bundle(base64EncodedString: String) throws -> OpaquePointer 
     }
     
     guard let p12 = p12 else {
-        // TODO: Error handling
-        throw BoringSSLError.unknownError([])
+        throw BoringSSLError.unknownError(BoringSSLError.buildErrorStack())
     }
     
     return p12
@@ -281,7 +277,7 @@ func boringSSLPKCS12BundleDERBytes(_ p12: OpaquePointer) throws -> [UInt8] {
     
     let rc = CNIOBoringSSL_i2d_PKCS12_bio(bio, p12)
     guard rc == 1 else {
-        throw BoringSSLError.unknownError([])
+        throw BoringSSLError.unknownError(BoringSSLError.buildErrorStack())
     }
     
     var dataPtr: UnsafeMutablePointer<CChar>? = nil
@@ -316,9 +312,7 @@ func boringSSLParseBase64EncodedPKCS12BundleString(passphrase: String, base64Enc
     let rc = CNIOBoringSSL_PKCS12_parse(p12, passphrase, &pkey, &cert, &caCerts)
 
     guard rc == 1 else {
-        // TODO: Error handling
-        // BoringSSLError.unknownError(<#T##NIOBoringSSLErrorStack#>)
-        throw BoringSSLError.noError
+        throw BoringSSLError.unknownError(BoringSSLError.buildErrorStack())
     }
     
     // Successfully parsed, let's unpack. The key and cert are mandatory,
