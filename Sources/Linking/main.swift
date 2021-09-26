@@ -32,7 +32,7 @@ let httpListenPort = "6152"
 //    "--exceptions", "localhost,*.local,localhost,*.apple.com,0.0.0.0/8,10.0.0.0/8,127.0.0.0/8,169.254.0.0/16,172.16.0.0/12,192.0.0.0/24,192.0.2.0/24,192.168.0.0/16,192.88.99.0/24,198.18.0.0/15,198.51.100.0/24,203.0.113.0/24,224.0.0.0/4,240.0.0.0/4,255.255.255.255/32"
 //])
 
-//BoringSSLCommand.main()
+//BoringSSLCommand.main(["install"])
 
 LoggingSystem.bootstrap { label in
     var handler = StreamLogHandler.standardOutput(label: label)
@@ -50,6 +50,13 @@ defer {
     try! eventLoopGroup.syncShutdownGracefully()
 }
 
+public enum OutboundMode {
+    case direct
+    case globalProxy
+    case ruleBasedProxy
+}
+
+let outboundMode = OutboundMode.direct
 
 let bootstrap = ServerBootstrap(group: eventLoopGroup)
     .serverChannelOption(ChannelOptions.backlog, value: Int32(1024))
@@ -58,23 +65,23 @@ let bootstrap = ServerBootstrap(group: eventLoopGroup)
         channel.pipeline.addHandlers([
             HTTPResponseEncoder(),
             ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)),
-            HTTP1ServerCONNECTTunnelHandler { taskAddress in
-                channel.eventLoop.next().submit {
+            HTTP1ProxyServerHandler { taskAddress in
+                let bootstrap = ClientBootstrap(group: channel.eventLoop.next())
+                    .channelInitializer { client in
+                                                client.pipeline.eventLoop.makeSucceededVoidFuture()
+//                        client.pipeline.addSSClientHandlers(taskAddress: taskAddress, secretKey: credential.identityTokenString)
+                        //                        client.pipeline.addSOCKSClientHandlers(taskAddress: taskAddress, credential: credential)
+                    }
+                
+                if outboundMode == .direct {
                     switch taskAddress {
                         case .domainPort(let domain, let port):
-                            return try .makeAddressResolvingHost(domain, port: port)
+                            return bootstrap.connect(host: domain, port: port)
                         case .socketAddress(let socketAddress):
-                            return socketAddress
+                            return bootstrap.connect(to: socketAddress)
                     }
-                }
-                .flatMap { baseAddress in
-                    ClientBootstrap(group: channel.eventLoop.next())
-                        .channelInitializer { client in
-                            client.pipeline.eventLoop.makeSucceededVoidFuture()
-                            //                        client.pipeline.addSSClientHandlers(taskAddress: taskAddress, secretKey: credential.identityTokenString)
-                            //                        client.pipeline.addSOCKSClientHandlers(taskAddress: taskAddress, credential: credential)
-                        }
-                        .connect(to: baseAddress)
+                } else {
+                    return bootstrap.connect(host: serverIpAddress, port: 8389)
                 }
             }
         ])

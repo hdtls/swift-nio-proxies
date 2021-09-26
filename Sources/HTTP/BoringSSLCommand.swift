@@ -299,7 +299,7 @@ NOTE. write PART.1 and PART.2 to your config file to enable decrypt HTTPS traffi
             guard let buffer = dataPtr.map({ UnsafeRawBufferPointer(start: $0, count: length) }) else {
                 fatalError("Failed to map bytes from a certificate")
             }
-            return
+            
             guard let certificate = SecCertificateCreateWithData(nil, Data(buffer) as CFData) else {
                 throw SecurityError.failedToLoadCertificate
             }

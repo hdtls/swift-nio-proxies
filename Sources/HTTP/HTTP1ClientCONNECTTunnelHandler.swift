@@ -73,7 +73,7 @@ public final class HTTP1ClientCONNECTTunnelHandler: ChannelInboundHandler, Remov
                         case 407:
                             throw HTTPProxyError.proxyAuthenticationRequired
                         default:
-                            throw HTTPProxyError.invalidProxyResponse
+                            throw HTTPProxyError.invalidProxyResponse(head)
                     }
                 case .end where requestHead != nil:
                     try established(context: context)

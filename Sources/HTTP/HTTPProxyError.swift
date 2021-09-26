@@ -12,13 +12,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NIOHTTP1
+
 public enum HTTPProxyError: Error {
     case invalidClientState
     case invalidServerState
-    case invalidProxyResponse
+    case invalidProxyResponse(HTTPResponseHead)
     case invalidHTTPOrdering
-    case unsupportedHTTPProxyMethod
-    case unexpectedRead
     case proxyAuthenticationRequired
     case invalidURL(url: String)
 }
