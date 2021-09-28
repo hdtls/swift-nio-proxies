@@ -17,41 +17,65 @@ import ArgumentParser
 import Foundation
 import SystemConfiguration
 
-public struct ProxiesControlCommand: ParsableCommand {
-    public static var configuration: CommandConfiguration = .init(commandName: "proxyctl", abstract: "System proxies settings.", discussion: "This command help user update system proxies settings for SOCKS, web and secure web proxy.", subcommands: [InstallCommand.self, UninstallCommand.self])
+public struct ProxyConfigCommand: ParsableCommand {
+    public static var configuration: CommandConfiguration = .init(commandName: "proxycfg", abstract: "System Proxies Settings Command Line Tool", discussion: "This command help user update system proxies settings for SOCKS, web and secure web proxy.", subcommands: [InstallCommand.self, UninstallCommand.self])
     
     public init() {}
 }
 
-extension ProxiesControlCommand {
+extension ProxyConfigCommand {
     
     public struct InstallCommand: ParsableCommand {
 
         public static var configuration: CommandConfiguration = .init(commandName: "install", abstract: "Install settings for system proxies settings.", discussion: "This command help user to install SOCKS5, web and secure web proxy settings. \n\nNote: Only when both address and port are set can take effect. Missing any of them will cause the proxy setting to failed. \n\nYou can choose set --xx-listen-address and --xx-listen-port or only use --xx-listen to update settings, if both --xx-listen will be override by --xx-listen-address/port.")
 
         @Option(help: "The SOCKS5 proxy server listen address.")
-        var socks5ListenAddress: String?
+        public var socksListenAddress: String?
+        private var __socksListenAddress: String? {
+            socksListenAddress ?? socksListen?.components(separatedBy: ":").first
+        }
         
         @Option(help: "The SOCKS5 proxy server listen port.")
-        var socks5ListenPort: Int?
+        public var socksListenPort: Int?
+        private var __socksListenPort: Int? {
+            guard socksListenPort == nil else {
+                return socksListenPort
+            }
+            guard let port = socksListen?.components(separatedBy: ":").last else {
+                return nil
+            }
+            return Int(port)
+        }
         
         @Option(help: "The SOCKS5 proxy server listen authority (e.g., 127.0.0.1:10000).")
-        var socks5Listen: String?
-        
+        public var socksListen: String?
+
         @Option(help: "The web and secure web proxy server listen address.")
-        var httpListenAddress: String?
+        public var httpListenAddress: String?
+        private var __httpListenAddress: String? {
+            httpListenAddress ?? httpListen?.components(separatedBy: ":").first
+        }
         
         @Option(help: "The web and secure web proxy server listen port.")
-        var httpListenPort: Int?
+        public var httpListenPort: Int?
+        private var __httpListenPort: Int? {
+            guard httpListenPort == nil else {
+                return httpListenPort
+            }
+            guard let port = httpListen?.components(separatedBy: ":").last else {
+                return nil
+            }
+            return Int(port)
+        }
         
-        @Option(help: "The web and secure web proxy server list authority. (e.g., 127.0.0.1:10000)")
-        var httpListen: String?
+        @Option(help: "The web and secure web proxy server listen authority. (e.g., 127.0.0.1:10000)")
+        public var httpListen: String?
         
         @Flag(help: "Exclude simple hostnames.")
-        var excludeSimpleHostnames: Bool = false
+        public var excludeSimpleHostnames: Bool = false
         
         @Option(help: "Bypass proxy settings for these Hosts & Domains, separated by commas.")
-        var exceptions: String?
+        public var exceptions: String?
         
         public init() {}
         
@@ -70,47 +94,19 @@ extension ProxiesControlCommand {
             
             var settings: [CFString : Any] = [:]
             
-            let resolveListenAddressPortPairs: (String?, String?, Int?) -> (address: String?, port: Int?) = { authority, address, port in
-                var listenAddress: String?
-                var listenPort: Int?
-                
-                let splits = authority?.split(separator: ":").map(String.init)
-                
-                if let address = address, address.isIPAddr() {
-                    listenAddress = address
-                } else {
-                    // evalute from authority.
-                    listenAddress = splits?.first?.isIPAddr() == true ? splits?.first : nil
-                }
-                
-                if let port = port {
-                    listenPort = port
-                } else {
-                    listenPort = splits?.last != nil ? Int(splits!.last!) : nil
-                }
-                
-                return (listenAddress, listenPort)
-            }
-       
-            let (socks5ListenAddress, socks5ListenPort) = resolveListenAddressPortPairs(self.socks5Listen, self.socks5ListenAddress, self.socks5ListenPort)
-            let (httpListenAddress, httpListenPort) = resolveListenAddressPortPairs(self.httpListen, self.httpListenAddress, self.httpListenPort)
-            
-            let socksProxyEnabled = socks5ListenAddress != nil && socks5ListenPort != nil
-            let webProxyEnabled = httpListenAddress != nil && httpListenPort != nil
-            
-            if socksProxyEnabled {
-                settings[kCFNetworkProxiesSOCKSProxy] = socks5ListenAddress
-                settings[kCFNetworkProxiesSOCKSPort] = socks5ListenPort
-                settings[kCFNetworkProxiesSOCKSEnable] = socksProxyEnabled
+            if let socksListenAddress = __socksListenAddress, let socksListenPort = __socksListenPort {
+                settings[kCFNetworkProxiesSOCKSProxy] = socksListenAddress
+                settings[kCFNetworkProxiesSOCKSPort] = socksListenPort
+                settings[kCFNetworkProxiesSOCKSEnable] = true
             }
             
-            if webProxyEnabled {
+            if let httpListenAddress = __httpListenAddress, let httpListenPort = __httpListenPort {
                 settings[kCFNetworkProxiesHTTPProxy] = httpListenAddress
                 settings[kCFNetworkProxiesHTTPPort] = httpListenPort
-                settings[kCFNetworkProxiesHTTPEnable] = webProxyEnabled
+                settings[kCFNetworkProxiesHTTPEnable] = true
                 settings[kCFNetworkProxiesHTTPSProxy] = httpListenAddress
                 settings[kCFNetworkProxiesHTTPSPort] = httpListenPort
-                settings[kCFNetworkProxiesHTTPSEnable] = webProxyEnabled
+                settings[kCFNetworkProxiesHTTPSEnable] = true
             }
             
             settings[kCFNetworkProxiesExcludeSimpleHostnames] = excludeSimpleHostnames
