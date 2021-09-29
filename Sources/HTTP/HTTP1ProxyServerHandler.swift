@@ -12,11 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#if compiler(>=5.1)
-@_implementationOnly import CNIOBoringSSL
-#else
-import CNIOBoringSSL
-#endif
 import Foundation
 import Helpers
 import Logging
@@ -44,6 +39,7 @@ public final class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
     /// During the request is established, we need to buffer events.
     private var eventBuffer: CircularBuffer<Event> = .init(initialCapacity: 0)
     
+    /// The Logger for this handler.
     public let logger: Logger
     
     public let completion: (NetAddress) -> EventLoopFuture<Channel>
@@ -73,6 +69,7 @@ public final class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
     
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         guard state != .active else {
+            // All inbound events will be buffered until handle remove from pipeline.
             eventBuffer.append(.channelRead(data: data))
             return
         }
@@ -151,8 +148,6 @@ extension HTTP1ProxyServerHandler {
             throw HTTPProxyError.invalidURL(url: "nil")
         }
         
-        logger.info("\(head.method) \(head.uri) \(head.version)")
-        
         // Only CONNECT tunnel need remove default http server pipelines.
         if requestHead.method == .CONNECT {
             // New request is complete. We don't want any more data from now on.
@@ -163,19 +158,19 @@ extension HTTP1ProxyServerHandler {
         }
         
         // Proxy Authorization
-        if let authorization = head.headers.first(name: "Proxy-Authorization") {
-            guard false else {
-                // If user do not have an authorization msg response 407.
-                context.write(wrapOutboundOut(.head(.init(version: .http1_1, status: .proxyAuthenticationRequired, headers: .init()))), promise: nil)
-                context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
-                return
+        if let authorization = authorization {
+            guard let basicAuthorization = head.headers.basicAuthorization else {
+                throw HTTPProxyError.unacceptable(code: .proxyAuthenticationRequired)
+            }
+            guard authorization == basicAuthorization else {
+                throw HTTPProxyError.unacceptable(code: .unauthorized)
             }
         }
         
         // This is the easiest way to parse host and port.
         let url = URL(string: "\(head.method == .CONNECT ? "https://" : "")\(head.uri)")
         var serverHostname = url?.host
-        if serverHostname == nil, let host = head.headers[canonicalForm: "Host"].first {
+        if serverHostname == nil, let host = head.headers.first(name: .host) {
             serverHostname = String(host)
         }
         guard let serverHostname = serverHostname, !serverHostname.isEmpty else {
@@ -188,8 +183,6 @@ extension HTTP1ProxyServerHandler {
         
         let client = completion(taskAddress)
         
-        logger.info("connecting to proxy server...")
-        
         client.whenSuccess { channel in
             self.remoteDidConnected(serverHostname, channel: channel, context: context)
         }
@@ -200,7 +193,7 @@ extension HTTP1ProxyServerHandler {
     }
     
     private func remoteDidConnected(_ serverHostname: String, channel: Channel, context: ChannelHandlerContext) {
-        logger.info("proxy server connected \(channel.remoteAddress?.description ?? "")")
+        logger.trace("proxy server connected \(String(describing: channel.remoteAddress?.description))")
         
         do {
             try state.established()
@@ -212,19 +205,19 @@ extension HTTP1ProxyServerHandler {
         
         // Only CONNECT tunnel need established response and remove default http server pipelines.
         if requestHead.method == .CONNECT {
-            logger.info("sending establish message to \(String(describing: context.channel.localAddress))...")
+            logger.trace("sending establish message to \(String(describing: context.channel.localAddress))...")
             // Ok, upgrade has completed! We now need to begin the upgrade process.
             // First, send the 200 connection established message.
             // This content-length header is MUST NOT, but we need to workaround NIO's insistence that we set one.
-            let headers = HTTPHeaders([("Content-Length", "0")])
+            var headers = HTTPHeaders()
+            headers.add(name: .contentLength, value: "0")
             let head = HTTPResponseHead(version: .http1_1, status: .custom(code: 200, reasonPhrase: "Connection Established"), headers: headers)
             context.write(wrapOutboundOut(.head(head)), promise: nil)
             context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
             
             context.pipeline.handler(type: HTTPResponseEncoder.self)
-                .flatMap {
-                    context.pipeline.removeHandler($0)
-                }.cascade(to: promise)
+                .flatMap(context.pipeline.removeHandler)
+                .cascade(to: promise)
         } else {
             promise.succeed(())
         }
@@ -297,12 +290,12 @@ extension HTTP1ProxyServerHandler {
                     head = response
                 case .invalidClientState, .invalidServerState, .invalidHTTPOrdering:
                     head = HTTPResponseHead.init(version: .http1_1, status: .internalServerError)
-                case .proxyAuthenticationRequired:
-                    head = HTTPResponseHead.init(version: .http1_1, status: .proxyAuthenticationRequired)
+                case .unacceptable(code: let code):
+                    head = HTTPResponseHead.init(version: .http1_1, status: code)
                 case .invalidURL:
                     var headers = HTTPHeaders.init()
-                    headers.add(name: "Proxy-Connection", value: "close")
-                    headers.add(name: "Connection", value: "close")
+                    headers.add(name: .proxyConnection, value: "close")
+                    headers.add(name: .connection, value: "close")
                     head = HTTPResponseHead.init(version: .http1_1, status: .badRequest, headers: headers)
             }
         }

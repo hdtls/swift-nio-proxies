@@ -12,6 +12,20 @@
 //
 //===----------------------------------------------------------------------===//
 
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Licensed under Apache License v2.0
+//
+// See LICENSE for license information
+// See CONTRIBUTORS.txt for the list of Netbot project authors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
 #if compiler(>=5.1)
 @_implementationOnly import CNIOBoringSSL
 #else
@@ -176,13 +190,18 @@ func boringSSLSelfSignedPKCS12Bundle(passphrase: String, certificate: OpaquePoin
     //    let passphrase = String((0...6).map { _ in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".randomElement()! })
     let pubkey = boringSSLGenerateRSAPrivateKey()
     let req = CNIOBoringSSL_X509_REQ_new()
+    defer {
+        CNIOBoringSSL_X509_REQ_free(req)
+    }
     
     /* Set the public key. */
     CNIOBoringSSL_X509_REQ_set_pubkey(req, pubkey)
     
     /* Set the DN of the request. */
     let name = CNIOBoringSSL_X509_NAME_new()
-    
+    defer {
+        CNIOBoringSSL_X509_NAME_free(name)
+    }
     boringSSLX509NameAddEntry(name: name, nid: NID_organizationName, value: "Netbot")
     
     let splits = hostname.split(separator: ".")
@@ -230,7 +249,6 @@ func boringSSLSelfSignedPKCS12Bundle(passphrase: String, certificate: OpaquePoin
     boringSSLX509AddExtension(x509: x, nid: NID_subject_key_identifier, value: "hash")
     
     CNIOBoringSSL_X509_sign(x, privateKey, CNIOBoringSSL_EVP_sha256())
-    CNIOBoringSSL_X509_REQ_free(req)
     
     return try boringSSLCreatePKCS12Bundle(passphrase: passphrase, name: commonName, certificate: x, privateKey: pubkey)
 }
@@ -305,6 +323,9 @@ func boringSSLBase64EncodedPKCS12String(_ p12: OpaquePointer) throws -> String {
 /// - Returns: The certificate chain and private key.
 func boringSSLParseBase64EncodedPKCS12BundleString(passphrase: String, base64EncodedString: String) throws -> (certificateChain: [OpaquePointer], privateKey: UnsafeMutablePointer<EVP_PKEY>) {
     let p12 = try boringSSLPKCS12Bundle(base64EncodedString: base64EncodedString)
+    defer {
+        CNIOBoringSSL_PKCS12_free(p12)
+    }
     var pkey: UnsafeMutablePointer<EVP_PKEY>? = nil
     var cert: OpaquePointer?/*<X509>*/ = nil
     var caCerts: OpaquePointer? = nil
