@@ -70,8 +70,6 @@ public final class HTTP1ClientCONNECTTunnelHandler: ChannelInboundHandler, Remov
                     switch head.status.code {
                         case 200..<300:
                             requestHead = head
-                        case 407:
-                            throw HTTPProxyError.proxyAuthenticationRequired
                         default:
                             throw HTTPProxyError.invalidProxyResponse(head)
                     }

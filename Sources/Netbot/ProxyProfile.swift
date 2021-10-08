@@ -23,7 +23,11 @@ public enum ProxyProtocol: String, Codable {
     case direct
 }
 
-public struct ProxyProfile {
+public protocol ProxyProfile {
+    var name: String { get set }
+}
+
+public struct HTTPProxyProfile: ProxyProfile {
     
     /// Name for proxy.
     public var name: String
@@ -42,9 +46,6 @@ public struct ProxyProfile {
     
     /// Port the server will connect to.
     public var port: Int
-    
-    /// Listen backlog.
-    public var backlog: Int
     
     /// When `true`, can prevent errors re-binding to a socket after successive server restarts.
     public var reuseAddress: Bool
@@ -66,7 +67,6 @@ public struct ProxyProfile {
                 token: String,
                 address: String,
                 port: Int,
-                backlog: Int = 256,
                 reuseAddress: Bool = true,
                 tcpNoDelay: Bool = true,
                 supportPipelining: Bool = true,
@@ -79,7 +79,6 @@ public struct ProxyProfile {
         self.token = token
         self.address = address
         self.port = port
-        self.backlog = backlog
         self.reuseAddress = reuseAddress
         self.tcpNoDelay = tcpNoDelay
         self.supportPipelining = supportPipelining

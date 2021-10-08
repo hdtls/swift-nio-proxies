@@ -12,62 +12,74 @@
 //
 //===----------------------------------------------------------------------===//
 
-import ArgumentParser
 import Foundation
 import HTTP
 import Logging
 import NIO
 import SOCKS
+import NIOExtras
 
 public class Netbot {
     
     public var logger: Logger
+    public var configuration: Configuration
     public var outboundMode: OutboundMode
-    public let httpListenAddress: String?
-    public let httpListenPort: Int?
-    public let socksListenAddress: String?
-    public let socksListenPort: Int?
-    public var reqMsgFilters: [String]?
-    public var rules: [Rule] = []
-    public var mitmHostnames: [String]?
-    public private(set) var didShutdown: Bool
+    public var basicAuthorization: BasicAuthorization?
+    public var isHTTPCaptureEnabled: Bool = false
+    public var isMitmEnabled: Bool = false
+    public private(set) var isRunning: Bool
     
-    private let eventLoopGroup: EventLoopGroup
-    private var httpChannel: Channel?
-    private var socksChannel: Channel?
+    private var eventLoopGroup: EventLoopGroup!
+    private var quiesce: ServerQuiescingHelper!
     
     public init(logger: Logger = .init(label: "com.netbot.logging"),
+                configuration: Configuration,
                 outboundMode: OutboundMode = .direct,
-                httpListenAddress: String?,
-                httpListenPort: Int?,
-                socksListenAddress: String?,
-                socksListenPort: Int?,
-                reqMsgFilters: [String]?,
-                mitmHostnames: [String]?) {
-        self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
+                basicAuthorization: BasicAuthorization? = nil,
+                enableHTTPCapture: Bool = false,
+                enableMitm: Bool = false) {
         self.logger = logger
+        self.configuration = configuration
         self.outboundMode = outboundMode
-        self.httpListenAddress = httpListenAddress
-        self.httpListenPort = httpListenPort
-        self.socksListenAddress = socksListenAddress
-        self.socksListenPort = socksListenPort
-        self.reqMsgFilters = reqMsgFilters
-        self.mitmHostnames = mitmHostnames
-        self.didShutdown = false
+        self.basicAuthorization = basicAuthorization
+        self.isHTTPCaptureEnabled = enableHTTPCapture
+        self.isMitmEnabled = enableMitm
+        self.isRunning = false
     }
     
     public func run() throws {
-        if let httpListenAddress = httpListenAddress, let httpListenPort = httpListenPort {
+        precondition(!isRunning, "Netbot has already started.")
+        
+        eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
+        quiesce = ServerQuiescingHelper(group: eventLoopGroup)
+        
+        let fullyShutdownPromise: EventLoopPromise<Void> = eventLoopGroup.next().makePromise()
+        
+        let signalQueue = DispatchQueue(label: "io.netbot.signalHandlingQueue")
+        
+        let signalSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: signalQueue)
+        signalSource.setEventHandler {
+            signalSource.cancel()
+            self.logger.trace("received signal, initiating shutdown which should complete after the last request finished.")
+            self.quiesce.initiateShutdown(promise: fullyShutdownPromise)
+        }
+        signal(SIGINT, SIG_IGN)
+        signalSource.resume()
+        
+        if let httpListenAddress = configuration.generalField.httpListenAddress, let httpListenPort = configuration.generalField.httpListenPort {
             let bootstrap = ServerBootstrap(group: eventLoopGroup)
-                .serverChannelOption(ChannelOptions.backlog, value: Int32(1024))
+                .serverChannelOption(ChannelOptions.backlog, value: Int32(256))
                 .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: SocketOptionValue(1))
+                .serverChannelInitializer { channel in
+                    channel.pipeline.addHandler(self.quiesce.makeServerChannelHandler(channel: channel))
+                }
                 .childChannelInitializer { channel in
                     channel.pipeline.addHandlers([
                         HTTPResponseEncoder(),
                         ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)),
-                        HTTP1ProxyServerHandler { taskAddress in
+                        HTTP1ProxyServerHandler(authorization: self.basicAuthorization, enableHTTPCapture: self.isHTTPCaptureEnabled, enableMitM: self.isMitmEnabled, mitmConfig: self.configuration.mitmField) { taskAddress in
                             
-                            let profile: ProxyProfile = .init(name: "DIRECT", protocol: .direct, user: "", token: "", address: "", port: 0)
+                            let profile: HTTPProxyProfile = .init(name: "DIRECT", protocol: .direct, user: "", token: "", address: "", port: 0)
                             let bootstrap = ClientBootstrap(group: channel.eventLoop.next())
                             
                             guard self.outboundMode != .direct, profile.protocol != .direct else {
@@ -92,37 +104,48 @@ public class Netbot {
                 .childChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: SocketOptionValue(1))
                 .childChannelOption(ChannelOptions.maxMessagesPerRead, value: 1)
             
-            httpChannel = try bootstrap
-                .bind(host: httpListenAddress, port: httpListenPort)
-                .wait()
-            
-            guard let localAddress = httpChannel!.localAddress else {
-                fatalError("Address was unable to bind. Please check that the socket was not closed or that the address family was understood.")
+            do {
+                let channel = try bootstrap
+                    .bind(host: httpListenAddress, port: httpListenPort)
+                    .wait()
+                guard let localAddress = channel.localAddress else {
+                    fatalError("Address was unable to bind. Please check that the socket was not closed or that the address family was understood.")
+                }
+                
+                logger.debug("HTTP proxy server started and listening on \(localAddress)")
+            } catch {
+                try eventLoopGroup.syncShutdownGracefully()
+                throw error
             }
-            
-            logger.info("HTTP proxy server started and listening on \(localAddress)")
         }
         
-        try httpChannel?.closeFuture.wait()
+        isRunning = true
+        
+        try fullyShutdownPromise.futureResult.wait()
+        try eventLoopGroup.syncShutdownGracefully()
     }
     
     public func shutdown() {
-        assert(!didShutdown, "Netbot has already shut down.")
+        precondition(isRunning, "Netbot has already shut down.")
         logger.debug("Netbot shutting down.")
-        logger.trace("Shutting down eventLoopGroup \(eventLoopGroup).")
+        logger.trace("Shutting down eventLoopGroup \(String(describing: eventLoopGroup)).")
         do {
+            let fullyShutdownPromise: EventLoopPromise<Void> = eventLoopGroup.next().makePromise()
+            quiesce.initiateShutdown(promise: fullyShutdownPromise)
+            
+            try fullyShutdownPromise.futureResult.wait()
             try eventLoopGroup.syncShutdownGracefully()
         } catch {
-            logger.warning("Shutting down eventLoopGroup failed: \(error).")
+            logger.warning("Shutting down failed: \(error).")
         }
         
-        didShutdown = true
+        isRunning = false
         logger.trace("Netbot shutdown complete.")
     }
     
     deinit {
         logger.trace("Netbot deinitialized, goodbye!")
-        if !didShutdown {
+        if isRunning {
             assertionFailure("\(self).shutdown() was not called before deinitialized.")
         }
     }
