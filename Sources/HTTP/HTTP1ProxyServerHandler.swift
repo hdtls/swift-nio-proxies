@@ -45,15 +45,31 @@ public final class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
     public let completion: (NetAddress) -> EventLoopFuture<Channel>
     
     /// Enable this to allow MitM decrypt https triffic.
-    public let isMitMEnabled: Bool = false
+    public let isMitMEnabled: Bool
     
     /// Enable this to capture http body.
-    public let isHTTPCaptureEnabled: Bool = true
+    public let isHTTPCaptureEnabled: Bool
     
-    public let sslDecConfig: SSLDecryptionConfiguration = .init(skipServerCertificateVerification: true, hostnames: ["*.baidu.com", "*.ietf.org"], base64EncodedP12String: "", passphrase: "")
+    /// Configuration for HTTP traffic with MitM attacks.
+    public let mitmConfiguration: MitMConfiguration?
     
-    public init(logger: Logger = .init(label: "com.netbot.http-tunnel"), enableHTTPCapture: Bool = false, enableMitM: Bool = false, completion: @escaping (NetAddress) -> EventLoopFuture<Channel>) {
-        self.logger = logger
+    /// The credentials to authenticate a user.
+    public let authorization: BasicAuthorization?
+    
+    deinit {
+        print(#function)
+    }
+    
+    public init(authorization: BasicAuthorization? = nil,
+                enableHTTPCapture: Bool = false,
+                enableMitM: Bool = false,
+                mitmConfig: MitMConfiguration? = nil,
+                completion: @escaping (NetAddress) -> EventLoopFuture<Channel>) {
+        self.authorization = authorization
+        self.logger = .init(label: "com.netbot.http")
+        self.isHTTPCaptureEnabled = enableHTTPCapture
+        self.isMitMEnabled = enableMitM
+        self.mitmConfiguration = mitmConfig
         self.completion = completion
         self.state = .idle
     }
@@ -79,6 +95,17 @@ public final class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
                 case .head(let head) where state == .evaluating:
                     requestHead = head
                     guard head.method != .CONNECT else {
+                        if !isMitMEnabled {
+                            // CONNECT pipeline doesn't contains `HTTPContentCather` handler when MitM disabled.
+                            // so we need log msg in there.
+                            var msg = "\n"
+                            msg += "\n\(head.method) \(head.version) \(head.uri)"
+                            head.headers.forEach { field in
+                                msg += "\n"
+                                msg += "\(field.name) \(field.value)"
+                            }
+                            logger.info("\(msg)")
+                        }
                         return
                     }
                     // Strip hop-by-hop header based on rfc2616.
@@ -90,9 +117,18 @@ public final class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
                 case .body where requestHead != nil && requestHead.method != .CONNECT:
                     eventBuffer.append(.channelRead(data: data))
                     
-                case .end where requestHead != nil:
+                case .end(let trailers) where requestHead != nil:
                     guard requestHead.method != .CONNECT else {
                         try evaluateClientGreeting(context: context)
+                        if !isMitMEnabled {
+                            var msg = "\n"
+                            trailers?.forEach { field in
+                                msg += "\n"
+                                msg += "\(field.name) \(field.value)"
+                            }
+                            msg += "\n"
+                            logger.info("\(msg)")
+                        }
                         return
                     }
                     eventBuffer.append(.channelRead(data: data))
@@ -233,7 +269,7 @@ extension HTTP1ProxyServerHandler {
                 
                 // Only filter PKCS#12 bundle when `isMitMEnabled` set to true.
                 if isMitMEnabled {
-                    filtered = self.sslDecConfig.pool.filter {
+                    filtered = self.mitmConfiguration?.pool.filter {
                         if $0.key.hasPrefix("*") {
                             return serverHostname.contains($0.key.dropFirst())
                         }
@@ -316,14 +352,14 @@ extension HTTPHeaders {
     /// - Returns: The headers without hop-by-hop fields.
     fileprivate func trimmingFieldsInHopByHop() -> HTTPHeaders {
         var headers = self
-        headers.remove(name: "Proxy-Connection")
-        headers.remove(name: "Proxy-Authenticate")
-        headers.remove(name: "Proxy-Authorization")
-        headers.remove(name: "TE")
-        headers.remove(name: "Trailers")
-        headers.remove(name: "Transfer-Encoding")
-        headers.remove(name: "Upgrade")
-        headers.remove(name: "Connection")
+        headers.remove(name: .proxyConnection)
+        headers.remove(name: .proxyAuthenticate)
+        headers.remove(name: .proxyAuthorization)
+        headers.remove(name: .te)
+        headers.remove(name: .trailer)
+        headers.remove(name: .transferEncoding)
+        headers.remove(name: .upgrade)
+        headers.remove(name: .connection)
         return headers
     }
 }

@@ -235,7 +235,7 @@ extension UInt8 {
 public struct Configuration: Codable {
     
     var ruleField: [Rule]
-    var mitmField: MitM.Configuration
+    var mitmField: MitMConfiguration
     var generalField: BasicConfiguration
     var replicaField: ReplicaConfiguration
     
@@ -256,7 +256,7 @@ public struct Configuration: Codable {
     public init(from decoder: Decoder) throws {
         let keyedContainer = try decoder.container(keyedBy: CodingKeys.self)
         ruleField = try keyedContainer.decodeIfPresent([Rule].self, forKey: .ruleField) ?? .init()
-        mitmField = try keyedContainer.decodeIfPresent(MitM.Configuration.self, forKey: .mitmField) ?? .init()
+        mitmField = try keyedContainer.decodeIfPresent(MitMConfiguration.self, forKey: .mitmField) ?? .init()
         generalField = try keyedContainer.decodeIfPresent(BasicConfiguration.self, forKey: .generalField) ?? .init()
         replicaField = try keyedContainer.decodeIfPresent(ReplicaConfiguration.self, forKey: .replicaField) ?? .init()
     }

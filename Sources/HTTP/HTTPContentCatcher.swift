@@ -25,14 +25,14 @@ public final class HTTPContentCatcher<HeadT: Equatable>: ChannelInboundHandler {
     private var body: ByteBuffer!
     private var trailers: HTTPHeaders?
     
-    public let logger: Logger = .init(label: "com.netbot.http.catcher")
-    
+    public let logger: Logger
     public let isHTTPCaptureEnabled: Bool
     public let isHTTPCompressionEnabled: Bool
     
-    public init(enableHTTPCapture: Bool, enableHTTPCompression: Bool = true) {
-        isHTTPCaptureEnabled = enableHTTPCapture
-        isHTTPCompressionEnabled = enableHTTPCompression
+    public init(logger: Logger = .init(label: "com.netbot.http-capture"), enableHTTPCapture: Bool, enableHTTPCompression: Bool = true) {
+        self.logger = logger
+        self.isHTTPCaptureEnabled = enableHTTPCapture
+        self.isHTTPCompressionEnabled = enableHTTPCompression
         guard HeadT.self == HTTPRequestHead.self || HeadT.self == HTTPResponseHead.self else {
             preconditionFailure("unknown HTTP head part type \(HeadT.self)")
         }
@@ -96,7 +96,7 @@ public final class HTTPContentCatcher<HeadT: Equatable>: ChannelInboundHandler {
                 }
                 msg += "\n"
                 
-                logger.debug("\(msg)")
+                logger.info("\(msg)")
         }
     }
 }
