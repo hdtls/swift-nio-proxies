@@ -30,9 +30,12 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-log.git", from: "1.4.2"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
-        .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0")
+        .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
+        .package(url: "https://github.com/vapor/async-kit.git", from: "1.9.0")
     ],
     targets: [
+        .target(name: "CMMDB",
+                cSettings: [.define("HAVE_CONFIG_H")]),
         .target(name: "Helpers",
                 dependencies: [
                     .product(name: "NIO", package: "swift-nio"),
@@ -63,10 +66,12 @@ let package = Package(
         .target(name: "Netbot",
                 dependencies: [
                     .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                    .product(name: "AsyncKit", package: "async-kit"),
                     .product(name: "NIO", package: "swift-nio"),
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
                     .product(name: "NIOExtras", package: "swift-nio-extras"),
+                    .target(name: "CMMDB"),
                     .target(name: "HTTP"),
                     .target(name: "SOCKS"),
                     .target(name: "Shadowsocks")
