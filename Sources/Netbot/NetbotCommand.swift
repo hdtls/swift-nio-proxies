@@ -23,6 +23,7 @@ public enum OutboundMode: String, CaseIterable, ExpressibleByArgument {
 
 public struct NetbotCommand: ParsableCommand {
     
+#if canImport(SystemConfiguration)
     public static var configuration: CommandConfiguration = .init(
         commandName: "netbot",
         abstract: "",
@@ -32,7 +33,17 @@ public struct NetbotCommand: ParsableCommand {
             ProxyConfigCommand.self,
             BoringSSLCommand.self
         ])
-    
+#else
+    public static var configuration: CommandConfiguration = .init(
+        commandName: "netbot",
+        abstract: "",
+        discussion: "",
+        version: "1.0.0",
+        subcommands: [
+            BoringSSLCommand.self
+        ])
+#endif
+
     @Option(help: "The SOCKS5 proxy server listen address.")
     var socksListenAddress: String?
     
@@ -52,7 +63,7 @@ public struct NetbotCommand: ParsableCommand {
     var httpListen: String?
     
     @Option(name: .shortAndLong, help: "The proxy configuration file.")
-    public var configFilePath: String?
+    public var configFile: String?
     
     @Option(help: "The proxy outbound mode.")
     public var outboundMode: OutboundMode = .direct
@@ -72,46 +83,49 @@ public struct NetbotCommand: ParsableCommand {
         
         var configuration: Configuration = .init()
         
-        if let config = configFilePath {
+        if let config = configFile {
             let data = try Data(contentsOf: URL(fileURLWithPath: config))
             let jsonObject = Parser.jsonObject(with: data)
             let jsonData = try JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
             configuration = try JSONDecoder().decode(Configuration.self, from: jsonData)
         }
         
+        #if canImport(SystemConfiguration)
         var proxyctl: [String] = []
         
         if let socksListenAddress = socksListenAddress {
             proxyctl.append("--socks-listen-address")
             proxyctl.append(socksListenAddress)
-            configuration.generalField.socksListenAddress = socksListenAddress
+            configuration.general.socksListenAddress = socksListenAddress
         }
         
         if let socksListenPort = socksListenPort {
             proxyctl.append("--socks-listen-port")
             proxyctl.append("\(socksListenPort)")
-            configuration.generalField.socksListenPort = socksListenPort
+            configuration.general.socksListenPort = socksListenPort
         }
         
         if let httpListenAddress = httpListenAddress {
             proxyctl.append("--http-listen-address")
             proxyctl.append("\(httpListenAddress)")
-            configuration.generalField.httpListenAddress = httpListenAddress
+            configuration.general.httpListenAddress = httpListenAddress
         }
         
         if let httpListenPort = httpListenPort {
             proxyctl.append("--http-listen-port")
             proxyctl.append("\(httpListenPort)")
-            configuration.generalField.httpListenPort = httpListenPort
+            configuration.general.httpListenPort = httpListenPort
         }
 
         if !proxyctl.isEmpty {
             proxyctl.insert("install", at: 0)
         }
-        //        ProxyConfigCommand.main(proxyctl)
+        
+        ProxyConfigCommand.main(proxyctl)
+        #endif
         
         if let reqMsgFilter = reqMsgFilter {
-            configuration.replicaField.reqMsgFilter = reqMsgFilter
+            configuration.replica.reqMsgFilter = reqMsgFilter
         }
         
         let netbot = Netbot.init(

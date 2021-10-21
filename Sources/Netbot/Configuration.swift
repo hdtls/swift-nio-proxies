@@ -12,13 +12,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-import ArgumentParser
 import HTTP
 import Foundation
 
 class Parser {
     /// Represents a `KEY=VALUE` pair in a dotenv file.
-    private struct Line: Equatable {
+    struct Line: Equatable {
         /// The key.
         let key: String
         
@@ -58,7 +57,7 @@ class Parser {
                     actual = value
             }
             
-            if parser.head == Configuration.CodingKeys.ruleField.rawValue {
+            if parser.head == Configuration.CodingKeys.rules.rawValue {
                 var rules: [Any] = (json[parser.head] as? [Any]) ?? []
                 rules.append(actual)
                 json[parser.head] = rules
@@ -93,7 +92,7 @@ class Parser {
                 return self.parseNext()
             default:
                 // this is a valid line, parse it
-                guard self.head == Configuration.CodingKeys.ruleField.rawValue else {
+                guard self.head == Configuration.CodingKeys.rules.rawValue else {
                     return self.parseLine()
                 }
                 guard let value = self.parseLineValue() else {
@@ -234,39 +233,39 @@ extension UInt8 {
 
 public struct Configuration: Codable {
     
-    var ruleField: [Rule]
-    var mitmField: MitMConfiguration
-    var generalField: BasicConfiguration
-    var replicaField: ReplicaConfiguration
+    var rules: [Rule]
+    var mitm: MitMConfiguration
+    var general: BasicConfiguration
+    var replica: ReplicaConfiguration
     
     enum CodingKeys: String, CodingKey {
-        case ruleField = "Rule"
-        case mitmField = "MitM"
-        case generalField = "General"
-        case replicaField = "Replica"
+        case rules = "Rule"
+        case mitm = "MitM"
+        case general = "General"
+        case replica = "Replica"
     }
     
     public init() {
-        ruleField = .init()
-        mitmField = .init()
-        generalField = .init()
-        replicaField = .init()
+        rules = .init()
+        mitm = .init()
+        general = .init()
+        replica = .init()
     }
     
     public init(from decoder: Decoder) throws {
         let keyedContainer = try decoder.container(keyedBy: CodingKeys.self)
-        ruleField = try keyedContainer.decodeIfPresent([Rule].self, forKey: .ruleField) ?? .init()
-        mitmField = try keyedContainer.decodeIfPresent(MitMConfiguration.self, forKey: .mitmField) ?? .init()
-        generalField = try keyedContainer.decodeIfPresent(BasicConfiguration.self, forKey: .generalField) ?? .init()
-        replicaField = try keyedContainer.decodeIfPresent(ReplicaConfiguration.self, forKey: .replicaField) ?? .init()
+        rules = try keyedContainer.decodeIfPresent([Rule].self, forKey: .rules) ?? .init()
+        mitm = try keyedContainer.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
+        general = try keyedContainer.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
+        replica = try keyedContainer.decodeIfPresent(ReplicaConfiguration.self, forKey: .replica) ?? .init()
     }
     
     //    public func encode(to encoder: Encoder) throws {
     //        var keyedContainer = encoder.container(keyedBy: CodingKeys.self)
-    //        keyedContainer.encode(ruleField, forKey: .ruleField)
-    //        keyedContainer.encode(mitmField, forKey: .mitmField)
-    //        keyedContainer.encode(generalField, forKey: .generalField)
-    //        keyedContainer.encode(replicaField, forKey: .replicaField)
+    //        keyedContainer.encode(rules, forKey: .rules)
+    //        keyedContainer.encode(mitm, forKey: .mitm)
+    //        keyedContainer.encode(general, forKey: .general)
+    //        keyedContainer.encode(replica, forKey: .replica)
     //    }
 }
 
@@ -398,72 +397,5 @@ public struct ReplicaConfiguration: Codable, Equatable {
         try keyedContainer.encode(hideUDP, forKey: .hideUDP)
         try keyedContainer.encodeIfPresent(reqMsgFilter, forKey: .reqMsgFilter)
         try keyedContainer.encodeIfPresent(reqMsgFilterType, forKey: .reqMsgFilterType)
-    }
-}
-
-public enum RuleType: String {
-    case domain = "DOMAIN"
-    case domainSuffix = "DOMAIN-SUFFIX"
-    case domainKeyword = "DOMAIN-KEYWORD"
-    case domainSet = "DOMAIN-SET"
-    case final = "FINAL"
-    case geoip = "GEOIP"
-    case ipcidr = "IP-CIDR"
-    case processName = "PROCESS-NAME"
-    case ruleSet = "RULE-SET"
-}
-
-public struct Rule: Codable, Equatable {
-    
-    public var type: RuleType
-    public var pattern: String?
-    public var policy: String
-    public var comment: String?
-    
-    init(string: String) throws {
-        let parts = string.split(separator: ",").map(String.init)
-        guard parts.count >= 2 else {
-            throw DecodingError.ruleValidationFailed(reason: .invalidRuleStringLiteral)
-        }
-        
-        guard let t = RuleType(rawValue: parts.first!.trimmingCharacters(in: .whitespaces)) else {
-            throw DecodingError.ruleValidationFailed(reason: .unacceptableRuleType)
-        }
-        
-        type = t
-        
-        if t == .final {
-            if parts[1].contains("//") {
-                let splited = parts[1].components(separatedBy: "//")
-                policy = splited.first!.trimmingCharacters(in: .whitespaces)
-                comment = splited.last!.trimmingCharacters(in: .whitespaces)
-            } else {
-                policy = parts[1].trimmingCharacters(in: .whitespaces)
-            }
-        } else {
-            guard parts.count >= 3 else {
-                throw DecodingError.ruleValidationFailed(reason: .invalidRuleStringLiteral)
-            }
-            pattern = parts[1].trimmingCharacters(in: .whitespaces)
-            if parts[2].contains("//") {
-                let splited = parts[2].components(separatedBy: "//")
-                policy = splited.first!.trimmingCharacters(in: .whitespaces)
-                comment = splited.last!.trimmingCharacters(in: .whitespaces)
-            } else {
-                policy = parts[2].trimmingCharacters(in: .whitespaces)
-            }
-        }
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let singleValueContainer = try decoder.singleValueContainer()
-        let stringLiteral = try singleValueContainer.decode(String.self)
-        try self.init(string: stringLiteral)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var singleValueContainer = encoder.singleValueContainer()
-        let stringLiteral = "\(type.rawValue),\(pattern != nil ? pattern! + "," : "")\(policy)\(comment != nil ? " // \(comment!)" : "")"
-        try singleValueContainer.encode(stringLiteral)
     }
 }
