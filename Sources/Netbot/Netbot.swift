@@ -66,7 +66,7 @@ public class Netbot {
         signal(SIGINT, SIG_IGN)
         signalSource.resume()
         
-        if let httpListenAddress = configuration.generalField.httpListenAddress, let httpListenPort = configuration.generalField.httpListenPort {
+        if let httpListenAddress = configuration.general.httpListenAddress, let httpListenPort = configuration.general.httpListenPort {
             let bootstrap = ServerBootstrap(group: eventLoopGroup)
                 .serverChannelOption(ChannelOptions.backlog, value: Int32(256))
                 .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: SocketOptionValue(1))
@@ -77,12 +77,11 @@ public class Netbot {
                     channel.pipeline.addHandlers([
                         HTTPResponseEncoder(),
                         ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)),
-                        HTTP1ProxyServerHandler(authorization: self.basicAuthorization, enableHTTPCapture: self.isHTTPCaptureEnabled, enableMitM: self.isMitmEnabled, mitmConfig: self.configuration.mitmField) { taskAddress in
+                        HTTP1ProxyServerHandler(authorization: self.basicAuthorization, enableHTTPCapture: self.isHTTPCaptureEnabled, enableMitM: self.isMitmEnabled, mitmConfig: self.configuration.mitm) { taskAddress in
                             
-                            let profile: HTTPProxyProfile = .init(name: "DIRECT", protocol: .direct, user: "", token: "", address: "", port: 0)
                             let bootstrap = ClientBootstrap(group: channel.eventLoop.next())
                             
-                            guard self.outboundMode != .direct, profile.protocol != .direct else {
+                            guard self.outboundMode != .direct else {
                                 switch taskAddress {
                                     case .domainPort(let domain, let port):
                                         return bootstrap.connect(host: domain, port: port)
@@ -91,12 +90,7 @@ public class Netbot {
                                 }
                             }
                             
-                            return bootstrap
-                                .channelInitializer { channel in
-                                    channel.eventLoop.makeSucceededVoidFuture()
-                                    //                        profile.initialize(on: channel, taskAddress: taskAddress)
-                                }
-                                .connect(host: profile.address, port: profile.port)
+                            return channel.eventLoop.next().makeFailedFuture(ParserError.dataCorrupted)
                         }
                     ])
                 }

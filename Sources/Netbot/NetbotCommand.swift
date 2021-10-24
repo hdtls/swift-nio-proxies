@@ -14,6 +14,7 @@
 
 import ArgumentParser
 import Foundation
+import Logging
 import HTTP
 
 public enum OutboundMode: String, CaseIterable, ExpressibleByArgument {
@@ -80,12 +81,11 @@ public struct NetbotCommand: ParsableCommand {
     public init() {}
     
     public func run() throws {
-        
         var configuration: Configuration = .init()
         
         if let config = configFile {
             let data = try Data(contentsOf: URL(fileURLWithPath: config))
-            let jsonObject = Parser.jsonObject(with: data)
+            let jsonObject = try Parser.jsonObject(with: data)
             let jsonData = try JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
             configuration = try JSONDecoder().decode(Configuration.self, from: jsonData)
         }
@@ -93,39 +93,54 @@ public struct NetbotCommand: ParsableCommand {
         #if canImport(SystemConfiguration)
         var proxyctl: [String] = []
         
-        if let socksListenAddress = socksListenAddress {
+        configuration.general.socksListenAddress = socksListenAddress ?? configuration.general.socksListenAddress
+        if let socksListenAddress = configuration.general.socksListenAddress {
             proxyctl.append("--socks-listen-address")
             proxyctl.append(socksListenAddress)
-            configuration.general.socksListenAddress = socksListenAddress
         }
         
-        if let socksListenPort = socksListenPort {
+        configuration.general.socksListenPort = socksListenPort ?? configuration.general.socksListenPort
+        if let socksListenPort = configuration.general.socksListenPort {
             proxyctl.append("--socks-listen-port")
             proxyctl.append("\(socksListenPort)")
-            configuration.general.socksListenPort = socksListenPort
         }
         
-        if let httpListenAddress = httpListenAddress {
+        configuration.general.httpListenAddress = httpListenAddress ?? configuration.general.httpListenAddress
+        if let httpListenAddress = configuration.general.httpListenAddress {
             proxyctl.append("--http-listen-address")
             proxyctl.append("\(httpListenAddress)")
-            configuration.general.httpListenAddress = httpListenAddress
         }
         
-        if let httpListenPort = httpListenPort {
+        configuration.general.httpListenPort = httpListenPort ?? configuration.general.httpListenPort
+        if let httpListenPort = configuration.general.httpListenPort {
             proxyctl.append("--http-listen-port")
             proxyctl.append("\(httpListenPort)")
-            configuration.general.httpListenPort = httpListenPort
+        }
+        
+        if configuration.general.excludeSimpleHostnames {
+            proxyctl.append("--exclude-simple-hostnames")
+        }
+        
+        if let skipProxy = configuration.general.skipProxy {
+            proxyctl.append("--exceptions")
+            proxyctl.append(skipProxy.joined(separator: ","))
         }
 
         if !proxyctl.isEmpty {
             proxyctl.insert("install", at: 0)
+    
+//            ProxyConfigCommand.main(proxyctl)
         }
-        
-        ProxyConfigCommand.main(proxyctl)
         #endif
         
         if let reqMsgFilter = reqMsgFilter {
             configuration.replica.reqMsgFilter = reqMsgFilter
+        }
+        
+        LoggingSystem.bootstrap { label in
+            var handler = StreamLogHandler.standardOutput(label: label)
+            handler.logLevel = configuration.general.logLevel
+            return handler
         }
         
         let netbot = Netbot.init(

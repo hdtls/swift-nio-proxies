@@ -27,10 +27,9 @@ import XCTest
 
    XCTMain([
          testCase(ClientGreetingTests.allTests),
-         testCase(HTTPProxyProtocolTests.allTests),
+         testCase(ConfigFileParsingTests.allTests),
          testCase(LinkingTests.allTests),
          testCase(ModelsTests.allTests),
          testCase(NetAddressTests.allTests),
-         testCase(ShadowsocksCodecTests.allTests),
     ])
 #endif

@@ -12,273 +12,54 @@
 //
 //===----------------------------------------------------------------------===//
 
-import HTTP
 import Foundation
-
-class Parser {
-    /// Represents a `KEY=VALUE` pair in a dotenv file.
-    struct Line: Equatable {
-        /// The key.
-        let key: String
-        
-        /// The value.
-        let value: String
-    }
-    
-    private var source: ByteBuffer
-    
-    private var head: String = ""
-    
-    private init(source: ByteBuffer) {
-        self.source = source
-    }
-    
-    /// Parse configuration file to json.
-    /// - Returns: JSON encoded object.
-    static func jsonObject(with data: Data) -> Any {
-        var json: [String : Any] = [:]
-        let parser = Parser.init(source: .init(bytes: data))
-        
-        while let next = parser.parseNext() {
-            guard let line = next as? Line else {
-                parser.head = (next as! String).trimmingCharacters(in: .whitespaces)
-                continue
-            }
-            
-            var actual: Any
-            // Transfer "true, false" to Bool value.
-            let value = line.value.trimmingCharacters(in: .whitespaces)
-            switch value {
-                case "true":
-                    actual = true
-                case "false":
-                    actual = false
-                default:
-                    actual = value
-            }
-            
-            if parser.head == Configuration.CodingKeys.rules.rawValue {
-                var rules: [Any] = (json[parser.head] as? [Any]) ?? []
-                rules.append(actual)
-                json[parser.head] = rules
-            } else {
-                var dictionary: [String : Any] = (json[parser.head] as? [String : Any]) ?? [:]
-                dictionary[line.key.trimmingCharacters(in: .whitespaces)] = actual
-                json[parser.head] = dictionary
-            }
-        }
-        
-        return json
-    }
-    
-    private func parseNext() -> Any? {
-        self.skipSpaces()
-        guard let peek = self.peek() else {
-            return nil
-        }
-        switch peek {
-            case .octothorpe, .semicolon:
-                // comment following, skip it
-                self.skipComment()
-                // then parse next
-                return self.parseNext()
-            case .leftSquareBracket:
-                self.pop()
-                return self.parseLineHead()
-            case .newLine:
-                // empty line, skip
-                self.pop() // \n
-                           // then parse next
-                return self.parseNext()
-            default:
-                // this is a valid line, parse it
-                guard self.head == Configuration.CodingKeys.rules.rawValue else {
-                    return self.parseLine()
-                }
-                guard let value = self.parseLineValue() else {
-                    return nil
-                }
-                return Line(key: "", value: value)
-        }
-    }
-    
-    private func skipComment() {
-        let commentLength: Int
-        if let toNewLine = self.countDistance(to: .newLine) {
-            commentLength = toNewLine + 1 // include newline
-        } else {
-            commentLength = self.source.readableBytes
-        }
-        self.source.moveReaderIndex(forwardBy: commentLength)
-    }
-    
-    private func parseLineHead() -> String? {
-        guard let headLength = self.countDistance(to: .rightSquareBracket) else {
-            return nil
-        }
-        guard let head = self.source.readString(length: headLength) else {
-            return nil
-        }
-        self.pop() // ]
-        
-        return head
-    }
-    
-    private func parseLine() -> Line? {
-        guard let keyLength = self.countDistance(to: .equal) else {
-            return nil
-        }
-        guard let key = self.source.readString(length: keyLength) else {
-            return nil
-        }
-        self.pop() // =
-        guard let value = self.parseLineValue() else {
-            return nil
-        }
-        return Line(key: key, value: value)
-    }
-    
-    private func parseLineValue() -> String? {
-        let valueLength: Int
-        if let toNewLine = self.countDistance(to: .newLine) {
-            valueLength = toNewLine
-        } else {
-            valueLength = self.source.readableBytes
-        }
-        guard let value = self.source.readString(length: valueLength) else {
-            return nil
-        }
-        guard let first = value.first, let last = value.last else {
-            return value
-        }
-        // check for quoted strings
-        switch (first, last) {
-            case ("\"", "\""):
-                // double quoted strings support escaped \n
-                return value.dropFirst().dropLast()
-                    .replacingOccurrences(of: "\\n", with: "\n")
-            case ("'", "'"):
-                // single quoted strings just need quotes removed
-                return value.dropFirst().dropLast() + ""
-            default: return value
-        }
-    }
-    
-    private func skipSpaces() {
-    scan: while let next = self.peek() {
-        switch next {
-            case .space: self.pop()
-            default: break scan
-        }
-    }
-    }
-    
-    private func peek() -> UInt8? {
-        return self.source.getInteger(at: self.source.readerIndex)
-    }
-    
-    private func pop() {
-        self.source.moveReaderIndex(forwardBy: 1)
-    }
-    
-    private func countDistance(to byte: UInt8) -> Int? {
-        var copy = self.source
-        var found = false
-    scan: while let next = copy.readInteger(as: UInt8.self) {
-        if next == byte {
-            found = true
-            break scan
-        }
-    }
-        guard found else {
-            return nil
-        }
-        let distance = copy.readerIndex - source.readerIndex
-        guard distance != 0 else {
-            return nil
-        }
-        return distance - 1
-    }
-}
-
-extension UInt8 {
-    fileprivate static var newLine: UInt8 {
-        return 0xA
-    }
-    
-    fileprivate static var space: UInt8 {
-        return 0x20
-    }
-    
-    fileprivate static var octothorpe: UInt8 {
-        return 0x23
-    }
-    
-    fileprivate static var semicolon: UInt8 {
-        return 0x3b
-    }
-    
-    fileprivate static var equal: UInt8 {
-        return 0x3D
-    }
-    
-    fileprivate static var leftSquareBracket: UInt8 {
-        return 0x5b
-    }
-    
-    fileprivate static var rightSquareBracket: UInt8 {
-        return 0x5d
-    }
-}
+import HTTP
+import Logging
 
 public struct Configuration: Codable {
     
-    var rules: [Rule]
-    var mitm: MitMConfiguration
-    var general: BasicConfiguration
-    var replica: ReplicaConfiguration
+    public var rules: [Rule]
+    public var mitm: MitMConfiguration
+    public var general: BasicConfiguration
+    public var replica: ReplicaConfiguration
+    public var selectablePolicyGroups: [SelectablePolicyGroup]
     
     enum CodingKeys: String, CodingKey {
-        case rules = "Rule"
-        case mitm = "MitM"
-        case general = "General"
-        case replica = "Replica"
+        case rules = "[Rule]"
+        case mitm = "[MitM]"
+        case general = "[General]"
+        case replica = "[Replica]"
+        case selectablePolicyGroups = "[Policy Group]"
     }
     
-    public init() {
-        rules = .init()
-        mitm = .init()
-        general = .init()
-        replica = .init()
+    public init(general: BasicConfiguration = .init(),
+                replica: ReplicaConfiguration = .init(),
+                rules: [Rule] = .init(),
+                mitm: MitMConfiguration = .init(),
+                selectablePolicyGroups: [SelectablePolicyGroup] = .init()) {
+        self.general = general
+        self.replica = replica
+        self.rules = rules
+        self.mitm = mitm
+        self.selectablePolicyGroups = selectablePolicyGroups
     }
     
     public init(from decoder: Decoder) throws {
-        let keyedContainer = try decoder.container(keyedBy: CodingKeys.self)
-        rules = try keyedContainer.decodeIfPresent([Rule].self, forKey: .rules) ?? .init()
-        mitm = try keyedContainer.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
-        general = try keyedContainer.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
-        replica = try keyedContainer.decodeIfPresent(ReplicaConfiguration.self, forKey: .replica) ?? .init()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rules = try container.decodeIfPresent([Rule].self, forKey: .rules) ?? .init()
+        mitm = try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
+        general = try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
+        replica = try container.decodeIfPresent(ReplicaConfiguration.self, forKey: .replica) ?? .init()
+        selectablePolicyGroups = try container.decodeIfPresent([SelectablePolicyGroup].self, forKey: .selectablePolicyGroups) ?? .init()
     }
     
-    //    public func encode(to encoder: Encoder) throws {
-    //        var keyedContainer = encoder.container(keyedBy: CodingKeys.self)
-    //        keyedContainer.encode(rules, forKey: .rules)
-    //        keyedContainer.encode(mitm, forKey: .mitm)
-    //        keyedContainer.encode(general, forKey: .general)
-    //        keyedContainer.encode(replica, forKey: .replica)
-    //    }
-}
-
-public enum DecodingError: Error {
-    case invalidConfFile(line: Int)
-    
-    case ruleValidationFailed(reason: RuleValidationFailureReason)
-    case dataCorrupted(String)
-    case valueNotFound(String)
-    
-    public enum RuleValidationFailureReason {
-        case invalidRuleStringLiteral
-        case unacceptableRuleType
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(rules, forKey: .rules)
+        try container.encode(mitm, forKey: .mitm)
+        try container.encode(general, forKey: .general)
+        try container.encode(replica, forKey: .replica)
+        try container.encodeIfPresent(selectablePolicyGroups.isEmpty ? nil : selectablePolicyGroups, forKey: .selectablePolicyGroups)
     }
 }
 
@@ -323,27 +104,29 @@ public struct BasicConfiguration: Codable, Equatable {
     }
     
     public init(from decoder: Decoder) throws {
-        let keyedContainer = try decoder.container(keyedBy: CodingKeys.self)
-        logLevel = try keyedContainer.decodeIfPresent(Logger.Level.self, forKey: .logLevel) ?? .info
-        dnsServers = try keyedContainer.decodeIfPresent(String.self, forKey: .dnsServers)?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces )} ?? ["system"]
-        skipProxy = try keyedContainer.decodeIfPresent(String.self, forKey: .skipProxy)?.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces )}
-        httpListenAddress = try keyedContainer.decodeIfPresent(String.self, forKey: .httpListenAddress)
-        httpListenPort = Int(try keyedContainer.decodeIfPresent(String.self, forKey: .httpListenPort) ?? "")
-        socksListenAddress = try keyedContainer.decodeIfPresent(String.self, forKey: .socksListenAddress)
-        socksListenPort = Int(try keyedContainer.decodeIfPresent(String.self, forKey: .socksListenPort) ?? "")
-        excludeSimpleHostnames = try keyedContainer.decodeIfPresent(Bool.self, forKey: .excludeSimpleHostnames) ?? false
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        logLevel = try container.decodeIfPresent(Logger.Level.self, forKey: .logLevel) ?? .info
+        dnsServers = try container.decodeIfPresent(String.self, forKey: .dnsServers)?.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces ) } ?? ["system"]
+        skipProxy = try container.decodeIfPresent(String.self, forKey: .skipProxy)?.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces ) }
+        httpListenAddress = try container.decodeIfPresent(String.self, forKey: .httpListenAddress)
+        httpListenPort = Int(try container.decodeIfPresent(String.self, forKey: .httpListenPort) ?? "")
+        socksListenAddress = try container.decodeIfPresent(String.self, forKey: .socksListenAddress)
+        socksListenPort = Int(try container.decodeIfPresent(String.self, forKey: .socksListenPort) ?? "")
+        excludeSimpleHostnames = try container.decodeIfPresent(Bool.self, forKey: .excludeSimpleHostnames) ?? false
     }
     
     public func encode(to encoder: Encoder) throws {
-        var keyedContainer = encoder.container(keyedBy: CodingKeys.self)
-        try keyedContainer.encode(logLevel, forKey: .logLevel)
-        try keyedContainer.encode(dnsServers.joined(separator: ","), forKey: .dnsServers)
-        try keyedContainer.encodeIfPresent(skipProxy?.joined(separator: ","), forKey: .skipProxy)
-        try keyedContainer.encodeIfPresent(httpListenAddress, forKey: .httpListenAddress)
-        try keyedContainer.encodeIfPresent(httpListenPort != nil ? "\(httpListenPort!)" : nil, forKey: .httpListenPort)
-        try keyedContainer.encodeIfPresent(socksListenAddress, forKey: .socksListenAddress)
-        try keyedContainer.encodeIfPresent(socksListenPort != nil ? "\(socksListenPort!)" : nil, forKey: .socksListenPort)
-        try keyedContainer.encodeIfPresent(excludeSimpleHostnames, forKey: .excludeSimpleHostnames)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(logLevel, forKey: .logLevel)
+        try container.encode(dnsServers.joined(separator: ", "), forKey: .dnsServers)
+        try container.encodeIfPresent(skipProxy?.joined(separator: ", "), forKey: .skipProxy)
+        try container.encodeIfPresent(httpListenAddress, forKey: .httpListenAddress)
+        try container.encodeIfPresent(httpListenPort != nil ? "\(httpListenPort!)" : nil, forKey: .httpListenPort)
+        try container.encodeIfPresent(socksListenAddress, forKey: .socksListenAddress)
+        try container.encodeIfPresent(socksListenPort != nil ? "\(socksListenPort!)" : nil, forKey: .socksListenPort)
+        try container.encodeIfPresent(excludeSimpleHostnames, forKey: .excludeSimpleHostnames)
     }
 }
 
@@ -380,22 +163,58 @@ public struct ReplicaConfiguration: Codable, Equatable {
     }
     
     public init(from decoder: Decoder) throws {
-        let keyedContainer = try decoder.container(keyedBy: CodingKeys.self)
-        hideAppleRequests = try keyedContainer.decodeIfPresent(Bool.self, forKey: .hideAppleRequests) ?? false
-        hideCrashlyticsRequests = try keyedContainer.decodeIfPresent(Bool.self, forKey: .hideCrashlyticsRequests) ?? false
-        hideCrashReporterRequests = try keyedContainer.decodeIfPresent(Bool.self, forKey: .hideCrashReporterRequests) ?? false
-        hideUDP = try keyedContainer.decodeIfPresent(Bool.self, forKey: .hideUDP) ?? false
-        reqMsgFilter = try keyedContainer.decodeIfPresent(String.self, forKey: .reqMsgFilter)
-        reqMsgFilterType = try keyedContainer.decodeIfPresent(String.self, forKey: .reqMsgFilterType)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hideAppleRequests = try container.decodeIfPresent(Bool.self, forKey: .hideAppleRequests) ?? false
+        hideCrashlyticsRequests = try container.decodeIfPresent(Bool.self, forKey: .hideCrashlyticsRequests) ?? false
+        hideCrashReporterRequests = try container.decodeIfPresent(Bool.self, forKey: .hideCrashReporterRequests) ?? false
+        hideUDP = try container.decodeIfPresent(Bool.self, forKey: .hideUDP) ?? false
+        reqMsgFilter = try container.decodeIfPresent(String.self, forKey: .reqMsgFilter)
+        reqMsgFilterType = try container.decodeIfPresent(String.self, forKey: .reqMsgFilterType)
     }
     
     public func encode(to encoder: Encoder) throws {
-        var keyedContainer = encoder.container(keyedBy: CodingKeys.self)
-        try keyedContainer.encode(hideAppleRequests, forKey: .hideAppleRequests)
-        try keyedContainer.encode(hideCrashlyticsRequests, forKey: .hideCrashlyticsRequests)
-        try keyedContainer.encode(hideCrashReporterRequests, forKey: .hideCrashReporterRequests)
-        try keyedContainer.encode(hideUDP, forKey: .hideUDP)
-        try keyedContainer.encodeIfPresent(reqMsgFilter, forKey: .reqMsgFilter)
-        try keyedContainer.encodeIfPresent(reqMsgFilterType, forKey: .reqMsgFilterType)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(hideAppleRequests, forKey: .hideAppleRequests)
+        try container.encode(hideCrashlyticsRequests, forKey: .hideCrashlyticsRequests)
+        try container.encode(hideCrashReporterRequests, forKey: .hideCrashReporterRequests)
+        try container.encode(hideUDP, forKey: .hideUDP)
+        try container.encodeIfPresent(reqMsgFilter, forKey: .reqMsgFilter)
+        try container.encodeIfPresent(reqMsgFilterType, forKey: .reqMsgFilterType)
+    }
+}
+
+public struct SelectablePolicyGroup: Codable, Equatable {
+    
+    public var name: String
+    public var policies: [String]
+    public var selected: String
+    
+    enum CodingKeys: String, CodingKey {
+        case name
+        case policies
+    }
+    
+    public init(name: String, policies: [String]) {
+        precondition(!policies.isEmpty, "You must provide at least one policy.")
+        
+        self.name = name
+        self.policies = policies
+        self.selected = policies.first!
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        policies = try container.decode(String.self, forKey: .policies)
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0 != "select" }
+        selected = policies.first!
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode("select, " + policies.joined(separator: ", "), forKey: .policies)
     }
 }
