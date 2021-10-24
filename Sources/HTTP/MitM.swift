@@ -75,7 +75,7 @@ public struct MitMConfiguration: Codable {
     internal var pool: [String : NIOSSLPKCS12Bundle] = [:]
     
     enum CodingKeys: String, CodingKey {
-        case skipServerCertificateVerification = "skip-server-cert-verify"
+        case skipServerCertificateVerification = "skip-server-cert-verification"
         case hostnames = "hostname"
         case passphrase = "ca-passphrase"
         case base64EncodedP12String = "ca-p12"
@@ -91,5 +91,26 @@ public struct MitMConfiguration: Codable {
         self.base64EncodedP12String = base64EncodedP12String
         // Workaround for `didSet` not call when setting new value in `init`.
         ({ self.hostnames = hostnames })()
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        skipServerCertificateVerification = try container.decode(Bool.self, forKey: .skipServerCertificateVerification)
+        let stringLiternal = try container.decode(String.self, forKey: .hostnames)
+        hostnames = stringLiternal.split(separator: ",").map {
+            $0.trimmingCharacters(in: .whitespaces)
+        }
+        base64EncodedP12String = try container.decode(String.self, forKey: .base64EncodedP12String)
+        passphrase = try container.decode(String.self, forKey: .passphrase)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        try container.encode(skipServerCertificateVerification, forKey: .skipServerCertificateVerification)
+        try container.encode(hostnames.joined(separator: ", "), forKey: .hostnames)
+        try container.encode(base64EncodedP12String, forKey: .base64EncodedP12String)
+        try container.encode(passphrase, forKey: .passphrase)
     }
 }
