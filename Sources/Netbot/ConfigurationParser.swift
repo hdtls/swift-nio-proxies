@@ -14,6 +14,8 @@
 
 import Foundation
 import NIOCore
+import NIO
+import NIOPosix
 
 /// Errors that can be raised while parsing configuration file.
 public enum ParserError: Error {
@@ -123,7 +125,7 @@ class Parser {
     }
     
     static func jsonObject(with data: Data) throws -> Any {
-        try jsonObject(with: .init(data: data))
+        try jsonObject(with: ByteBuffer.init(bytes: data))
     }
     
     static func data(withJSONObject obj: Any) throws -> Data {

@@ -98,11 +98,12 @@ public struct MitMConfiguration: Codable {
         
         skipServerCertificateVerification = try container.decode(Bool.self, forKey: .skipServerCertificateVerification)
         let stringLiternal = try container.decode(String.self, forKey: .hostnames)
-        hostnames = stringLiternal.split(separator: ",").map {
+        let hostnames = stringLiternal.split(separator: ",").map {
             $0.trimmingCharacters(in: .whitespaces)
         }
         base64EncodedP12String = try container.decode(String.self, forKey: .base64EncodedP12String)
         passphrase = try container.decode(String.self, forKey: .passphrase)
+        ({ self.hostnames = hostnames })()
     }
     
     public func encode(to encoder: Encoder) throws {

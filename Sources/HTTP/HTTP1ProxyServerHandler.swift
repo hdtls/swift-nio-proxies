@@ -19,7 +19,7 @@ import NIO
 import NIOHTTP1
 import NIOSSL
 
-public final class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChannelHandler {
+final public class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChannelHandler {
     
     public typealias InboundIn = HTTPServerRequestPart
     public typealias InboundOut = HTTPServerRequestPart
@@ -44,10 +44,10 @@ public final class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
     
     public let completion: (NetAddress) -> EventLoopFuture<Channel>
     
-    /// Enable this to allow MitM decrypt https triffic.
+    /// Enable  to allow MitM decrypt https triffic.
     public let isMitMEnabled: Bool
     
-    /// Enable this to capture http body.
+    /// Enable  to capture http body.
     public let isHTTPCaptureEnabled: Bool
     
     /// Configuration for HTTP traffic with MitM attacks.
@@ -55,10 +55,6 @@ public final class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
     
     /// The credentials to authenticate a user.
     public let authorization: BasicAuthorization?
-    
-    deinit {
-        print(#function)
-    }
     
     public init(authorization: BasicAuthorization? = nil,
                 enableHTTPCapture: Bool = false,
@@ -203,19 +199,12 @@ extension HTTP1ProxyServerHandler {
             }
         }
         
-        // This is the easiest way to parse host and port.
-        let url = URL(string: "\(head.method == .CONNECT ? "https://" : "")\(head.uri)")
-        var serverHostname = url?.host
-        if serverHostname == nil, let host = head.headers.first(name: .host) {
-            serverHostname = String(host)
-        }
-        guard let serverHostname = serverHostname, !serverHostname.isEmpty else {
+        guard let serverHostname = head.host, !serverHostname.isEmpty else {
             // RFC 2068 (HTTP/1.1) requires URL to be absolute URL in HTTP proxy.
             throw HTTPProxyError.invalidURL(url: head.uri)
         }
-        let port = url?.port ?? (url?.scheme == "https" ? 443 : 80)
         
-        let taskAddress: NetAddress = .domainPort(serverHostname, port)
+        let taskAddress: NetAddress = .domainPort(serverHostname, head.port)
         
         let client = completion(taskAddress)
         
@@ -361,5 +350,30 @@ extension HTTPHeaders {
         headers.remove(name: .upgrade)
         headers.remove(name: .connection)
         return headers
+    }
+}
+
+extension HTTPRequestHead {
+    
+    public var host: String? {
+        return headers.first(name: .host)?.components(separatedBy: ":").first
+    }
+    
+    /// Port for request. parse from `headers` host filed or `uri` if any else 80 is returned.
+    public var port: Int {
+        var part = headers.first(name: .host)?.components(separatedBy: ":")
+        
+        // Standard host field
+        if part?.count == 2 {
+            return Int(part![1])!
+        }
+        
+        part = uri.components(separatedBy: ":")
+        
+        guard part?.count == 2 else {
+            return 80
+        }
+        
+        return Int(part![1].split(separator: "/").first!) ?? 80
     }
 }

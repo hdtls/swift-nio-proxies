@@ -16,8 +16,10 @@ import Foundation
 import HTTP
 import Logging
 import NIO
-import SOCKS
 import NIOExtras
+import NIOHTTP1
+import NIOPosix
+import SOCKS
 
 public class Netbot {
     
@@ -90,7 +92,11 @@ public class Netbot {
                                 }
                             }
                             
-                            return channel.eventLoop.next().makeFailedFuture(ParserError.dataCorrupted)
+                            return bootstrap
+                                .channelInitializer { channel in
+                                    channel.eventLoop.makeSucceededVoidFuture()
+                                }
+                                .connect(host: "", port: 0)
                         }
                     ])
                 }
@@ -98,19 +104,14 @@ public class Netbot {
                 .childChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: SocketOptionValue(1))
                 .childChannelOption(ChannelOptions.maxMessagesPerRead, value: 1)
             
-            do {
-                let channel = try bootstrap
-                    .bind(host: httpListenAddress, port: httpListenPort)
-                    .wait()
-                guard let localAddress = channel.localAddress else {
-                    fatalError("Address was unable to bind. Please check that the socket was not closed or that the address family was understood.")
-                }
-                
-                logger.debug("HTTP proxy server started and listening on \(localAddress)")
-            } catch {
-                try eventLoopGroup.syncShutdownGracefully()
-                throw error
+            let channel = try bootstrap
+                .bind(host: httpListenAddress, port: httpListenPort)
+                .wait()
+            guard let localAddress = channel.localAddress else {
+                fatalError("Address was unable to bind. Please check that the socket was not closed or that the address family was understood.")
             }
+            
+            logger.debug("HTTP proxy server started and listening on \(localAddress)")
         }
         
         isRunning = true
