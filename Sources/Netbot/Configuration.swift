@@ -18,7 +18,7 @@ import Logging
 
 public struct Configuration: Codable {
     
-    public var rules: [Rule]
+    public var rules: [AnyRule]
     public var mitm: MitMConfiguration
     public var general: BasicConfiguration
     public var replica: ReplicaConfiguration
@@ -34,7 +34,7 @@ public struct Configuration: Codable {
     
     public init(general: BasicConfiguration = .init(),
                 replica: ReplicaConfiguration = .init(),
-                rules: [Rule] = .init(),
+                rules: [AnyRule] = .init(),
                 mitm: MitMConfiguration = .init(),
                 selectablePolicyGroups: [SelectablePolicyGroup] = .init()) {
         self.general = general
@@ -46,7 +46,7 @@ public struct Configuration: Codable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        rules = try container.decodeIfPresent([Rule].self, forKey: .rules) ?? .init()
+        rules = try container.decodeIfPresent([AnyRule].self, forKey: .rules) ?? .init()
         mitm = try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
         general = try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
         replica = try container.decodeIfPresent(ReplicaConfiguration.self, forKey: .replica) ?? .init()

@@ -29,35 +29,44 @@ public class Netbot {
     public var basicAuthorization: BasicAuthorization?
     public var isHTTPCaptureEnabled: Bool = false
     public var isMitmEnabled: Bool = false
-    public private(set) var isRunning: Bool
-    
+    public var ruleMatcher: RuleMatcher {
+        .init(rules: configuration.rules)
+    }
     private var eventLoopGroup: EventLoopGroup!
     private var quiesce: ServerQuiescingHelper!
     
-    public init(logger: Logger = .init(label: "com.netbot.logging"),
+    public init(logger: Logger = .init(label: "io.tenbits.Netbot"),
                 configuration: Configuration,
                 outboundMode: OutboundMode = .direct,
                 basicAuthorization: BasicAuthorization? = nil,
                 enableHTTPCapture: Bool = false,
-                enableMitm: Bool = false) {
+                enableMitm: Bool = false,
+                geo: GeoLite2? = nil) {
         self.logger = logger
         self.configuration = configuration
         self.outboundMode = outboundMode
         self.basicAuthorization = basicAuthorization
         self.isHTTPCaptureEnabled = enableHTTPCapture
         self.isMitmEnabled = enableMitm
-        self.isRunning = false
+
+        if let geo = geo {
+            GeoIPRule.geo = geo
+        } else {
+            var dstURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            dstURL.appendPathComponent("io.tenbits.Netbot")
+            dstURL.appendPathComponent("GeoLite2-Country.mmdb")
+            GeoIPRule.geo = try? .init(file: dstURL.path)
+        }
     }
     
     public func run() throws {
-        precondition(!isRunning, "Netbot has already started.")
         
         eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
         quiesce = ServerQuiescingHelper(group: eventLoopGroup)
         
         let fullyShutdownPromise: EventLoopPromise<Void> = eventLoopGroup.next().makePromise()
         
-        let signalQueue = DispatchQueue(label: "io.netbot.signalHandlingQueue")
+        let signalQueue = DispatchQueue(label: "io.tenbits.Netbot.signalHandlingQueue")
         
         let signalSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: signalQueue)
         signalSource.setEventHandler {
@@ -81,22 +90,32 @@ public class Netbot {
                         ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)),
                         HTTP1ProxyServerHandler(authorization: self.basicAuthorization, enableHTTPCapture: self.isHTTPCaptureEnabled, enableMitM: self.isMitmEnabled, mitmConfig: self.configuration.mitm) { taskAddress in
                             
+                            guard case .domainPort(let domain, let port) = taskAddress else {
+                                return channel.eventLoop.makeFailedFuture(SocketAddressError.unsupported)
+                            }
+                            
                             let bootstrap = ClientBootstrap(group: channel.eventLoop.next())
                             
                             guard self.outboundMode != .direct else {
-                                switch taskAddress {
-                                    case .domainPort(let domain, let port):
-                                        return bootstrap.connect(host: domain, port: port)
-                                    case .socketAddress(let socketAddress):
-                                        return bootstrap.connect(to: socketAddress)
-                                }
+                                return bootstrap.connect(host: domain, port: port)
+                            }
+                            
+                            guard let policy = self.ruleMatcher.firstMatch(domain)?.policy else {
+                                return bootstrap.connect(host: domain, port: port)
+                            }
+                            
+                            let selectablePolicyGroup = self.configuration.selectablePolicyGroups.first {
+                                $0.name == policy
+                            }
+                            if let selectablePolicyGroup = selectablePolicyGroup {
+                                print("Policy Group", selectablePolicyGroup.selected)
                             }
                             
                             return bootstrap
                                 .channelInitializer { channel in
                                     channel.eventLoop.makeSucceededVoidFuture()
                                 }
-                                .connect(host: "", port: 0)
+                                .connect(host: domain, port: port)
                         }
                     ])
                 }
@@ -113,15 +132,12 @@ public class Netbot {
             
             logger.debug("HTTP proxy server started and listening on \(localAddress)")
         }
-        
-        isRunning = true
-        
+                
         try fullyShutdownPromise.futureResult.wait()
         try eventLoopGroup.syncShutdownGracefully()
     }
     
     public func shutdown() {
-        precondition(isRunning, "Netbot has already shut down.")
         logger.debug("Netbot shutting down.")
         logger.trace("Shutting down eventLoopGroup \(String(describing: eventLoopGroup)).")
         do {
@@ -134,14 +150,10 @@ public class Netbot {
             logger.warning("Shutting down failed: \(error).")
         }
         
-        isRunning = false
         logger.trace("Netbot shutdown complete.")
     }
     
     deinit {
         logger.trace("Netbot deinitialized, goodbye!")
-        if isRunning {
-            assertionFailure("\(self).shutdown() was not called before deinitialized.")
-        }
     }
 }

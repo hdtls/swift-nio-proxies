@@ -19,7 +19,7 @@ class ConfigFileParsingTests: XCTestCase {
     
     func testParsingRuleWithoutComment() throws {
         let literal = "DOMAIN,www.github.com,DIRECT"
-        let rule = try Rule.init(string: literal)
+        let rule = try StandardRule.init(string: literal)
 
         XCTAssertEqual(rule.type, .domain)
         XCTAssertEqual(rule.pattern, "www.github.com")
@@ -29,7 +29,7 @@ class ConfigFileParsingTests: XCTestCase {
     
     func testParsingRuleWithComment() throws {
         let literal = "DOMAIN,www.github.com,DIRECT // The rule for Github."
-        let rule = try Rule.init(string: literal)
+        let rule = try StandardRule.init(string: literal)
 
         XCTAssertEqual(rule.type, .domain)
         XCTAssertEqual(rule.pattern, "www.github.com")
@@ -39,12 +39,12 @@ class ConfigFileParsingTests: XCTestCase {
     
     func testParsingRuleWithInvalidStatements() {
         let literal = "DOMAIN,www.github.com"
-        XCTAssertThrowsError(try Rule.init(string: literal))
+        XCTAssertThrowsError(try StandardRule.init(string: literal))
     }
     
     func testParsingFinalRule() {
         let literal = "FINAL,DIRECT"
-        let rule: Rule = try! Rule.init(string: literal)
+        let rule: Rule = try! StandardRule.init(string: literal)
         XCTAssertEqual(rule.type, .final)
         XCTAssertEqual(rule.policy, "DIRECT")
         XCTAssertNil(rule.pattern)
@@ -53,7 +53,7 @@ class ConfigFileParsingTests: XCTestCase {
     
     func testParsingFinalRuleWithComment() {
         let literal = "FINAL,DIRECT // The rule for FINAL."
-        let rule: Rule = try! Rule.init(string: literal)
+        let rule: Rule = try! FinalRule.init(string: literal)
         XCTAssertEqual(rule.type, .final)
         XCTAssertEqual(rule.policy, "DIRECT")
         XCTAssertNil(rule.pattern)
@@ -62,7 +62,7 @@ class ConfigFileParsingTests: XCTestCase {
     
     func testRuleEncoding() throws {
         let expect = "DOMAIN,www.github.com,DIRECT // The rule for Github."
-        let rule = try Rule.init(string: expect)
+        let rule = try StandardRule.init(string: expect)
         let data = try JSONEncoder().encode(rule)
         
         let result = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as! String
@@ -72,7 +72,7 @@ class ConfigFileParsingTests: XCTestCase {
     
     func testFinalRuleEncoding() throws {
         let expect = "FINAL,DIRECT // The rule for FINAL."
-        let rule = try Rule.init(string: expect)
+        let rule = try FinalRule.init(string: expect)
         let data = try JSONEncoder().encode(rule)
         
         let result = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as! String

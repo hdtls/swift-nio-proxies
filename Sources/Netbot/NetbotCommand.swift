@@ -17,10 +17,7 @@ import Foundation
 import Logging
 import HTTP
 
-public enum OutboundMode: String, CaseIterable, ExpressibleByArgument {
-    case direct
-    case global
-}
+extension OutboundMode: ExpressibleByArgument {}
 
 public struct NetbotCommand: ParsableCommand {
     

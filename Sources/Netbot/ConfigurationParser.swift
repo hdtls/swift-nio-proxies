@@ -220,7 +220,7 @@ class Parser {
         }
         
         try ruleLineMap.forEach { (cursor, line) in
-            guard let rule = try? Rule.init(string: line.value) else {
+            guard let rule = try? AnyRule.init(string: line.value) else {
                 throw ParserError.invalidFile(reason: .invalidLine(cursor: cursor, description: line.value))
             }
             // Validate rule policy.

@@ -12,8 +12,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
+#if compiler(>=5.1)
+@_implementationOnly import CMMDB
+#else
 import CMMDB
+#endif
+import Foundation
 
 public struct GeoLiteInternalError: Equatable, CustomStringConvertible {
     
