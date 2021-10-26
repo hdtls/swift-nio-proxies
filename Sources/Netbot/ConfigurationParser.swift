@@ -110,6 +110,14 @@ class Parser {
                 return
             }
             
+            guard parser.currentGroup != Configuration.CodingKeys.policies.rawValue else {
+                // Rebuild policy group as json array.
+                var array: [Any] = (json[parser.currentGroup] as? [Any]) ?? []
+                array.append("\(next.key)=\(next.value)")
+                json[parser.currentGroup] = array
+                return
+            }
+            
             if next.key == Parser.__array__ {
                 var array: [Any] = (json[parser.currentGroup] as? [Any]) ?? []
                 array.append(actual)
@@ -195,7 +203,7 @@ class Parser {
                     policyGroupMap[cursor] = next
                 case Configuration.CodingKeys.rules.rawValue:
                     ruleLineMap[cursor] = next
-                case "[Proxy]":
+                case Configuration.CodingKeys.policies.rawValue:
                     proxyMap[cursor] = next
                 default:
                     break

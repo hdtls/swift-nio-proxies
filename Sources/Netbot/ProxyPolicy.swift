@@ -1,0 +1,516 @@
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Licensed under Apache License v2.0
+//
+// See LICENSE for license information
+// See CONTRIBUTORS.txt for the list of Netbot project authors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
+import ConnectionPool
+import Foundation
+import Helpers
+
+public struct __Never: Codable, Hashable {}
+
+public protocol Policy: Codable, ConnectionPoolSource {
+    associatedtype Configuration: Codable
+    
+    static var type: String { get }
+    var configuration: Configuration { get set }
+    var name: String { get set }
+    var taskAddress: NetAddress? { get set }
+    
+    init()
+}
+
+extension Policy {
+    
+    public init(stringLiteral: String) throws {
+        var components = stringLiteral.components(separatedBy: ",")
+
+        self.init()
+        
+        let l = components.removeFirst().trimmingCharacters(in: .whitespaces).components(separatedBy: "=")
+        // l must be NAME = TYPE pair.
+        guard l.count == 2, Self.type == l.last?.trimmingCharacters(in: .whitespaces) else {
+            throw ParserError.dataCorrupted
+        }
+        name = l.first!.trimmingCharacters(in: .whitespaces)
+        
+        let json = try components.reduce(into: [:], { result, substring in
+                let sequence = substring.split(separator: "=")
+                guard sequence.count == 2 else {
+                    throw ParserError.dataCorrupted
+                }
+                let stringLiteral = sequence[1].trimmingCharacters(in: .whitespaces)
+                var value: Any
+                switch stringLiteral {
+                    case "true":
+                        value = true
+                    case "false":
+                        value = false
+                    default:
+                        value = Int(stringLiteral) ?? stringLiteral
+                }
+                result.updateValue(value, forKey: sequence[0].trimmingCharacters(in: .whitespaces))
+            })
+        
+        let data = try JSONSerialization.data(withJSONObject: json, options: .fragmentsAllowed)
+        configuration = try JSONDecoder().decode(Configuration.self, from: data)
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let stringLiteral = try container.decode(String.self)
+        try self.init(stringLiteral: stringLiteral)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        
+        var stringLiteral = name + " = \(Self.type)"
+        
+        let data = try JSONEncoder().encode(configuration)
+        let json = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? [String : Any]
+        json?.keys.sorted().forEach {
+            let value = json![$0]!
+            if let bool = value as? Bool {
+                stringLiteral.append(", \($0)=\(bool ? "true" : "false")")
+            } else {
+                stringLiteral.append(", \($0)=\(value)")
+            }
+        }
+        
+        try container.encode(stringLiteral)
+    }
+}
+
+public enum ProxyPolicy: Codable {
+    
+    case direct(underlying: DirectPolicy)
+    case reject(underlying: RejectPolicy)
+    case rejectTinyGif(underlying: RejectTinyGifPolicy)
+    case shadowsocks(underlying: ShadowsocksPolicy)
+    case socks5(underlying: SOCKS5Policy)
+    case socks5TLS(underlying: SOCKS5TLSPolicy)
+    case http(underlying: HTTPProxyPolicy)
+    case https(underlying: HTTPSProxyPolicy)
+    
+    public var name: String {
+        switch self {
+            case .direct(let underlying):
+                return underlying.name
+            case .reject(let underlying):
+                return underlying.name
+            case .rejectTinyGif(let underlying):
+                return underlying.name
+            case .shadowsocks(let underlying):
+                return underlying.name
+            case .socks5(let underlying):
+                return underlying.name
+            case .socks5TLS(let underlying):
+                return underlying.name
+            case .http(let underlying):
+                return underlying.name
+            case .https(let underlying):
+                return underlying.name
+        }
+    }
+    
+    public var taskAddress: NetAddress? {
+        set {
+            switch self {
+                case .direct(var underlying):
+                    underlying.taskAddress = newValue
+                    self = .direct(underlying: underlying)
+                case .reject(var underlying):
+                    underlying.taskAddress = newValue
+                    self = .reject(underlying: underlying)
+                case .rejectTinyGif(var underlying):
+                    underlying.taskAddress = newValue
+                    self = .rejectTinyGif(underlying: underlying)
+                case .shadowsocks(var underlying):
+                    underlying.taskAddress = newValue
+                    self = .shadowsocks(underlying: underlying)
+                case .socks5(var underlying):
+                    underlying.taskAddress = newValue
+                    self = .socks5(underlying: underlying)
+                case .socks5TLS(var underlying):
+                    underlying.taskAddress = newValue
+                    self = .socks5TLS(underlying: underlying)
+                case .http(var underlying):
+                    underlying.taskAddress = newValue
+                    self = .http(underlying: underlying)
+                case .https(var underlying):
+                    underlying.taskAddress = newValue
+                    self = .https(underlying: underlying)
+            }
+        }
+        get {
+            switch self {
+                case .direct(let underlying):
+                    return underlying.taskAddress
+                case .reject(let underlying):
+                    return underlying.taskAddress
+                case .rejectTinyGif(let underlying):
+                    return underlying.taskAddress
+                case .shadowsocks(let underlying):
+                    return underlying.taskAddress
+                case .socks5(let underlying):
+                    return underlying.taskAddress
+                case .socks5TLS(let underlying):
+                    return underlying.taskAddress
+                case .http(let underlying):
+                    return underlying.taskAddress
+                case .https(let underlying):
+                    return underlying.taskAddress
+            }
+        }
+    }
+    
+    public init(stringLiteral: String) throws {
+        let components = stringLiteral.components(separatedBy: ",")
+        guard components.count >= 1 else {
+            throw ParserError.dataCorrupted
+        }
+        
+        let type = components.first!.components(separatedBy: "=")
+            .last?.trimmingCharacters(in: .whitespaces)
+            .uppercased()
+        
+        switch type {
+            case .some("DIRECT"):
+                self = .direct(underlying: try DirectPolicy.init(stringLiteral: stringLiteral))
+            case .some("HTTP"):
+                self = .http(underlying: try HTTPProxyPolicy.init(stringLiteral: stringLiteral))
+            case .some("HTTPS"):
+                self = .https(underlying: try HTTPSProxyPolicy.init(stringLiteral: stringLiteral))
+            case .some("REJECT"):
+                self = .reject(underlying: try RejectPolicy.init(stringLiteral: stringLiteral))
+            case .some("REJECT-TINYGIF"):
+                self = .rejectTinyGif(underlying: try RejectTinyGifPolicy.init(stringLiteral: stringLiteral))
+            case .some("SS"):
+                self = .shadowsocks(underlying: try ShadowsocksPolicy.init(stringLiteral: stringLiteral))
+            case .some("SOCKS5"):
+                self = .socks5(underlying: try SOCKS5Policy.init(stringLiteral: stringLiteral))
+            case .some("SOCKS5-TLS"):
+                self = .socks5TLS(underlying: try SOCKS5TLSPolicy.init(stringLiteral: stringLiteral))
+            default:
+                throw ParserError.dataCorrupted
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+            case .direct(let underlying):
+                try underlying.encode(to: encoder)
+            case .reject(let underlying):
+                try underlying.encode(to: encoder)
+            case .rejectTinyGif(let underlying):
+                try underlying.encode(to: encoder)
+            case .shadowsocks(let underlying):
+                try underlying.encode(to: encoder)
+            case .socks5(let underlying):
+                try underlying.encode(to: encoder)
+            case .socks5TLS(let underlying):
+                try underlying.encode(to: encoder)
+            case .http(let underlying):
+                try underlying.encode(to: encoder)
+            case .https(let underlying):
+                try underlying.encode(to: encoder)
+        }
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let stringLiteral = try container.decode(String.self)
+        try self.init(stringLiteral: stringLiteral)
+    }
+    
+    public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
+        switch self {
+            case .direct(let underlying):
+                return underlying.makeConnection(logger: logger, on: eventLoop)
+            case .reject(let underlying):
+                return underlying.makeConnection(logger: logger, on: eventLoop)
+            case .rejectTinyGif(let underlying):
+                return underlying.makeConnection(logger: logger, on: eventLoop)
+            case .shadowsocks(let underlying):
+                return underlying.makeConnection(logger: logger, on: eventLoop)
+            case .socks5(let underlying):
+                return underlying.makeConnection(logger: logger, on: eventLoop)
+            case .socks5TLS(let underlying):
+                return underlying.makeConnection(logger: logger, on: eventLoop)
+            case .http(let underlying):
+                return underlying.makeConnection(logger: logger, on: eventLoop)
+            case .https(let underlying):
+                return underlying.makeConnection(logger: logger, on: eventLoop)
+        }
+    }
+}
+
+public struct DirectPolicy: Codable, Hashable, Policy {
+    
+    public typealias Configuration = __Never
+    
+    public var configuration: Configuration = .init()
+    public var name: String = "DIRECT"
+    public var taskAddress: NetAddress?
+    public static var type: String {
+        "direct"
+    }
+    
+    public init() {}
+    
+    public init(taskAddress: NetAddress?) {
+        self.taskAddress = taskAddress
+    }
+}
+
+public struct RejectPolicy: Codable, Hashable, Policy {
+    
+    public typealias Configuration = __Never
+    
+    public var configuration: Configuration = .init()
+    public var name: String = "REJECT"
+    public var taskAddress: NetAddress?
+    public static var type: String {
+        "reject"
+    }
+    
+    public init() {}
+    
+    public init(taskAddress: NetAddress?) {
+        self.taskAddress = taskAddress
+    }
+}
+
+public struct RejectTinyGifPolicy: Codable, Hashable, Policy {
+    
+    public typealias Configuration = __Never
+    
+    public var configuration: Configuration = .init()
+    public var name: String = "REJECT-TINYGIF"
+    public var taskAddress: NetAddress?
+    public static var type: String {
+        "reject-tinygif"
+    }
+    
+    public init() {}
+    
+    public init(taskAddress: NetAddress?) {
+        self.taskAddress = taskAddress
+    }
+}
+
+/// SHADOWSOCKS = ss, algorithm=chacha20-ietf-poly1305, allow-udp-relay=true, password=password, server-port=8389, server-hostname=127.0.0.1, tfo=true
+public struct ShadowsocksPolicy: Codable, Hashable, Policy {
+    
+    public struct Configuration: Codable, Hashable {
+        
+        public var algorithm: String = ""
+        private var _allowUDPRelay: Bool?
+        public var allowUDPRelay: Bool {
+            set { _allowUDPRelay = newValue }
+            get { _allowUDPRelay ?? false }
+        }
+        public var password: String = ""
+        public var serverHostname: String = ""
+        public var serverPort: Int = 0
+        private var _tfo: Bool?
+        public var tfo: Bool {
+            set { _tfo = newValue }
+            get { _tfo ?? false }
+        }
+        
+        private enum CodingKeys: String, CodingKey {
+            case serverHostname = "server-hostname"
+            case serverPort = "server-port"
+            case password
+            case algorithm
+            case _allowUDPRelay = "allow-udp-relay"
+            case _tfo = "tfo"
+        }
+    }
+    
+    public var configuration: Configuration = .init()
+    public var name: String = "ss"
+    public var taskAddress: NetAddress?
+    public static var type: String {
+        "ss"
+    }
+    
+    public init() {}
+    
+    public init(name: String, configuration: Configuration, taskAddress: NetAddress? = nil) {
+        self.name = name
+        self.configuration = configuration
+        self.taskAddress = taskAddress
+    }
+}
+
+/// SOCKS = socks5, password=password, server-port=8385, server-hostname=127.0.0.1, username=username
+public struct SOCKS5Policy: Codable, Hashable, Policy {
+    
+    public struct Configuration: Codable, Hashable {
+        
+        public var password: String?
+        public var username: String?
+        public var serverHostname: String = ""
+        public var serverPort: Int = 0
+        
+        private enum CodingKeys: String, CodingKey {
+            case password
+            case username
+            case serverHostname = "server-hostname"
+            case serverPort = "server-port"
+        }
+    }
+    
+    public var configuration: Configuration = .init()
+    public var name: String = "socks5"
+    public var taskAddress: NetAddress?
+    public static var type: String {
+        "socks5"
+    }
+    
+    public init() {}
+    
+    public init(name: String, configuration: Configuration, taskAddress: NetAddress? = nil) {
+        self.name = name
+        self.configuration = configuration
+        self.taskAddress = taskAddress
+    }
+}
+
+/// SOCKS TLS = socks5-tls, password=password, server-port=443, server-hostname=socks5-tls.com, username=username
+public struct SOCKS5TLSPolicy: Codable, Hashable, Policy {
+    
+    public struct Configuration: Codable, Hashable {
+        
+        // TODO: Allow user add client certificate.
+        //        public var clientCerficateString: String?
+        public var customTLSSNI: String?
+        public var password: String?
+        public var username: String?
+        public var serverHostname: String = ""
+        public var serverPort: Int = 0
+        private var _skipCertificateVerification: Bool?
+        public var skipCertificateVerification: Bool {
+            set { _skipCertificateVerification = newValue }
+            get { _skipCertificateVerification ?? false }
+        }
+        
+        private enum CodingKeys: String, CodingKey {
+            case customTLSSNI = "sni"
+            case password
+            case username
+            case serverHostname = "server-hostname"
+            case serverPort = "server-port"
+            case _skipCertificateVerification = "skip-certificate-verification"
+        }
+        
+        init() {}
+    }
+    
+    public var name: String = "socks5-tls"
+    public var configuration: Configuration = .init()
+    public var taskAddress: NetAddress?
+    public static var type: String {
+        "socks5-tls"
+    }
+    
+    public init() {}
+    
+    public init(name: String, configuration: Configuration, taskAddress: NetAddress? = nil) {
+        self.name = name
+        self.configuration = configuration
+        self.taskAddress = taskAddress
+    }
+}
+
+/// HTTP = https, password=password, server-hostname=127.0.0.1, server-port=8385, username=username
+public struct HTTPProxyPolicy: Codable, Hashable, Policy {
+    
+    public struct Configuration: Codable, Hashable {
+        
+        public var password: String?
+        public var username: String?
+        public var serverHostname: String = ""
+        public var serverPort: Int = 0
+        private var _alwaysUseConnect: Bool?
+        public var alwaysUseConnect: Bool {
+            set { _alwaysUseConnect = newValue }
+            get { _alwaysUseConnect ?? false }
+        }
+        
+        private enum CodingKeys: String, CodingKey {
+            case password
+            case username
+            case serverHostname = "server-hostname"
+            case serverPort = "server-port"
+            case _alwaysUseConnect = "always-use-connect"
+        }
+    }
+    
+    /// Name for proxy.
+    public var name: String = "http"
+    public var configuration: Configuration = .init()
+    public var taskAddress: NetAddress?
+    public static var type: String {
+        "http"
+    }
+    
+    public init() {}
+}
+
+/// HTTPS = https, password=password, server-hostname=https.com, server-port=8385, username=username
+public struct HTTPSProxyPolicy: Codable, Hashable, Policy {
+    
+    public struct Configuration: Codable, Hashable {
+        
+        // TODO: Allow user add client certificate.
+        //        public var clientCerficateString: String?
+        public var customTLSSNI: String?
+        public var password: String?
+        public var username: String?
+        public var serverHostname: String = ""
+        public var serverPort: Int = 0
+        private var _alwaysUseConnectTunnel: Bool?
+        public var alwaysUseConnectTunnel: Bool {
+            set { _alwaysUseConnectTunnel = newValue }
+            get { _alwaysUseConnectTunnel ?? false }
+        }
+        private var _skipCertificateVerification: Bool?
+        public var skipCertificateVerification: Bool {
+            set { _skipCertificateVerification = newValue }
+            get { _skipCertificateVerification ?? false }
+        }
+        
+        private enum CodingKeys: String, CodingKey {
+            case customTLSSNI = "sni"
+            case password
+            case username
+            case serverHostname = "server-hostname"
+            case serverPort = "server-port"
+            case _alwaysUseConnectTunnel = "always-use-connect"
+            case _skipCertificateVerification = "skip-certificate-verification"
+        }
+    }
+    
+    /// Name for proxy.
+    public var name: String = "https"
+    public var configuration: Configuration = .init()
+    public var taskAddress: NetAddress?
+    public static var type: String {
+        "https"
+    }
+    
+    public init() {}
+}

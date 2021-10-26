@@ -31,11 +31,18 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
-        .package(url: "https://github.com/vapor/async-kit.git", from: "1.9.0")
+        .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0"),
+        .package(url: "https://github.com/vapor/async-kit.git", from: "1.9.0"),
     ],
     targets: [
         .target(name: "CMMDB",
                 cSettings: [.define("HAVE_CONFIG_H")]),
+        .target(name: "ConnectionPool",
+                dependencies: [
+                    .product(name: "Logging", package: "swift-log"),
+                    .product(name: "NIOCore", package: "swift-nio"),
+                    .product(name: "NIOPosix", package: "swift-nio")
+                ]),
         .target(name: "Helpers",
                 dependencies: [
                     .product(name: "NIO", package: "swift-nio"),
@@ -49,6 +56,7 @@ let package = Package(
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
                     .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
+                    .target(name: "ConnectionPool"),
                     .target(name: "Helpers")
                 ]),
         .target(name: "SOCKS",
@@ -71,6 +79,7 @@ let package = Package(
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
                     .product(name: "NIOExtras", package: "swift-nio-extras"),
+                    .product(name: "NIOTransportServices", package: "swift-nio-transport-services"),
                     .target(name: "CMMDB"),
                     .target(name: "HTTP"),
                     .target(name: "SOCKS"),

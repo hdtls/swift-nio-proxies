@@ -22,6 +22,7 @@ public struct Configuration: Codable {
     public var mitm: MitMConfiguration
     public var general: BasicConfiguration
     public var replica: ReplicaConfiguration
+    public var policies: [ProxyPolicy]
     public var selectablePolicyGroups: [SelectablePolicyGroup]
     
     enum CodingKeys: String, CodingKey {
@@ -29,6 +30,7 @@ public struct Configuration: Codable {
         case mitm = "[MitM]"
         case general = "[General]"
         case replica = "[Replica]"
+        case policies = "[Proxy Policy]"
         case selectablePolicyGroups = "[Policy Group]"
     }
     
@@ -36,11 +38,13 @@ public struct Configuration: Codable {
                 replica: ReplicaConfiguration = .init(),
                 rules: [AnyRule] = .init(),
                 mitm: MitMConfiguration = .init(),
+                policies: [ProxyPolicy] = .init(),
                 selectablePolicyGroups: [SelectablePolicyGroup] = .init()) {
         self.general = general
         self.replica = replica
         self.rules = rules
         self.mitm = mitm
+        self.policies = policies
         self.selectablePolicyGroups = selectablePolicyGroups
     }
     
@@ -50,6 +54,7 @@ public struct Configuration: Codable {
         mitm = try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
         general = try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
         replica = try container.decodeIfPresent(ReplicaConfiguration.self, forKey: .replica) ?? .init()
+        policies = try container.decodeIfPresent([ProxyPolicy].self, forKey: .policies) ?? .init()
         selectablePolicyGroups = try container.decodeIfPresent([SelectablePolicyGroup].self, forKey: .selectablePolicyGroups) ?? .init()
     }
     
@@ -59,6 +64,7 @@ public struct Configuration: Codable {
         try container.encode(mitm, forKey: .mitm)
         try container.encode(general, forKey: .general)
         try container.encode(replica, forKey: .replica)
+        try container.encodeIfPresent(policies.isEmpty ? nil : policies, forKey: .policies)
         try container.encodeIfPresent(selectablePolicyGroups.isEmpty ? nil : selectablePolicyGroups, forKey: .selectablePolicyGroups)
     }
 }

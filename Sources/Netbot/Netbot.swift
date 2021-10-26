@@ -34,6 +34,7 @@ public class Netbot {
     }
     private var eventLoopGroup: EventLoopGroup!
     private var quiesce: ServerQuiescingHelper!
+    private var threadPool: NIOThreadPool
     
     public init(logger: Logger = .init(label: "io.tenbits.Netbot"),
                 configuration: Configuration,
@@ -48,7 +49,8 @@ public class Netbot {
         self.basicAuthorization = basicAuthorization
         self.isHTTPCaptureEnabled = enableHTTPCapture
         self.isMitmEnabled = enableMitm
-
+        self.threadPool = .init(numberOfThreads: System.coreCount)
+        
         if let geo = geo {
             GeoIPRule.geo = geo
         } else {
@@ -60,7 +62,7 @@ public class Netbot {
     }
     
     public func run() throws {
-        
+        threadPool.start()
         eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
         quiesce = ServerQuiescingHelper(group: eventLoopGroup)
         
@@ -90,32 +92,30 @@ public class Netbot {
                         ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)),
                         HTTP1ProxyServerHandler(authorization: self.basicAuthorization, enableHTTPCapture: self.isHTTPCaptureEnabled, enableMitM: self.isMitmEnabled, mitmConfig: self.configuration.mitm) { taskAddress in
                             
-                            guard case .domainPort(let domain, let port) = taskAddress else {
+                            guard case .domainPort(let domain, _) = taskAddress else {
                                 return channel.eventLoop.makeFailedFuture(SocketAddressError.unsupported)
                             }
                             
-                            let bootstrap = ClientBootstrap(group: channel.eventLoop.next())
+                            let eventLoop = channel.eventLoop.next()
                             
-                            guard self.outboundMode != .direct else {
-                                return bootstrap.connect(host: domain, port: port)
-                            }
-                            
-                            guard let policy = self.ruleMatcher.firstMatch(domain)?.policy else {
-                                return bootstrap.connect(host: domain, port: port)
+                            guard self.outboundMode != .direct, let rule = self.ruleMatcher.firstMatch(domain) else {
+                                return DirectPolicy.init(taskAddress: taskAddress)
+                                    .makeConnection(logger: self.logger, on: eventLoop)
                             }
                             
                             let selectablePolicyGroup = self.configuration.selectablePolicyGroups.first {
-                                $0.name == policy
-                            }
-                            if let selectablePolicyGroup = selectablePolicyGroup {
-                                print("Policy Group", selectablePolicyGroup.selected)
+                                $0.name == rule.policy
                             }
                             
-                            return bootstrap
-                                .channelInitializer { channel in
-                                    channel.eventLoop.makeSucceededVoidFuture()
-                                }
-                                .connect(host: domain, port: port)
+                            guard var policy = (self.configuration.policies.first {
+                                $0.name == selectablePolicyGroup?.selected || $0.name == rule.policy
+                            }) else {
+                                // Unknown policy found.
+                                return eventLoop.makeFailedFuture(ParserError.dataCorrupted)
+                            }
+                            
+                            policy.taskAddress = taskAddress
+                            return policy.makeConnection(logger: self.logger, on: eventLoop)
                         }
                     ])
                 }
@@ -132,7 +132,8 @@ public class Netbot {
             
             logger.debug("HTTP proxy server started and listening on \(localAddress)")
         }
-                
+        
+        try threadPool.syncShutdownGracefully()
         try fullyShutdownPromise.futureResult.wait()
         try eventLoopGroup.syncShutdownGracefully()
     }
@@ -144,6 +145,7 @@ public class Netbot {
             let fullyShutdownPromise: EventLoopPromise<Void> = eventLoopGroup.next().makePromise()
             quiesce.initiateShutdown(promise: fullyShutdownPromise)
             
+            try threadPool.syncShutdownGracefully()
             try fullyShutdownPromise.futureResult.wait()
             try eventLoopGroup.syncShutdownGracefully()
         } catch {
