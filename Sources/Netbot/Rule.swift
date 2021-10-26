@@ -464,14 +464,14 @@ final public class RuleMatcher {
         var match: Rule?
         var dnsFailedRule: Rule?
         
-        rules.forEach {
-            if $0.match(pattern) {
-                match = $0
-                return
+        for rule in rules {
+            if rule.match(pattern) {
+                match = rule
+                break
             }
             
-            if $0.type == .final {
-                dnsFailedRule = $0
+            if rule.type == .final {
+                dnsFailedRule = rule
             }
         }
         return match ?? dnsFailedRule
