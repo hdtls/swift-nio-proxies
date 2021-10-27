@@ -93,14 +93,14 @@ extension Policy {
 
 public enum ProxyPolicy: Codable {
     
-    case direct(underlying: DirectPolicy)
-    case reject(underlying: RejectPolicy)
-    case rejectTinyGif(underlying: RejectTinyGifPolicy)
-    case shadowsocks(underlying: ShadowsocksPolicy)
-    case socks5(underlying: SOCKS5Policy)
-    case socks5TLS(underlying: SOCKS5TLSPolicy)
-    case http(underlying: HTTPProxyPolicy)
-    case https(underlying: HTTPSProxyPolicy)
+    case direct(DirectPolicy)
+    case reject(RejectPolicy)
+    case rejectTinyGif(RejectTinyGifPolicy)
+    case shadowsocks(ShadowsocksPolicy)
+    case socks5(SOCKS5Policy)
+    case socks5TLS(SOCKS5TLSPolicy)
+    case http(HTTPProxyPolicy)
+    case https(HTTPSProxyPolicy)
     
     public var name: String {
         switch self {
@@ -128,28 +128,28 @@ public enum ProxyPolicy: Codable {
             switch self {
                 case .direct(var underlying):
                     underlying.taskAddress = newValue
-                    self = .direct(underlying: underlying)
+                    self = .direct(underlying)
                 case .reject(var underlying):
                     underlying.taskAddress = newValue
-                    self = .reject(underlying: underlying)
+                    self = .reject(underlying)
                 case .rejectTinyGif(var underlying):
                     underlying.taskAddress = newValue
-                    self = .rejectTinyGif(underlying: underlying)
+                    self = .rejectTinyGif(underlying)
                 case .shadowsocks(var underlying):
                     underlying.taskAddress = newValue
-                    self = .shadowsocks(underlying: underlying)
+                    self = .shadowsocks(underlying)
                 case .socks5(var underlying):
                     underlying.taskAddress = newValue
-                    self = .socks5(underlying: underlying)
+                    self = .socks5(underlying)
                 case .socks5TLS(var underlying):
                     underlying.taskAddress = newValue
-                    self = .socks5TLS(underlying: underlying)
+                    self = .socks5TLS(underlying)
                 case .http(var underlying):
                     underlying.taskAddress = newValue
-                    self = .http(underlying: underlying)
+                    self = .http(underlying)
                 case .https(var underlying):
                     underlying.taskAddress = newValue
-                    self = .https(underlying: underlying)
+                    self = .https(underlying)
             }
         }
         get {
@@ -186,21 +186,21 @@ public enum ProxyPolicy: Codable {
         
         switch type {
             case .some("DIRECT"):
-                self = .direct(underlying: try DirectPolicy.init(stringLiteral: stringLiteral))
+                self = .direct(try DirectPolicy.init(stringLiteral: stringLiteral))
             case .some("HTTP"):
-                self = .http(underlying: try HTTPProxyPolicy.init(stringLiteral: stringLiteral))
+                self = .http(try HTTPProxyPolicy.init(stringLiteral: stringLiteral))
             case .some("HTTPS"):
-                self = .https(underlying: try HTTPSProxyPolicy.init(stringLiteral: stringLiteral))
+                self = .https(try HTTPSProxyPolicy.init(stringLiteral: stringLiteral))
             case .some("REJECT"):
-                self = .reject(underlying: try RejectPolicy.init(stringLiteral: stringLiteral))
+                self = .reject(try RejectPolicy.init(stringLiteral: stringLiteral))
             case .some("REJECT-TINYGIF"):
-                self = .rejectTinyGif(underlying: try RejectTinyGifPolicy.init(stringLiteral: stringLiteral))
+                self = .rejectTinyGif(try RejectTinyGifPolicy.init(stringLiteral: stringLiteral))
             case .some("SS"):
-                self = .shadowsocks(underlying: try ShadowsocksPolicy.init(stringLiteral: stringLiteral))
+                self = .shadowsocks(try ShadowsocksPolicy.init(stringLiteral: stringLiteral))
             case .some("SOCKS5"):
-                self = .socks5(underlying: try SOCKS5Policy.init(stringLiteral: stringLiteral))
+                self = .socks5(try SOCKS5Policy.init(stringLiteral: stringLiteral))
             case .some("SOCKS5-TLS"):
-                self = .socks5TLS(underlying: try SOCKS5TLSPolicy.init(stringLiteral: stringLiteral))
+                self = .socks5TLS(try SOCKS5TLSPolicy.init(stringLiteral: stringLiteral))
             default:
                 throw ParserError.dataCorrupted
         }

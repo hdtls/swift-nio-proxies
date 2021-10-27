@@ -15,28 +15,8 @@
 import XCTest
 @testable import Netbot
 
-class ConfigFileParsingTests: XCTestCase {
-    
-    func testParsingRuleWithoutComment() throws {
-        let literal = "DOMAIN,www.github.com,DIRECT"
-        let rule = try StandardRule.init(string: literal)
-
-        XCTAssertEqual(rule.type, .domain)
-        XCTAssertEqual(rule.pattern, "www.github.com")
-        XCTAssertEqual(rule.policy, "DIRECT")
-        XCTAssertNil(rule.comment)
-    }
-    
-    func testParsingRuleWithComment() throws {
-        let literal = "DOMAIN,www.github.com,DIRECT // The rule for Github."
-        let rule = try StandardRule.init(string: literal)
-
-        XCTAssertEqual(rule.type, .domain)
-        XCTAssertEqual(rule.pattern, "www.github.com")
-        XCTAssertEqual(rule.policy, "DIRECT")
-        XCTAssertEqual(rule.comment, "The rule for Github.")
-    }
-    
+final class ConfigurationParserTests: XCTestCase {
+        
     func testParsingRuleWithInvalidStatements() {
         let literal = "DOMAIN,www.github.com"
         XCTAssertThrowsError(try StandardRule.init(string: literal))
@@ -71,7 +51,7 @@ class ConfigFileParsingTests: XCTestCase {
     }
     
     func testFinalRuleEncoding() throws {
-        let expect = "FINAL,DIRECT // The rule for FINAL."
+        let expect = "FINAL,DIRECT,dns-failed"
         let rule = try FinalRule.init(string: expect)
         let data = try JSONEncoder().encode(rule)
         

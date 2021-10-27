@@ -73,7 +73,7 @@ public struct BasicConfiguration: Codable, Equatable {
     
     public var logLevel: Logger.Level
     public var dnsServers: [String]
-    public var skipProxy: [String]?
+    public var exceptions: [String]?
     public var httpListenAddress: String?
     public var httpListenPort: Int?
     public var socksListenAddress: String?
@@ -83,7 +83,7 @@ public struct BasicConfiguration: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case logLevel = "log-level"
         case dnsServers = "dns-servers"
-        case skipProxy = "skip-proxy"
+        case exceptions = "exceptions"
         case httpListenAddress = "http-listen-address"
         case httpListenPort = "http-listen-port"
         case socksListenAddress = "socks-listen-address"
@@ -93,7 +93,7 @@ public struct BasicConfiguration: Codable, Equatable {
     
     public init(logLevel: Logger.Level = .info,
                 dnsServers: [String] = ["system"],
-                skipProxy: [String]? = nil,
+                exceptions: [String]? = nil,
                 httpListenAddress: String? = nil,
                 httpListenPort: Int? = nil,
                 socksListenAddress: String? = nil,
@@ -101,7 +101,7 @@ public struct BasicConfiguration: Codable, Equatable {
                 excludeSimpleHostnames: Bool = false) {
         self.logLevel = logLevel
         self.dnsServers = dnsServers
-        self.skipProxy = skipProxy
+        self.exceptions = exceptions
         self.httpListenAddress = httpListenAddress
         self.httpListenPort = httpListenPort
         self.socksListenAddress = socksListenAddress
@@ -114,7 +114,7 @@ public struct BasicConfiguration: Codable, Equatable {
         logLevel = try container.decodeIfPresent(Logger.Level.self, forKey: .logLevel) ?? .info
         dnsServers = try container.decodeIfPresent(String.self, forKey: .dnsServers)?.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces ) } ?? ["system"]
-        skipProxy = try container.decodeIfPresent(String.self, forKey: .skipProxy)?.split(separator: ",")
+        exceptions = try container.decodeIfPresent(String.self, forKey: .exceptions)?.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces ) }
         httpListenAddress = try container.decodeIfPresent(String.self, forKey: .httpListenAddress)
         httpListenPort = Int(try container.decodeIfPresent(String.self, forKey: .httpListenPort) ?? "")
@@ -127,7 +127,7 @@ public struct BasicConfiguration: Codable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(logLevel, forKey: .logLevel)
         try container.encode(dnsServers.joined(separator: ", "), forKey: .dnsServers)
-        try container.encodeIfPresent(skipProxy?.joined(separator: ", "), forKey: .skipProxy)
+        try container.encodeIfPresent(exceptions?.joined(separator: ", "), forKey: .exceptions)
         try container.encodeIfPresent(httpListenAddress, forKey: .httpListenAddress)
         try container.encodeIfPresent(httpListenPort != nil ? "\(httpListenPort!)" : nil, forKey: .httpListenPort)
         try container.encodeIfPresent(socksListenAddress, forKey: .socksListenAddress)
