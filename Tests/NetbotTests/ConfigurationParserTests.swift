@@ -16,49 +16,6 @@ import XCTest
 @testable import Netbot
 
 final class ConfigurationParserTests: XCTestCase {
-        
-    func testParsingRuleWithInvalidStatements() {
-        let literal = "DOMAIN,www.github.com"
-        XCTAssertThrowsError(try StandardRule.init(string: literal))
-    }
-    
-    func testParsingFinalRule() {
-        let literal = "FINAL,DIRECT"
-        let rule: Rule = try! StandardRule.init(string: literal)
-        XCTAssertEqual(rule.type, .final)
-        XCTAssertEqual(rule.policy, "DIRECT")
-        XCTAssertNil(rule.pattern)
-        XCTAssertNil(rule.comment)
-    }
-    
-    func testParsingFinalRuleWithComment() {
-        let literal = "FINAL,DIRECT // The rule for FINAL."
-        let rule: Rule = try! FinalRule.init(string: literal)
-        XCTAssertEqual(rule.type, .final)
-        XCTAssertEqual(rule.policy, "DIRECT")
-        XCTAssertNil(rule.pattern)
-        XCTAssertEqual(rule.comment, "The rule for FINAL.")
-    }
-    
-    func testRuleEncoding() throws {
-        let expect = "DOMAIN,www.github.com,DIRECT // The rule for Github."
-        let rule = try StandardRule.init(string: expect)
-        let data = try JSONEncoder().encode(rule)
-        
-        let result = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as! String
-        
-        XCTAssertEqual(result, expect)
-    }
-    
-    func testFinalRuleEncoding() throws {
-        let expect = "FINAL,DIRECT,dns-failed"
-        let rule = try FinalRule.init(string: expect)
-        let data = try JSONEncoder().encode(rule)
-        
-        let result = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as! String
-        
-        XCTAssertEqual(result, expect)
-    }
     
     func testReplicaEncoding() throws {
         let expect = ReplicaConfiguration(hideAppleRequests: true, hideCrashlyticsRequests: false, hideCrashReporterRequests: true, hideUDP: true, reqMsgFilterType: .none, reqMsgFilter: "github.com")

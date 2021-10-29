@@ -34,21 +34,48 @@ public enum RuleType: String, Codable, CaseIterable {
     case ruleSet = "RULE-SET"
 }
 
-public protocol Rule: Codable {
+fileprivate typealias CodableRule = Rule & Codable
+
+public protocol Rule {
     var type: RuleType { get set }
     var pattern: String { get set }
     var policy: String { get set }
     var comment: String? { get set }
     func match(_ pattern: String) -> Bool
     
-    init(string: String) throws
+    init()
+    init(stringLiteral: String) throws
 }
 
 extension Rule {
     
+    public init(stringLiteral: String) throws {
+        var components = stringLiteral.components(separatedBy: ",")
+        guard components.count >= 3 else {
+            throw ParserError.invalidFile(reason: .dataCorrupted)
+        }
+        
+        guard let t = RuleType(rawValue: components.removeFirst().trimmingCharacters(in: .whitespaces)) else {
+            throw ParserError.invalidFile(reason: .dataCorrupted)
+        }
+        
+        self.init()
+        
+        type = t
+        pattern = components.removeFirst().trimmingCharacters(in: .whitespaces)
+        components = components[0].components(separatedBy: "//")
+        
+        guard components.count >= 2 else {
+            policy = components[0].trimmingCharacters(in: .whitespaces)
+            return
+        }
+        policy = components.first!.trimmingCharacters(in: .whitespaces)
+        comment = components[1].trimmingCharacters(in: .whitespaces)
+    }
+    
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        try self.init(string: container.decode(String.self))
+        try self.init(stringLiteral: container.decode(String.self))
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -64,6 +91,8 @@ public protocol RuleCollection: Rule {
     // Reload rule data.
     func reloadData()
 }
+
+fileprivate typealias CodableRuleCollection = RuleCollection & Codable
 
 extension RuleCollection {
     
@@ -114,36 +143,25 @@ extension RuleCollection {
             }
         }.resume()
     }
+    
+    public func match(_ pattern: String) -> Bool {
+        standardRules.first {
+            $0.match(pattern)
+        } != nil
+    }
 }
 
-public struct StandardRule: Rule {
+public struct StandardRule: CodableRule {
     
     public var type: RuleType
     public var pattern: String
     public var policy: String
     public var comment: String?
     
-    public init(string: String) throws {
-        let parts = string.split(separator: ",").map(String.init)
-        guard parts.count >= 3 else {
-            throw ParserError.invalidFile(reason: .dataCorrupted)
-        }
-        
-        guard let t = RuleType(rawValue: parts.first!.trimmingCharacters(in: .whitespaces)) else {
-            throw ParserError.invalidFile(reason: .dataCorrupted)
-        }
-        
-        assert(t != .domainSet && t != .ruleSet, "assert illegal rule type.")
-        
-        type = t
-        pattern = parts[1].trimmingCharacters(in: .whitespaces)
-        if parts[2].contains("//") {
-            let splited = parts[2].components(separatedBy: "//")
-            policy = splited.first!.trimmingCharacters(in: .whitespaces)
-            comment = splited.last!.trimmingCharacters(in: .whitespaces)
-        } else {
-            policy = parts[2].trimmingCharacters(in: .whitespaces)
-        }
+    public init() {
+        type = .domain
+        pattern = ""
+        policy = "direct"
     }
     
     public func match(_ pattern: String) -> Bool {
@@ -151,7 +169,9 @@ public struct StandardRule: Rule {
             case .domain, .processName:
                 return self.pattern == pattern
             case .domainSuffix:
-                return pattern.hasSuffix(self.pattern)
+                // e.g. apple.com should match *.apple.com and apple.com
+                // should not match *apple.com.
+                return self.pattern == pattern || ".\(pattern)".hasSuffix(self.pattern)
             case .domainKeyword:
                 return pattern.contains(self.pattern)
             case .userAgent:
@@ -167,7 +187,7 @@ public struct StandardRule: Rule {
 }
 
 /// GEOIP,CN,DIRECT
-public struct GeoIPRule: Rule {
+public struct GeoIPRule: CodableRule {
     
     @Protected public static var geo: GeoLite2?
     
@@ -176,27 +196,10 @@ public struct GeoIPRule: Rule {
     public var policy: String
     public var comment: String?
     
-    public init(string: String) throws {
-        let parts = string.split(separator: ",").map(String.init)
-        guard parts.count >= 3 else {
-            throw ParserError.invalidFile(reason: .dataCorrupted)
-        }
-        
-        guard let t = RuleType(rawValue: parts.first!.trimmingCharacters(in: .whitespaces)) else {
-            throw ParserError.invalidFile(reason: .dataCorrupted)
-        }
-        
-        assert(t == .geoip, "assert illegal rule type.")
-        
-        type = t
-        pattern = parts[1].trimmingCharacters(in: .whitespaces)
-        if parts[2].contains("//") {
-            let splited = parts[2].components(separatedBy: "//")
-            policy = splited.first!.trimmingCharacters(in: .whitespaces)
-            comment = splited.last!.trimmingCharacters(in: .whitespaces)
-        } else {
-            policy = parts[2].trimmingCharacters(in: .whitespaces)
-        }
+    public init() {
+        type = .geoip
+        pattern = ""
+        policy = "direct"
     }
     
     public func match(_ pattern: String) -> Bool {
@@ -210,28 +213,53 @@ public struct GeoIPRule: Rule {
 }
 
 /// FINAL,PROXY,dns-failed
-public struct FinalRule: Rule {
+public struct FinalRule: CodableRule {
     
     public var type: RuleType
     public var pattern: String
     public var policy: String
     public var comment: String?
     
-    public init(string: String) throws {
-        let parts = string.split(separator: ",").map(String.init)
-        guard parts.count >= 3 else {
-            throw ParserError.invalidFile(reason: .dataCorrupted)
+    public init() {
+        type = .final
+        pattern = ""
+        policy = "direct"
+    }
+    
+    public init(stringLiteral: String) throws {
+        var components = stringLiteral.components(separatedBy: ",")
+        guard components.count >= 2 else {
+            throw ParserError.invalidRule(reason: .missingField)
         }
         
-        guard let t = RuleType(rawValue: parts.first!.trimmingCharacters(in: .whitespaces)) else {
-            throw ParserError.invalidFile(reason: .dataCorrupted)
+        guard let t = RuleType(rawValue: components.removeFirst().trimmingCharacters(in: .whitespaces)) else {
+            throw ParserError.invalidRule(reason: .unsupported)
         }
         
-        precondition(parts[2] == "dns-failed", "unsupported pattern \(String(describing: parts[2])).")
         assert(t == .final, "assert illegal rule type.")
+        self.init()
+        
         type = t
-        policy = parts[1].trimmingCharacters(in: .whitespaces)
-        pattern = parts[2]
+        
+        if components.count == 1 {
+            components = components[0].components(separatedBy: "//")
+            policy = components[0].trimmingCharacters(in: .whitespaces)
+            if components.count >= 2 {
+                comment = components[1].trimmingCharacters(in: .whitespaces)
+            }
+        } else {
+            policy = components[0].trimmingCharacters(in: .whitespaces)
+            components = components[1].components(separatedBy: "//")
+            pattern = components[0].trimmingCharacters(in: .whitespaces)
+            if components.count >= 2 {
+                comment = components[1].trimmingCharacters(in: .whitespaces)
+            }
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode("\(type.rawValue),\(policy)\(pattern.isEmpty ? "" : "," + pattern)\(comment != nil ? " // \(comment!)" : "")")
     }
     
     public func match(_ pattern: String) -> Bool {
@@ -239,7 +267,7 @@ public struct FinalRule: Rule {
     }
 }
 
-final public class DomainSet: RuleCollection {
+final public class DomainSet: CodableRuleCollection {
     
     public var type: RuleType
     public var pattern: String
@@ -251,8 +279,14 @@ final public class DomainSet: RuleCollection {
         _standardRules
     }
     
-    public init(string: String) throws {
-        let parts = string.split(separator: ",").map(String.init)
+    public init() {
+        type = .domainSet
+        pattern = ""
+        policy = "direct"
+    }
+    
+    public init(stringLiteral: String) throws {
+        let parts = stringLiteral.split(separator: ",").map(String.init)
         guard parts.count >= 3 else {
             throw ParserError.invalidFile(reason: .dataCorrupted)
         }
@@ -287,19 +321,13 @@ final public class DomainSet: RuleCollection {
                 guard !literal.isEmpty else {
                     return
                 }
-                rules.append(try! .init(string: "\(RuleType.domainSuffix.rawValue),\(literal),\(policy)"))
+                rules.append(try! .init(stringLiteral: "\(RuleType.domainSuffix.rawValue),\(literal),\(policy)"))
             }
         self._standardRules = rules
     }
-    
-    public func match(_ pattern: String) -> Bool {
-        standardRules.first {
-            $0.match(pattern)
-        } != nil
-    }
 }
 
-final public class RuleSet: RuleCollection {
+final public class RuleSet: CodableRuleCollection {
     
     public var type: RuleType
     public var pattern: String
@@ -311,8 +339,14 @@ final public class RuleSet: RuleCollection {
         _standardRules
     }
     
-    public init(string: String) throws {
-        let parts = string.split(separator: ",").map(String.init)
+    public init() {
+        type = .ruleSet
+        pattern = ""
+        policy = "direct"
+    }
+    
+    public init(stringLiteral: String) throws {
+        let parts = stringLiteral.split(separator: ",")
         guard parts.count >= 3 else {
             throw ParserError.invalidFile(reason: .dataCorrupted)
         }
@@ -355,7 +389,7 @@ final public class RuleSet: RuleCollection {
                 }
                 literal.append(",\(policy)")
                 
-                guard let standardRule = try? StandardRule.init(string: literal) else {
+                guard let standardRule = try? StandardRule.init(stringLiteral: literal) else {
                     // .dataCorrupted
                     return
                 }
@@ -363,76 +397,58 @@ final public class RuleSet: RuleCollection {
             }
         self._standardRules = rules
     }
-    
-    public func match(_ pattern: String) -> Bool {
-        standardRules.first {
-            $0.match(pattern)
-        } != nil
-    }
 }
 
 /// A type-erased rule.
-public struct AnyRule: Rule {
+public struct AnyRule: CodableRule {
     
     public var type: RuleType {
-        set {
-            underlying.type = newValue
-        }
-        get {
-            underlying.type
-        }
+        set { underlying.type = newValue }
+        get { underlying.type }
     }
     
     public var pattern: String {
-        set {
-            underlying.pattern = newValue
-        }
-        get {
-            underlying.pattern
-        }
+        set { underlying.pattern = newValue }
+        get { underlying.pattern }
     }
     
     public var policy: String {
-        set {
-            underlying.policy = newValue
-        }
-        get {
-            underlying.policy
-        }
+        set { underlying.policy = newValue }
+        get { underlying.policy }
     }
     
     public var comment: String? {
-        set {
-            underlying.comment = newValue
-        }
-        get {
-            underlying.comment
-        }
+        set { underlying.comment = newValue }
+        get { underlying.comment }
     }
     
     var underlying: Rule
     
-    public init(underlying: Rule) {
+    public init<R>(underlying: R) where R: Rule {
         self.underlying = underlying
     }
     
-    public init(string: String) throws {
-        guard let type = RuleType.init(rawValue: string.components(separatedBy: ",").first!) else {
+    public init() {
+        self.init(underlying: FinalRule.init())
+    }
+    
+    public init(stringLiteral: String) throws {
+        guard let type = RuleType.init(rawValue: stringLiteral.components(separatedBy: ",").first!) else {
             throw ParserError.dataCorrupted
         }
         switch type {
             case .domain, .domainSuffix, .domainKeyword, .processName, .userAgent:
-                self = .init(underlying: try StandardRule.init(string: string))
+                self = .init(underlying: try StandardRule.init(stringLiteral: stringLiteral))
             case .domainSet:
-                self = .init(underlying: try DomainSet.init(string: string))
+                self = .init(underlying: try DomainSet.init(stringLiteral: stringLiteral))
             case .final:
-                self = .init(underlying: try FinalRule.init(string: string))
+                self = .init(underlying: try FinalRule.init(stringLiteral: stringLiteral))
             case .geoip:
-                self = .init(underlying: try GeoIPRule.init(string: string))
+                self = .init(underlying: try GeoIPRule.init(stringLiteral: stringLiteral))
             case .ipcidr:
-                self = .init(underlying: try StandardRule.init(string: string))
+                self = .init(underlying: try StandardRule.init(stringLiteral: stringLiteral))
             case .ruleSet:
-                self = .init(underlying: try RuleSet.init(string: string))
+                self = .init(underlying: try RuleSet.init(stringLiteral: stringLiteral))
         }
     }
     

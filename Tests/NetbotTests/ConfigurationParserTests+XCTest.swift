@@ -24,11 +24,6 @@ extension ConfigurationParserTests {
 
    static var allTests : [(String, (ConfigurationParserTests) -> () throws -> Void)] {
       return [
-                ("testParsingRuleWithInvalidStatements", testParsingRuleWithInvalidStatements),
-                ("testParsingFinalRule", testParsingFinalRule),
-                ("testParsingFinalRuleWithComment", testParsingFinalRuleWithComment),
-                ("testRuleEncoding", testRuleEncoding),
-                ("testFinalRuleEncoding", testFinalRuleEncoding),
                 ("testReplicaEncoding", testReplicaEncoding),
            ]
    }
