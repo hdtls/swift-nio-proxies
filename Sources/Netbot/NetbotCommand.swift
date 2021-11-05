@@ -128,17 +128,61 @@ public struct NetbotCommand: ParsableCommand {
             configuration.replica.reqMsgFilter = reqMsgFilter
         }
         
-        LoggingSystem.bootstrap { label in
-            var handler = StreamLogHandler.standardOutput(label: label)
-            handler.logLevel = configuration.general.logLevel
-            return handler
+        /// Default GeoLite2 database file url.
+        let dstURL: URL = {
+            var dstURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            dstURL.appendPathComponent("io.tenbits.Netbot")
+            dstURL.appendPathComponent("GeoLite2-Country.mmdb")
+            return dstURL
+        }()
+        
+        if FileManager.default.fileExists(atPath: dstURL.path) {
+            let g = DispatchGroup.init()
+            g.enter()
+            
+            print("Downloading https://git.io/GeoLite2-Country.mmdb")
+            let totalSize: Double = 60
+            var prettyPrint = String.init(repeating: "-", count: Int(totalSize))
+            print("\r[\(prettyPrint)] 0%", terminator: "")
+            fflush(__stdoutp)
+            
+            let task = URLSession(configuration: .ephemeral).downloadTask(with: URL(string: "https://git.io/GeoLite2-Country.mmdb")!) { url, response, error in
+                defer {
+                    g.leave()
+                }
+                guard let url = url, error == nil else {
+                    return
+                }
+                do {
+                    let supportDirectory = dstURL.deletingLastPathComponent()
+                    try FileManager.default.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
+                    try FileManager.default.moveItem(at: url, to: dstURL)
+                } catch {
+                    assertionFailure(error.localizedDescription)
+                }
+            }
+            
+            task.resume()
+            
+            let observation = task.progress.observe(\.fractionCompleted, options: .new) { progress, _ in
+                let range = Range.init(.init(location: 0, length: Int(progress.fractionCompleted * totalSize)), in: prettyPrint)
+                prettyPrint = prettyPrint.replacingOccurrences(of: "-", with: "#", range: range)
+                
+                print("\r[\(prettyPrint)] \(Int(progress.fractionCompleted * 100))%", terminator: progress.fractionCompleted < 1 ? "" : "\n")
+                fflush(__stdoutp)
+            }
+            
+            // Wait downloading done.
+            g.wait()
+            observation.invalidate()
         }
         
         let netbot = Netbot.init(
             configuration: configuration,
             outboundMode: outboundMode,
             enableHTTPCapture: enableHTTPCapture,
-            enableMitm: enableMitm
+            enableMitm: enableMitm,
+            geoLite2: try .init(file: dstURL.path)
         )
         
         try netbot.run()

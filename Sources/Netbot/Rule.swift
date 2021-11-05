@@ -189,7 +189,7 @@ public struct StandardRule: CodableRule {
 /// GEOIP,CN,DIRECT
 public struct GeoIPRule: CodableRule {
     
-    @Protected public static var geo: GeoLite2?
+    @Protected static var geo: GeoLite2?
     
     public var type: RuleType
     public var pattern: String

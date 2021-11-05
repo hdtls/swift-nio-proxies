@@ -28,9 +28,9 @@ public class Netbot {
     public var outboundMode: OutboundMode
     public var isHTTPCaptureEnabled: Bool = false
     public var isMitmEnabled: Bool = false
-    public var geoLite2: GeoLite2? {
+    public var geoLite2: GeoLite2 {
         set { GeoIPRule.geo = newValue }
-        get { GeoIPRule.geo }
+        get { GeoIPRule.geo! }
     }
     public var ruleMatcher: RuleMatcher {
         .init(rules: configuration.rules)
@@ -46,7 +46,7 @@ public class Netbot {
                 outboundMode: OutboundMode = .direct,
                 enableHTTPCapture: Bool = false,
                 enableMitm: Bool = false,
-                geoLite2: GeoLite2? = nil) {
+                geoLite2: GeoLite2) {
         self.logger = logger
         self.configuration = configuration
         self.outboundMode = outboundMode
