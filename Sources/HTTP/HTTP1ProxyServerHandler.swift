@@ -56,13 +56,14 @@ final public class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
     /// The credentials to authenticate a user.
     public let authorization: BasicAuthorization?
     
-    public init(authorization: BasicAuthorization? = nil,
+    public init(logger: Logger,
+                authorization: BasicAuthorization? = nil,
                 enableHTTPCapture: Bool = false,
                 enableMitM: Bool = false,
                 mitmConfig: MitMConfiguration? = nil,
                 completion: @escaping (NetAddress) -> EventLoopFuture<Channel>) {
+        self.logger = logger
         self.authorization = authorization
-        self.logger = .init(label: "com.netbot.http")
         self.isHTTPCaptureEnabled = enableHTTPCapture
         self.isMitMEnabled = enableMitM
         self.mitmConfiguration = mitmConfig
@@ -146,7 +147,7 @@ final public class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
     }
     
     public func removeHandler(context: ChannelHandlerContext, removalToken: ChannelHandlerContext.RemovalToken) {
-        precondition(state == .active, "\(self) should never remove before proxy pipe active.")
+        assert(state == .active, "\(self) should never remove before proxy pipe active.")
         
         // We're being removed from the pipeline. If we have buffered events, deliver them.
         while !eventBuffer.isEmpty {

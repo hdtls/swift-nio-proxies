@@ -41,24 +41,18 @@ public struct NetbotCommand: ParsableCommand {
             BoringSSLCommand.self
         ])
 #endif
-
+    
     @Option(help: "The SOCKS5 proxy server listen address.")
-    var socksListenAddress: String?
+    public var socksListenAddress: String?
     
     @Option(help: "The SOCKS5 proxy server listen port.")
-    var socksListenPort: Int?
-    
-    @Option(help: "The SOCKS5 proxy server listen authority (e.g., 127.0.0.1:10000).")
-    var socksListen: String?
+    public var socksListenPort: Int?
     
     @Option(help: "The web and secure web proxy server listen address.")
-    var httpListenAddress: String?
+    public var httpListenAddress: String?
     
     @Option(help: "The web and secure web proxy server listen port.")
-    var httpListenPort: Int?
-    
-    @Option(help: "The web and secure web proxy server listen authority. (e.g., 127.0.0.1:10000)")
-    var httpListen: String?
+    public var httpListenPort: Int?
     
     @Option(name: .shortAndLong, help: "The proxy configuration file.")
     public var configFile: String?
@@ -74,7 +68,7 @@ public struct NetbotCommand: ParsableCommand {
     
     @Flag(help: "Enable MitM, should be enabled only when needed.")
     public var enableMitm: Bool = false
-
+    
     public init() {}
     
     public func run() throws {
@@ -87,7 +81,7 @@ public struct NetbotCommand: ParsableCommand {
             configuration = try JSONDecoder().decode(Configuration.self, from: jsonData)
         }
         
-        #if canImport(SystemConfiguration)
+#if canImport(SystemConfiguration)
         var proxyctl: [String] = []
         
         configuration.general.socksListenAddress = socksListenAddress ?? configuration.general.socksListenAddress
@@ -118,17 +112,17 @@ public struct NetbotCommand: ParsableCommand {
             proxyctl.append("--exclude-simple-hostnames")
         }
         
-        if let skipProxy = configuration.general.skipProxy {
+        if let exceptions = configuration.general.exceptions {
             proxyctl.append("--exceptions")
-            proxyctl.append(skipProxy.joined(separator: ","))
+            proxyctl.append(exceptions.joined(separator: ","))
         }
-
+        
         if !proxyctl.isEmpty {
             proxyctl.insert("install", at: 0)
-    
-//            ProxyConfigCommand.main(proxyctl)
+            
+            //            ProxyConfigCommand.main(proxyctl)
         }
-        #endif
+#endif
         
         if let reqMsgFilter = reqMsgFilter {
             configuration.replica.reqMsgFilter = reqMsgFilter
@@ -143,11 +137,10 @@ public struct NetbotCommand: ParsableCommand {
         let netbot = Netbot.init(
             configuration: configuration,
             outboundMode: outboundMode,
-            basicAuthorization: .none,
             enableHTTPCapture: enableHTTPCapture,
             enableMitm: enableMitm
         )
-
+        
         try netbot.run()
     }
 }

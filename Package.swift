@@ -22,7 +22,8 @@ let package = Package(
         .iOS(.v13),
     ],
     products: [
-        .library(name: "Netbot", targets: ["Netbot"])
+        .library(name: "Netbot", targets: ["Netbot"]),
+        .executable(name: "netbotcli", targets: ["NetbotCLI"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.0.1"),
@@ -85,7 +86,7 @@ let package = Package(
                     .target(name: "SOCKS"),
                     .target(name: "Shadowsocks")
                 ]),
-        .executableTarget(name: "Linking",
+        .executableTarget(name: "NetbotCLI",
                           dependencies: [
                             .product(name: "NIO", package: "swift-nio"),
                             .product(name: "NIOSSL", package: "swift-nio-ssl"),

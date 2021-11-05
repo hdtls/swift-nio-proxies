@@ -26,38 +26,38 @@ public class Netbot {
     public var logger: Logger
     public var configuration: Configuration
     public var outboundMode: OutboundMode
-    public var basicAuthorization: BasicAuthorization?
     public var isHTTPCaptureEnabled: Bool = false
     public var isMitmEnabled: Bool = false
+    public var geoLite2: GeoLite2? {
+        set { GeoIPRule.geo = newValue }
+        get { GeoIPRule.geo }
+    }
     public var ruleMatcher: RuleMatcher {
         .init(rules: configuration.rules)
     }
     private var eventLoopGroup: EventLoopGroup!
     private var quiesce: ServerQuiescingHelper!
-    private var threadPool: NIOThreadPool
+    private lazy var threadPool: NIOThreadPool = {
+        NIOThreadPool.init(numberOfThreads: System.coreCount)
+    }()
     
     public init(logger: Logger = .init(label: "io.tenbits.Netbot"),
                 configuration: Configuration,
                 outboundMode: OutboundMode = .direct,
-                basicAuthorization: BasicAuthorization? = nil,
                 enableHTTPCapture: Bool = false,
                 enableMitm: Bool = false,
-                geo: GeoLite2? = nil) {
+                geoLite2: GeoLite2? = nil) {
         self.logger = logger
         self.configuration = configuration
         self.outboundMode = outboundMode
-        self.basicAuthorization = basicAuthorization
         self.isHTTPCaptureEnabled = enableHTTPCapture
         self.isMitmEnabled = enableMitm
-        self.threadPool = .init(numberOfThreads: System.coreCount)
+        self.geoLite2 = geoLite2
         
-        if let geo = geo {
-            GeoIPRule.geo = geo
-        } else {
-            var dstURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            dstURL.appendPathComponent("io.tenbits.Netbot")
-            dstURL.appendPathComponent("GeoLite2-Country.mmdb")
-            GeoIPRule.geo = try? .init(file: dstURL.path)
+        LoggingSystem.bootstrap { label in
+            var handler = StreamLogHandler.standardOutput(label: label)
+            handler.logLevel = configuration.general.logLevel
+            return handler
         }
     }
     
@@ -90,7 +90,7 @@ public class Netbot {
                     channel.pipeline.addHandlers([
                         HTTPResponseEncoder(),
                         ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)),
-                        HTTP1ProxyServerHandler(authorization: self.basicAuthorization, enableHTTPCapture: self.isHTTPCaptureEnabled, enableMitM: self.isMitmEnabled, mitmConfig: self.configuration.mitm) { taskAddress in
+                        HTTP1ProxyServerHandler(logger: self.logger, authorization: nil, enableHTTPCapture: self.isHTTPCaptureEnabled, enableMitM: self.isMitmEnabled, mitmConfig: self.configuration.mitm) { taskAddress in
                             
                             guard case .domainPort(let domain, _) = taskAddress else {
                                 return channel.eventLoop.makeFailedFuture(SocketAddressError.unsupported)
