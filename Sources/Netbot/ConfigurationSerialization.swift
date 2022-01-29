@@ -20,9 +20,16 @@ import NIOPosix
 /// Errors that can be raised while parsing configuration file.
 public enum ConfigurationSerializationError: Error {
     
+    /// Error reason for invalid file
     public enum InvalidFileErrorReason: CustomStringConvertible {
+
+        /// Line is invalid at cursor line
         case invalidLine(cursor: Int, description: String)
+        
+        /// Data represent for this configuration file is corrupted.
         case dataCorrupted
+        
+        /// Unknown policy define at cursor line.
         case unknownPolicy(cursor: Int, policy: String)
         
         public var description: String {
@@ -37,8 +44,13 @@ public enum ConfigurationSerializationError: Error {
         }
     }
     
+    /// Error reason for invalid rule.
     public enum InvalidRuleErrorReason: CustomStringConvertible {
+        
+        /// Rule missing field.
         case missingField
+        
+        /// Unsupported rule.
         case unsupported
         
         public var description: String {
@@ -51,17 +63,32 @@ public enum ConfigurationSerializationError: Error {
         }
     }
     
+    /// Error with invalid file error reason `InvalidFileErrorReason`.
     case invalidFile(reason: InvalidFileErrorReason)
+    
+    /// Error with invalid rule error reason `InvalidRuleErrorReason`.
     case invalidRule(reason: InvalidRuleErrorReason)
+    
+    /// Error that failed to parse rule to specified type.
     case failedToParseAs(Rule.Type, butCanBeParsedAs: Rule.Type)
+    
+    /// Error that data corrupted.
     case dataCorrupted
 }
 
+/// An object that converts between configuration file and the equivalent Foundation objects.
+///
+/// You use the JSONSerialization class to convert JSON to Foundation objects and convert Foundation
+/// objects to JSON.
+/// To convert a json object to data the object must is a NSDIctionary with String keys.
 final public class ConfigurationSerialization {
-    private static let __group__: String = "__group__"
-    private static let __array__: String = "__array__"
-    private static let __comment__: String = "__comment__"
-    private static let __return__: String = "__return__"
+
+    private enum Cursor: String {
+        case mdlLine = "cursor.__MODULE_LINE"
+        case commentLine = "cursor.__COMMENT_LINE"
+        case newLine = "cursor.__NEW_LINE"
+        case markableLine = "cursor.__MARKABLE_LINE"
+    }
     
     /// Represents a `KEY=VALUE` pair in a dotenv file.
     struct Line: Equatable {
@@ -81,6 +108,9 @@ final public class ConfigurationSerialization {
     /// Line number being parsed.
     private var cursor: Int = 0
     
+    /// A boolean value that determines whether to convert string to bool if possible.
+    public static var converStringToBoolIfPossible: Bool = true
+    
     private init(source: ByteBuffer) {
         self.source = source
     }
@@ -94,11 +124,11 @@ final public class ConfigurationSerialization {
         
         try parser.parse().forEach { next in
             // Comment and empty line will be ignored.
-            guard next.key != ConfigurationSerialization.__comment__, next.key != ConfigurationSerialization.__return__ else {
+            guard next.key != Cursor.commentLine.rawValue, next.key != Cursor.newLine.rawValue else {
                 return
             }
             
-            guard next.key != ConfigurationSerialization.__group__ else {
+            guard next.key != Cursor.mdlLine.rawValue else {
                 parser.currentGroup = next.value.trimmingCharacters(in: .whitespaces)
                 return
             }
@@ -106,17 +136,21 @@ final public class ConfigurationSerialization {
             var actual: Any
             let value = next.value.trimmingCharacters(in: .whitespaces)
             // Convert String to Bool if possible.
-            switch value {
-                case "true":
-                    actual = true
-                case "false":
-                    actual = false
-                default:
-                    actual = value
+            if Self.converStringToBoolIfPossible {
+                switch value {
+                    case "true":
+                        actual = true
+                    case "false":
+                        actual = false
+                    default:
+                        actual = value
+                }
+            } else {
+                actual = value
             }
             
+            // Rebuild policy group as json array.
             guard parser.currentGroup != Configuration.CodingKeys.selectablePolicyGroups.rawValue else {
-                // Rebuild policy group as json array.
                 var array: [Any] = (json[parser.currentGroup] as? [Any]) ?? []
                 let _json = [
                     SelectablePolicyGroup.CodingKeys.name.rawValue : next.key.trimmingCharacters(in: .whitespaces),
@@ -127,15 +161,15 @@ final public class ConfigurationSerialization {
                 return
             }
             
+            // Rebuild policies as json array.
             guard parser.currentGroup != Configuration.CodingKeys.policies.rawValue else {
-                // Rebuild policy group as json array.
                 var array: [Any] = (json[parser.currentGroup] as? [Any]) ?? []
                 array.append("\(next.key)=\(next.value)")
                 json[parser.currentGroup] = array
                 return
             }
             
-            if next.key == ConfigurationSerialization.__array__ {
+            if next.key == Cursor.markableLine.rawValue {
                 var array: [Any] = (json[parser.currentGroup] as? [Any]) ?? []
                 array.append(actual)
                 json[parser.currentGroup] = array
@@ -148,7 +182,6 @@ final public class ConfigurationSerialization {
         
         return json
     }
-    
     
     /// Create a Foundation object from configuration file data.
     /// - Parameter data: The configuration file data.
@@ -214,11 +247,11 @@ final public class ConfigurationSerialization {
             
             lines.append(next)
             
-            guard next.key != ConfigurationSerialization.__comment__, next.key != ConfigurationSerialization.__return__ else {
+            guard next.key != Cursor.commentLine.rawValue, next.key != Cursor.newLine.rawValue else {
                 continue
             }
             
-            guard next.key != ConfigurationSerialization.__group__ else {
+            guard next.key != Cursor.mdlLine.rawValue else {
                 currentGroup = next.value.trimmingCharacters(in: .whitespaces)
                 continue
             }
@@ -284,14 +317,14 @@ final public class ConfigurationSerialization {
         switch (peek, previous) {
             case (.octothorpe, _), (.semicolon, _):
                 self.previous = peek
-                return Line(key: ConfigurationSerialization.__comment__, value: self.parseLineValue())
-            case (.leftSquareBracket, _):
+                return Line(key: Cursor.commentLine.rawValue, value: self.parseLineValue())
+            case (0x5b, _):
                 self.previous = peek
-                return Line(key: ConfigurationSerialization.__group__, value: self.parseLineValue())
+                return Line(key: Cursor.mdlLine.rawValue, value: self.parseLineValue())
             case (.newLine, .some(.newLine)):
                 self.pop()
                 self.previous = peek
-                return Line(key: ConfigurationSerialization.__return__, value: "\n")
+                return Line(key: Cursor.newLine.rawValue, value: "\n")
             case (.newLine, _):
                 // empty line, skip
                 self.pop()
@@ -321,7 +354,7 @@ final public class ConfigurationSerialization {
         // Ensure that have equal mark and the equal is in current line.
         // FIXME: Think about `.equal` is the end of line.
         guard let distance = distance, distance <= maxLength else {
-            return Line(key: ConfigurationSerialization.__array__, value: self.parseLineValue())
+            return Line(key: Cursor.markableLine.rawValue, value: self.parseLineValue())
         }
         
         let key = self.source.readString(length: distance)!
@@ -407,13 +440,5 @@ extension UInt8 {
     
     fileprivate static var equal: UInt8 {
         return 0x3D
-    }
-    
-    fileprivate static var leftSquareBracket: UInt8 {
-        return 0x5b
-    }
-    
-    fileprivate static var rightSquareBracket: UInt8 {
-        return 0x5d
     }
 }

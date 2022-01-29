@@ -38,14 +38,22 @@ public struct Request: Equatable {
     /// in done in an HTTP POST request.
     public var httpBody: ByteBuffer?
     
-    /// Creates and initializes a Request with the given HTTPRequestHead.
+    /// Creates and initializes a `Request` with specified id and head.
     /// - Parameter head: The HTTPRequestHead for the request.
-    public init(id: UUID = UUID(), head: HTTPRequestHead) {
+    public init(id: UUID, head: HTTPRequestHead) {
         self.id = id
         self.httpMethod = head.method
         self.url = URL(string: head.uri)
         self.httpVersion = head.version
         self.httpHeaders = head.headers
+    }
+    
+    /// Initialize an instance of `Request` with specified head.
+    /// - Parameter head: The HTTPRequestHead for the request.
+    ///
+    /// Calling this method is equivalent to calling `init(id:head:)` with `UUID()` id and specified head.
+    public init(head: HTTPRequestHead) {
+        self.init(id: UUID(), head: head)
     }
 }
 

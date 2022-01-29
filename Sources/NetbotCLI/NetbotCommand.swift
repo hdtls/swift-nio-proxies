@@ -23,6 +23,7 @@ extension OutboundMode: ExpressibleByArgument {}
 public struct NetbotCommand: ParsableCommand {
     
 #if os(macOS)
+    /// A configuration object use for config this command.
     public static var configuration: CommandConfiguration = .init(
         commandName: "netbot",
         abstract: "",
@@ -33,6 +34,7 @@ public struct NetbotCommand: ParsableCommand {
             BoringSSLCommand.self
         ])
 #else
+    /// A configuration object use for config this command.
     public static var configuration: CommandConfiguration = .init(
         commandName: "netbot",
         abstract: "",
@@ -43,33 +45,44 @@ public struct NetbotCommand: ParsableCommand {
         ])
 #endif
     
+    
+    /// The SOCKS5 proxy server listen address.
     @Option(help: "The SOCKS5 proxy server listen address.")
     public var socksListenAddress: String?
     
+    /// The SOCKS5 proxy server listen port.
     @Option(help: "The SOCKS5 proxy server listen port.")
     public var socksListenPort: Int?
-    
+
+    /// The web and secure web proxy server listen address.
     @Option(help: "The web and secure web proxy server listen address.")
     public var httpListenAddress: String?
     
+    /// The web and secure web proxy server listen port.
     @Option(help: "The web and secure web proxy server listen port.")
     public var httpListenPort: Int?
     
+    /// The proxy configuration file path.
     @Option(name: .shortAndLong, help: "The proxy configuration file.")
     public var configFile: String?
     
+    /// The proxy outbound mode.
     @Option(help: "The proxy outbound mode.")
     public var outboundMode: OutboundMode = .direct
     
+    /// The request message filter, separated by commas.
     @Option(help: "The request message filter, separated by commas.")
     public var reqMsgFilter: String?
     
+    /// A boolean value that determines whether http capture should be enabled.
     @Flag(help: "Enable HTTP capture, should be enabled only when needed.")
     public var enableHTTPCapture: Bool = false
     
+    /// A boolean value that determines whether MitM should be enabled.
     @Flag(help: "Enable MitM, should be enabled only when needed.")
     public var enableMitm: Bool = false
     
+    /// Initialize an instance of `NetbotCommand`.
     public init() {}
     
     public func run() throws {
@@ -137,7 +150,7 @@ public struct NetbotCommand: ParsableCommand {
             return dstURL
         }()
         
-        if FileManager.default.fileExists(atPath: dstURL.path) {
+        if !FileManager.default.fileExists(atPath: dstURL.path) {
             let g = DispatchGroup.init()
             g.enter()
             

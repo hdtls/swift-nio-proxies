@@ -16,30 +16,42 @@ import Foundation
 import HTTP
 import Logging
 
-public struct Configuration: Codable {
+/// A configuration object that defines behavior and policies for a Netbot process.
+public struct Configuration {
     
+    /// The rules contains in this configuration.
     public var rules: [AnyRule]
+    
+    /// A configuration object that provides HTTP MitM configuration for this process.
     public var mitm: MitMConfiguration
+    
+    /// A configuration object that provides general configuration for this process.
     public var general: BasicConfiguration
+    
+    /// A configuration object that provides replica configuration for this process
     public var replica: ReplicaConfiguration
+    
+    /// All proxy policy object contains in this configuration object.
     public var policies: [ProxyPolicy]
+    
+    /// All selectable policy groups contains in this configuration object.
     public var selectablePolicyGroups: [SelectablePolicyGroup]
     
-    enum CodingKeys: String, CodingKey {
-        case rules = "[Rule]"
-        case mitm = "[MitM]"
-        case general = "[General]"
-        case replica = "[Replica]"
-        case policies = "[Proxy Policy]"
-        case selectablePolicyGroups = "[Policy Group]"
-    }
-    
-    public init(general: BasicConfiguration = .init(),
-                replica: ReplicaConfiguration = .init(),
-                rules: [AnyRule] = .init(),
-                mitm: MitMConfiguration = .init(),
-                policies: [ProxyPolicy] = .init(),
-                selectablePolicyGroups: [SelectablePolicyGroup] = .init()) {
+    /// Initialize an instance of `Configuration` with the specified general, replicat, rules, mitm,
+    /// polcies and selectablePolicyGroups.
+    /// - Parameters:
+    ///   - general: A general configuration object that will be included in this configuration.
+    ///   - replica: A replica configuration object that will be included in this configuration.
+    ///   - rules: Rules that will be included in this configuration.
+    ///   - mitm: A MitM configuration object that will be included in this configuration.
+    ///   - policies: Policies that will be included in this configuration.
+    ///   - selectablePolicyGroups: SelectablePolicyGroups that will be included in this configuration.
+    public init(general: BasicConfiguration,
+                replica: ReplicaConfiguration,
+                rules: [AnyRule],
+                mitm: MitMConfiguration,
+                policies: [ProxyPolicy],
+                selectablePolicyGroups: [SelectablePolicyGroup]) {
         self.general = general
         self.replica = replica
         self.rules = rules
@@ -48,57 +60,67 @@ public struct Configuration: Codable {
         self.selectablePolicyGroups = selectablePolicyGroups
     }
     
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        rules = try container.decodeIfPresent([AnyRule].self, forKey: .rules) ?? .init()
-        mitm = try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
-        general = try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
-        replica = try container.decodeIfPresent(ReplicaConfiguration.self, forKey: .replica) ?? .init()
-        policies = try container.decodeIfPresent([ProxyPolicy].self, forKey: .policies) ?? .init()
-        selectablePolicyGroups = try container.decodeIfPresent([SelectablePolicyGroup].self, forKey: .selectablePolicyGroups) ?? .init()
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(rules, forKey: .rules)
-        try container.encode(mitm, forKey: .mitm)
-        try container.encode(general, forKey: .general)
-        try container.encode(replica, forKey: .replica)
-        try container.encodeIfPresent(policies.isEmpty ? nil : policies, forKey: .policies)
-        try container.encodeIfPresent(selectablePolicyGroups.isEmpty ? nil : selectablePolicyGroups, forKey: .selectablePolicyGroups)
+    /// Initialize an `Configuration`.
+    ///
+    /// Calling this method is equivalent to calling
+    /// `init(general:replica:rules:mitm:policies:selectablePolicyGroups:)`
+    /// with a default general, replica rules, mitm, policies and selectablePolicyGroups object.
+    public init() {
+        self.init(general: .init(),
+                  replica: .init(),
+                  rules: .init(),
+                  mitm: .init(),
+                  policies: .init(),
+                  selectablePolicyGroups: .init())
     }
 }
 
-public struct BasicConfiguration: Codable, Equatable {
+/// Basic configuration object that defines behavior and polices for logging and proxy settings.
+public struct BasicConfiguration: Equatable {
     
+    /// Log level use for `Logging.Logger`.`
     public var logLevel: Logger.Level
+
+    /// DNS servers use for system proxy.
     public var dnsServers: [String]
+    
+    /// Exceptions use for system proxy.
     public var exceptions: [String]?
+    
+    /// Http listen address use for system http proxy.
     public var httpListenAddress: String?
+    
+    /// Http listen port use for system http proxy
     public var httpListenPort: Int?
+    
+    /// Socks listen address use for system socks proxy.
     public var socksListenAddress: String?
+    
+    /// Socks listen port use for system socks proxy.
     public var socksListenPort: Int?
+    
+    /// A boolean value that determines whether system proxy should exclude simple hostnames.
     public var excludeSimpleHostnames: Bool
     
-    enum CodingKeys: String, CodingKey {
-        case logLevel = "log-level"
-        case dnsServers = "dns-servers"
-        case exceptions = "exceptions"
-        case httpListenAddress = "http-listen-address"
-        case httpListenPort = "http-listen-port"
-        case socksListenAddress = "socks-listen-address"
-        case socksListenPort = "socks-listen-port"
-        case excludeSimpleHostnames = "exclude-simple-hostnames"
-    }
-    
-    public init(logLevel: Logger.Level = .info,
-                dnsServers: [String] = ["system"],
-                exceptions: [String]? = nil,
-                httpListenAddress: String? = nil,
-                httpListenPort: Int? = nil,
-                socksListenAddress: String? = nil,
-                socksListenPort: Int? = nil,
-                excludeSimpleHostnames: Bool = false) {
+    /// Initialize an instance of `BasicConfiguration` with specified logLevel, dnsServers exceptions,
+    /// httpListenAddress, httpListenPort, socksListenAddress, socksListenPort and excludeSimpleHostnames.
+    /// - Parameters:
+    ///   - logLevel: see `logLevel` for `BasicConfiguration`.
+    ///   - dnsServers: see `dnsServers` for `BasicConfiguration`.
+    ///   - exceptions: see `exceptions` for `BasicConfiguration`.
+    ///   - httpListenAddress: see `httpListenAddress` for `BasicConfiguration`.
+    ///   - httpListenPort: see `httpListenPort` for `BasicConfiguration`.
+    ///   - socksListenAddress: see `socksListenAddress` for `BasicConfiguration`.
+    ///   - socksListenPort: see `socksListenPort` for `BasicConfiguration`.
+    ///   - excludeSimpleHostnames: see `excludeSimpleHostnames` for `BasicConfiguration`.
+    public init(logLevel: Logger.Level,
+                dnsServers: [String],
+                exceptions: [String]?,
+                httpListenAddress: String?,
+                httpListenPort: Int?,
+                socksListenAddress: String?,
+                socksListenPort: Int?,
+                excludeSimpleHostnames: Bool) {
         self.logLevel = logLevel
         self.dnsServers = dnsServers
         self.exceptions = exceptions
@@ -109,57 +131,52 @@ public struct BasicConfiguration: Codable, Equatable {
         self.excludeSimpleHostnames = excludeSimpleHostnames
     }
     
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        logLevel = try container.decodeIfPresent(Logger.Level.self, forKey: .logLevel) ?? .info
-        dnsServers = try container.decodeIfPresent(String.self, forKey: .dnsServers)?.split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces ) } ?? ["system"]
-        exceptions = try container.decodeIfPresent(String.self, forKey: .exceptions)?.split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces ) }
-        httpListenAddress = try container.decodeIfPresent(String.self, forKey: .httpListenAddress)
-        httpListenPort = Int(try container.decodeIfPresent(String.self, forKey: .httpListenPort) ?? "")
-        socksListenAddress = try container.decodeIfPresent(String.self, forKey: .socksListenAddress)
-        socksListenPort = Int(try container.decodeIfPresent(String.self, forKey: .socksListenPort) ?? "")
-        excludeSimpleHostnames = try container.decodeIfPresent(Bool.self, forKey: .excludeSimpleHostnames) ?? false
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(logLevel, forKey: .logLevel)
-        try container.encode(dnsServers.joined(separator: ", "), forKey: .dnsServers)
-        try container.encodeIfPresent(exceptions?.joined(separator: ", "), forKey: .exceptions)
-        try container.encodeIfPresent(httpListenAddress, forKey: .httpListenAddress)
-        try container.encodeIfPresent(httpListenPort != nil ? "\(httpListenPort!)" : nil, forKey: .httpListenPort)
-        try container.encodeIfPresent(socksListenAddress, forKey: .socksListenAddress)
-        try container.encodeIfPresent(socksListenPort != nil ? "\(socksListenPort!)" : nil, forKey: .socksListenPort)
-        try container.encodeIfPresent(excludeSimpleHostnames, forKey: .excludeSimpleHostnames)
+    /// Initialize an instance of `BasicConfiguration`.
+    ///
+    /// Calling this method is equivalent to calling `init(logLevel:dnsServers:exceptions:httpListenAddress:httpListenPort:socksListenAddress:socksListenPort:excludeSimpleHostnames:)`
+    /// with `info` logLevel, `["system"]` dnsServers, `nil` exceptions, httpListenAddress, httpListenPort,
+    /// socksListenAddress, socksListenPort and `false` excludeSimpleHostnames.
+    public init() {
+        self.init(logLevel: .info,
+                  dnsServers: ["system"],
+                  exceptions: nil,
+                  httpListenAddress: nil,
+                  httpListenPort: nil,
+                  socksListenAddress: nil,
+                  socksListenPort: nil,
+                  excludeSimpleHostnames: false)
     }
 }
 
-public struct ReplicaConfiguration: Codable, Equatable {
+/// Replica configuration object that defines behavior and filters.
+public struct ReplicaConfiguration: Equatable {
     
+    /// A boolean value that determines whether to hide requests came from Apple.
     public var hideAppleRequests: Bool
+    
+    /// A boolean value that determines whether to hide requests came from Crashlytics.
     public var hideCrashlyticsRequests: Bool
+    
+    /// A boolean value that determines whether to hide requests came from CrashReporter.
     public var hideCrashReporterRequests: Bool
+    
+    /// A boolean value that determines whether to hide UDP requests.
     public var hideUDP: Bool
+    
+    /// The request message filter type.
     public var reqMsgFilterType: String?
+    
+    /// The request message filter.
     public var reqMsgFilter: String?
     
-    enum CodingKeys: String, CodingKey {
-        case hideAppleRequests = "hide-apple-requests"
-        case hideCrashlyticsRequests = "hide-crashlytics-requests"
-        case hideCrashReporterRequests = "hide-crash-reporter-requests"
-        case hideUDP = "hide-udp"
-        case reqMsgFilterType = "req-msg-filter-type"
-        case reqMsgFilter = "req-msg-filter"
-    }
-    
-    public init(hideAppleRequests: Bool = false,
-                hideCrashlyticsRequests: Bool = false,
-                hideCrashReporterRequests: Bool = false,
-                hideUDP: Bool = false,
-                reqMsgFilterType: String? = nil,
-                reqMsgFilter: String? = nil) {
+    /// Initialize an instance of `ReplicaConfiguration` with specified hideAppleRequests,
+    /// hideCrashlyticsRequests, hideCrashReporterRequests, hideUDP, reqMsgFilterType and reqMsgFilter.
+    public init(hideAppleRequests: Bool,
+                hideCrashlyticsRequests: Bool,
+                hideCrashReporterRequests: Bool,
+                hideUDP: Bool,
+                reqMsgFilterType: String?,
+                reqMsgFilter: String?) {
         self.hideAppleRequests = hideAppleRequests
         self.hideCrashlyticsRequests = hideCrashlyticsRequests
         self.hideCrashReporterRequests = hideCrashReporterRequests
@@ -168,59 +185,40 @@ public struct ReplicaConfiguration: Codable, Equatable {
         self.reqMsgFilter = reqMsgFilter
     }
     
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        hideAppleRequests = try container.decodeIfPresent(Bool.self, forKey: .hideAppleRequests) ?? false
-        hideCrashlyticsRequests = try container.decodeIfPresent(Bool.self, forKey: .hideCrashlyticsRequests) ?? false
-        hideCrashReporterRequests = try container.decodeIfPresent(Bool.self, forKey: .hideCrashReporterRequests) ?? false
-        hideUDP = try container.decodeIfPresent(Bool.self, forKey: .hideUDP) ?? false
-        reqMsgFilter = try container.decodeIfPresent(String.self, forKey: .reqMsgFilter)
-        reqMsgFilterType = try container.decodeIfPresent(String.self, forKey: .reqMsgFilterType)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(hideAppleRequests, forKey: .hideAppleRequests)
-        try container.encode(hideCrashlyticsRequests, forKey: .hideCrashlyticsRequests)
-        try container.encode(hideCrashReporterRequests, forKey: .hideCrashReporterRequests)
-        try container.encode(hideUDP, forKey: .hideUDP)
-        try container.encodeIfPresent(reqMsgFilter, forKey: .reqMsgFilter)
-        try container.encodeIfPresent(reqMsgFilterType, forKey: .reqMsgFilterType)
+    /// Initialzie an instance of `ReplicaConfiguration`.
+    ///
+    /// Calling this method is equivalent to calling
+    /// `init(hideAppleRequests:hideCrashlyticsRequests:hideCrashReporterRequests:hideUDP:reqMsgFilterType:reqMsgFilter:)`
+    /// with `false` hideAppleRequests, hideCrashlyticsRequests. hideCrashReporterRequests, hideUDP
+    /// and `nil` reqMsgFilterType, reqMsgFilter.
+    public init() {
+        self.init(hideAppleRequests: false,
+                  hideCrashlyticsRequests: false,
+                  hideCrashReporterRequests: false,
+                  hideUDP: false,
+                  reqMsgFilterType: nil,
+                  reqMsgFilter: nil)
     }
 }
 
-public struct SelectablePolicyGroup: Codable, Equatable {
+/// Selectable policy group object that defines policy group and current selected policy.
+public struct SelectablePolicyGroup: Equatable {
     
+    /// The name for this PolicyGroup.
     public var name: String
+    
+    /// Policies included in this policy group.
     public var policies: [String]
+    
+    /// Current selected policy.
     public var selected: String
     
-    enum CodingKeys: String, CodingKey {
-        case name
-        case policies
-    }
-    
+    /// Initialize an instance of `SelectablePolicyGroup` with specified name and policies.
     public init(name: String, policies: [String]) {
         precondition(!policies.isEmpty, "You must provide at least one policy.")
         
         self.name = name
         self.policies = policies
         self.selected = policies.first!
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        name = try container.decode(String.self, forKey: .name)
-        policies = try container.decode(String.self, forKey: .policies)
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { $0 != "select" }
-        selected = policies.first!
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(name, forKey: .name)
-        try container.encode("select, " + policies.joined(separator: ", "), forKey: .policies)
     }
 }
