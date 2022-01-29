@@ -16,6 +16,7 @@ import ArgumentParser
 import Foundation
 import Logging
 import HTTP
+import Netbot
 
 extension OutboundMode: ExpressibleByArgument {}
 
@@ -76,7 +77,7 @@ public struct NetbotCommand: ParsableCommand {
         
         if let config = configFile {
             let data = try Data(contentsOf: URL(fileURLWithPath: config))
-            let jsonObject = try ConfiguratioinSerialization.jsonObject(with: data)
+            let jsonObject = try ConfigurationSerialization.jsonObject(with: data)
             let jsonData = try JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
             configuration = try JSONDecoder().decode(Configuration.self, from: jsonData)
         }

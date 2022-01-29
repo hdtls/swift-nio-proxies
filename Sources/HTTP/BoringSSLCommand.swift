@@ -155,7 +155,7 @@ NOTE. write PART.1 and PART.2 to your config file to enable decrypt HTTPS traffi
             defer {
                 fclose(file)
             }
-     
+            
             switch outputFormat {
                 case .der:
                     CNIOBoringSSL_i2d_PrivateKey_fp(file, ref)
@@ -201,13 +201,13 @@ NOTE. write PART.1 and PART.2 to your config file to enable decrypt HTTPS traffi
         
         @Option(help: "The input CA certificate format, only valid when `ca` is specified.")
         public var caFormat: FileSerializationFormats = .der
-
+        
         @Option(help: "The input CA key file, only valid when `ca` is specified.")
         public var key: String?
         
         @Option(help: "The input CA certificate private key format, only valid when `ca` is specified.")
         public var keyFormat: FileSerializationFormats = .der
-                
+        
         @Option(help: "The passphrase for PKCS#12 file.")
         public var passphrase: String?
         
@@ -218,7 +218,7 @@ NOTE. write PART.1 and PART.2 to your config file to enable decrypt HTTPS traffi
             let passphrase = passphrase ?? String((0...7).map { _ in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".randomElement()! })
             var base64EncodedPKCS12String: String
             let commonName = "Netbot Root CA \(passphrase)"
-
+            
             if let fileURLPath = ca {
                 precondition(caFormat == .p12 || key != nil, "CA key is required for create PKCS#12 bundle.")
                 
@@ -303,7 +303,7 @@ NOTE. write PART.1 and PART.2 to your config file to enable decrypt HTTPS traffi
             guard let certificate = SecCertificateCreateWithData(nil, Data(buffer) as CFData) else {
                 throw SecurityError.failedToLoadCertificate
             }
-
+            
             var status: OSStatus
             let attributes: [CFString: Any] = [
                 kSecClass : kSecClassCertificate,
@@ -315,11 +315,13 @@ NOTE. write PART.1 and PART.2 to your config file to enable decrypt HTTPS traffi
                 throw SecurityError.unknowError(SecurityInternalError(errorCode: status))
             }
             
+#if os(macOS)
             status = SecTrustSettingsSetTrustSettings(certificate, .user, [kSecTrustSettingsResult : NSNumber(value: SecTrustSettingsResult.trustRoot.rawValue)] as CFTypeRef)
             
             guard status == errSecSuccess else {
                 throw SecurityError.unknowError(SecurityInternalError(errorCode: status))
             }
+#endif
 #endif
         }
     }

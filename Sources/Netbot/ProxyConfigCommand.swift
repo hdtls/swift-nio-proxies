@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#if canImport(SystemConfiguration)
+#if os(macOS)
 import ArgumentParser
 import Foundation
 import SystemConfiguration
