@@ -18,7 +18,7 @@ import NIO
 import NIOPosix
 
 /// Errors that can be raised while parsing configuration file.
-public enum ParserError: Error {
+public enum ConfigurationSerializationError: Error {
     
     public enum InvalidFileErrorReason: CustomStringConvertible {
         case invalidLine(cursor: Int, description: String)
@@ -57,7 +57,7 @@ public enum ParserError: Error {
     case dataCorrupted
 }
 
-class Parser {
+final public class ConfigurationSerialization {
     private static let __group__: String = "__group__"
     private static let __array__: String = "__array__"
     private static let __comment__: String = "__comment__"
@@ -85,19 +85,20 @@ class Parser {
         self.source = source
     }
     
-    /// Parse configuration file to json.
-    /// - Returns: JSON encoded object.
-    static func jsonObject(with data: ByteBuffer) throws -> Any {
+    /// Create a Foundation object from configuration file data.
+    /// - Parameter data: The configuration file byte buffer.
+    /// - Returns: Foundation NSDictionary object.
+    public static func jsonObject(with data: ByteBuffer) throws -> Any {
         var json: [String : Any] = [:]
-        let parser = Parser.init(source: data)
+        let parser = ConfigurationSerialization.init(source: data)
         
         try parser.parse().forEach { next in
             // Comment and empty line will be ignored.
-            guard next.key != Parser.__comment__, next.key != Parser.__return__ else {
+            guard next.key != ConfigurationSerialization.__comment__, next.key != ConfigurationSerialization.__return__ else {
                 return
             }
             
-            guard next.key != Parser.__group__ else {
+            guard next.key != ConfigurationSerialization.__group__ else {
                 parser.currentGroup = next.value.trimmingCharacters(in: .whitespaces)
                 return
             }
@@ -134,7 +135,7 @@ class Parser {
                 return
             }
             
-            if next.key == Parser.__array__ {
+            if next.key == ConfigurationSerialization.__array__ {
                 var array: [Any] = (json[parser.currentGroup] as? [Any]) ?? []
                 array.append(actual)
                 json[parser.currentGroup] = array
@@ -148,13 +149,21 @@ class Parser {
         return json
     }
     
-    static func jsonObject(with data: Data) throws -> Any {
+    
+    /// Create a Foundation object from configuration file data.
+    /// - Parameter data: The configuration file data.
+    /// - Returns: Foundation NSDictionary object.
+    public static func jsonObject(with data: Data) throws -> Any {
         try jsonObject(with: ByteBuffer.init(bytes: data))
     }
     
-    static func data(withJSONObject obj: Any) throws -> Data {
+    /// Generate Configuration data from a Foundation object. If the object will not produce valid JSON
+    /// then an exception will be thrown.
+    /// - Parameter obj: Foundation NSDictionary object.
+    /// - Returns: Generated configuration file data.
+    public static func data(withJSONObject obj: Any) throws -> Data {
         guard let json = obj as? [String : Any] else {
-            throw ParserError.dataCorrupted
+            throw ConfigurationSerializationError.dataCorrupted
         }
         
         var stringLiteral = ""
@@ -205,11 +214,11 @@ class Parser {
             
             lines.append(next)
             
-            guard next.key != Parser.__comment__, next.key != Parser.__return__ else {
+            guard next.key != ConfigurationSerialization.__comment__, next.key != ConfigurationSerialization.__return__ else {
                 continue
             }
             
-            guard next.key != Parser.__group__ else {
+            guard next.key != ConfigurationSerialization.__group__ else {
                 currentGroup = next.value.trimmingCharacters(in: .whitespaces)
                 continue
             }
@@ -238,14 +247,14 @@ class Parser {
                         l.key.trimmingCharacters(in: .whitespaces) == name
                     }
                     guard name == "select" || contains else {
-                        throw ParserError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: name))
+                        throw ConfigurationSerializationError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: name))
                     }
                 }
         }
         
         try ruleLineMap.forEach { (cursor, line) in
             guard let rule = try? AnyRule.init(stringLiteral: line.value) else {
-                throw ParserError.invalidFile(reason: .invalidLine(cursor: cursor, description: line.value))
+                throw ConfigurationSerializationError.invalidFile(reason: .invalidLine(cursor: cursor, description: line.value))
             }
             // Validate rule policy.
             let contains = proxyMap.values.contains {
@@ -256,7 +265,7 @@ class Parser {
                 $0.key.trimmingCharacters(in: .whitespaces) == rule.policy
             }
             guard contains else {
-                throw ParserError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: rule.policy))
+                throw ConfigurationSerializationError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: rule.policy))
             }
         }
         
@@ -275,14 +284,14 @@ class Parser {
         switch (peek, previous) {
             case (.octothorpe, _), (.semicolon, _):
                 self.previous = peek
-                return Line(key: Parser.__comment__, value: self.parseLineValue())
+                return Line(key: ConfigurationSerialization.__comment__, value: self.parseLineValue())
             case (.leftSquareBracket, _):
                 self.previous = peek
-                return Line(key: Parser.__group__, value: self.parseLineValue())
+                return Line(key: ConfigurationSerialization.__group__, value: self.parseLineValue())
             case (.newLine, .some(.newLine)):
                 self.pop()
                 self.previous = peek
-                return Line(key: Parser.__return__, value: "\n")
+                return Line(key: ConfigurationSerialization.__return__, value: "\n")
             case (.newLine, _):
                 // empty line, skip
                 self.pop()
@@ -312,7 +321,7 @@ class Parser {
         // Ensure that have equal mark and the equal is in current line.
         // FIXME: Think about `.equal` is the end of line.
         guard let distance = distance, distance <= maxLength else {
-            return Line(key: Parser.__array__, value: self.parseLineValue())
+            return Line(key: ConfigurationSerialization.__array__, value: self.parseLineValue())
         }
         
         let key = self.source.readString(length: distance)!

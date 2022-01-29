@@ -39,14 +39,14 @@ extension Policy {
         let l = components.removeFirst().trimmingCharacters(in: .whitespaces).components(separatedBy: "=")
         // l must be NAME = TYPE pair.
         guard l.count == 2, Self.type == l.last?.trimmingCharacters(in: .whitespaces) else {
-            throw ParserError.dataCorrupted
+            throw ConfigurationSerializationError.dataCorrupted
         }
         name = l.first!.trimmingCharacters(in: .whitespaces)
         
         let json = try components.reduce(into: [:], { result, substring in
                 let sequence = substring.split(separator: "=")
                 guard sequence.count == 2 else {
-                    throw ParserError.dataCorrupted
+                    throw ConfigurationSerializationError.dataCorrupted
                 }
                 let stringLiteral = sequence[1].trimmingCharacters(in: .whitespaces)
                 var value: Any
@@ -177,7 +177,7 @@ public enum ProxyPolicy: Codable {
     public init(stringLiteral: String) throws {
         let components = stringLiteral.components(separatedBy: ",")
         guard components.count >= 1 else {
-            throw ParserError.dataCorrupted
+            throw ConfigurationSerializationError.dataCorrupted
         }
         
         let type = components.first!.components(separatedBy: "=")
@@ -202,7 +202,7 @@ public enum ProxyPolicy: Codable {
             case .some("SOCKS5-TLS"):
                 self = .socks5TLS(try SOCKS5TLSPolicy.init(stringLiteral: stringLiteral))
             default:
-                throw ParserError.dataCorrupted
+                throw ConfigurationSerializationError.dataCorrupted
         }
     }
     

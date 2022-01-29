@@ -21,7 +21,7 @@ extension OutboundMode: ExpressibleByArgument {}
 
 public struct NetbotCommand: ParsableCommand {
     
-#if canImport(SystemConfiguration)
+#if os(macOS)
     public static var configuration: CommandConfiguration = .init(
         commandName: "netbot",
         abstract: "",
@@ -76,7 +76,7 @@ public struct NetbotCommand: ParsableCommand {
         
         if let config = configFile {
             let data = try Data(contentsOf: URL(fileURLWithPath: config))
-            let jsonObject = try Parser.jsonObject(with: data)
+            let jsonObject = try ConfiguratioinSerialization.jsonObject(with: data)
             let jsonData = try JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
             configuration = try JSONDecoder().decode(Configuration.self, from: jsonData)
         }

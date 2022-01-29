@@ -111,7 +111,7 @@ public class Netbot {
                                 $0.name == selectablePolicyGroup?.selected || $0.name == rule.policy
                             }) else {
                                 // Unknown policy found.
-                                return eventLoop.makeFailedFuture(ParserError.dataCorrupted)
+                                return eventLoop.makeFailedFuture(ConfigurationSerializationError.dataCorrupted)
                             }
                             
                             policy.taskAddress = taskAddress

@@ -52,11 +52,11 @@ extension Rule {
     public init(stringLiteral: String) throws {
         var components = stringLiteral.components(separatedBy: ",")
         guard components.count >= 3 else {
-            throw ParserError.invalidFile(reason: .dataCorrupted)
+            throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
         }
         
         guard let t = RuleType(rawValue: components.removeFirst().trimmingCharacters(in: .whitespaces)) else {
-            throw ParserError.invalidFile(reason: .dataCorrupted)
+            throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
         }
         
         self.init()
@@ -229,11 +229,11 @@ public struct FinalRule: CodableRule {
     public init(stringLiteral: String) throws {
         var components = stringLiteral.components(separatedBy: ",")
         guard components.count >= 2 else {
-            throw ParserError.invalidRule(reason: .missingField)
+            throw ConfigurationSerializationError.invalidRule(reason: .missingField)
         }
         
         guard let t = RuleType(rawValue: components.removeFirst().trimmingCharacters(in: .whitespaces)) else {
-            throw ParserError.invalidRule(reason: .unsupported)
+            throw ConfigurationSerializationError.invalidRule(reason: .unsupported)
         }
         
         assert(t == .final, "assert illegal rule type.")
@@ -288,11 +288,11 @@ final public class DomainSet: CodableRuleCollection {
     public init(stringLiteral: String) throws {
         let parts = stringLiteral.split(separator: ",").map(String.init)
         guard parts.count >= 3 else {
-            throw ParserError.invalidFile(reason: .dataCorrupted)
+            throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
         }
         
         guard let t = RuleType(rawValue: parts.first!.trimmingCharacters(in: .whitespaces)) else {
-            throw ParserError.invalidFile(reason: .dataCorrupted)
+            throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
         }
         assert(t == .domainSet, "assert illegal rule type.")
         
@@ -348,11 +348,11 @@ final public class RuleSet: CodableRuleCollection {
     public init(stringLiteral: String) throws {
         let parts = stringLiteral.split(separator: ",")
         guard parts.count >= 3 else {
-            throw ParserError.invalidFile(reason: .dataCorrupted)
+            throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
         }
         
         guard let t = RuleType(rawValue: parts.first!.trimmingCharacters(in: .whitespaces)) else {
-            throw ParserError.invalidFile(reason: .dataCorrupted)
+            throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
         }
         
         assert(t == .ruleSet, "assert illegal rule type.")
@@ -434,7 +434,7 @@ public struct AnyRule: CodableRule {
     
     public init(stringLiteral: String) throws {
         guard let type = RuleType.init(rawValue: stringLiteral.components(separatedBy: ",").first!) else {
-            throw ParserError.dataCorrupted
+            throw ConfigurationSerializationError.dataCorrupted
         }
         switch type {
             case .domain, .domainSuffix, .domainKeyword, .processName, .userAgent:
