@@ -32,8 +32,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
-        .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0"),
-        .package(url: "https://github.com/vapor/async-kit.git", from: "1.9.0"),
+        .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0")
     ],
     targets: [
         .target(name: "CMMDB",
@@ -75,7 +74,6 @@ let package = Package(
         .target(name: "Netbot",
                 dependencies: [
                     .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                    .product(name: "AsyncKit", package: "async-kit"),
                     .product(name: "NIO", package: "swift-nio"),
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
