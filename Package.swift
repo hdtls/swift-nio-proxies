@@ -51,38 +51,46 @@ let package = Package(
                 ]),
         .target(name: "HTTP",
                 dependencies: [
+                    "Helpers",
+                    "ConnectionPool",
                     .product(name: "ArgumentParser", package: "swift-argument-parser"),
                     .product(name: "NIO", package: "swift-nio"),
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
                     .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
-                    .target(name: "ConnectionPool"),
-                    .target(name: "Helpers")
                 ]),
         .target(name: "SOCKS",
                 dependencies: [
+                    "Helpers",
                     .product(name: "NIO", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
-                    .target(name: "Helpers")
                 ]),
         .target(name: "Shadowsocks",
                 dependencies: [
+                    "Helpers",
                     .product(name: "Crypto", package: "swift-crypto"),
                     .product(name: "NIO", package: "swift-nio"),
-                    .target(name: "Helpers")
                 ]),
+        .target(name: "VMESS",
+               dependencies: [
+                    "Helpers",
+                    .product(name: "Crypto", package: "swift-crypto"),
+                    .product(name: "NIO", package: "swift-nio"),
+                    .product(name: "NIOWebSocket", package: "swift-nio")
+               ]),
         .target(name: "Netbot",
                 dependencies: [
+                    "CMMDB",
+                    "HTTP",
+                    "SOCKS",
+                    "Shadowsocks",
+                    "VMESS",
                     .product(name: "ArgumentParser", package: "swift-argument-parser"),
                     .product(name: "NIO", package: "swift-nio"),
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
                     .product(name: "NIOExtras", package: "swift-nio-extras"),
                     .product(name: "NIOTransportServices", package: "swift-nio-transport-services"),
-                    .target(name: "CMMDB"),
-                    .target(name: "HTTP"),
-                    .target(name: "SOCKS"),
-                    .target(name: "Shadowsocks")
                 ]),
         .executableTarget(name: "NetbotCLI",
                           dependencies: [
@@ -92,9 +100,17 @@ let package = Package(
                             .product(name: "Logging", package: "swift-log"),
                             .target(name: "Netbot")
                           ]),
-        .testTarget(name: "HelperTests", dependencies: [ .product(name: "NIOCore", package: "swift-nio"), .target(name: "Helpers") ]),
-        .testTarget(name: "NetbotTests", dependencies: [ .product(name: "NIOEmbedded", package: "swift-nio"), .target(name: "Netbot") ]),
-        .testTarget(name: "SOCKSTests", dependencies: [ .target(name: "SOCKS") ])
+        .testTarget(name: "HelperTests",
+                    dependencies: [
+                        "Helpers",
+                        .product(name: "NIOCore", package: "swift-nio")
+                    ]),
+        .testTarget(name: "NetbotTests",
+                    dependencies: [
+                        "Netbot",
+                        .product(name: "NIOEmbedded", package: "swift-nio")
+                    ]),
+        .testTarget(name: "SOCKSTests", dependencies: [ "SOCKS" ])
     ],
     swiftLanguageVersions: [.v5]
 )
