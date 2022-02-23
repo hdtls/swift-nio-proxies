@@ -12,9 +12,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-@_exported import Logging
-@_exported import NetbotHelpers
-@_exported import NIO
-@_exported import NIOHTTP1
-@_exported import NIOWebSocket
+import NIO
+
+public class ResponseDeocoder: ChannelInboundHandler {
+
+    public typealias InboundIn = NIOAny
+    
+    public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        print(data)
+    }
+}
