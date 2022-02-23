@@ -22,6 +22,7 @@ let package = Package(
         .iOS(.v13),
     ],
     products: [
+        .library(name: "SHAKE128", targets: ["SHAKE128"]),
         .library(name: "Netbot", targets: ["Netbot"]),
         .executable(name: "netbotcli", targets: ["NetbotCLI"])
     ],
@@ -35,6 +36,18 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0")
     ],
     targets: [
+        .systemLibrary(
+            name: "COpenSSLCrypto",
+            pkgConfig: "openssl",
+            providers: [
+                .apt(["openssl libssl-dev"]),
+                .brew(["openssl"]),
+            ]
+        ),
+        .target(name: "SHAKE128", dependencies: [
+            "COpenSSLCrypto",
+            .product(name: "Crypto", package: "swift-crypto")
+        ]),
         .target(name: "CMMDB",
                 cSettings: [.define("HAVE_CONFIG_H")]),
         .target(name: "ConnectionPool",
@@ -110,6 +123,7 @@ let package = Package(
                         "Netbot",
                         .product(name: "NIOEmbedded", package: "swift-nio")
                     ]),
+        .testTarget(name: "SHAKE128Tests", dependencies: [ "SHAKE128" ]),
         .testTarget(name: "SOCKSTests", dependencies: [ "SOCKS" ])
     ],
     swiftLanguageVersions: [.v5]
