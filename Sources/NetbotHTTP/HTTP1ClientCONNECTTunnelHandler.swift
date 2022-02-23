@@ -12,10 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
-import NIOHTTP1
 import Foundation
 import Logging
+import NIO
+import NIOHTTP1
 
 /// Credential use for username and password authentication.
 public struct Credential {

@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import XCTest
-import Helpers
+import NetbotHelpers
 
 class NetAddressTests: XCTestCase {
     

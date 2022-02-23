@@ -12,9 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIOCore
 import Logging
-import Helpers
+import NIO
 
 extension ChannelPipeline {
     

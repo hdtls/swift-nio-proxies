@@ -12,8 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Helpers
-@_exported import NIO
+import NIO
 
 /// Credential use for username and password authentication.
 public struct Credential {

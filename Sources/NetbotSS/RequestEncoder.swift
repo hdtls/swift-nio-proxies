@@ -12,11 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
 import Crypto
-import NIOCore
+import Foundation
 import Logging
-import Helpers
+import NIO
 
 public class RequestEncoder: MessageToByteEncoder {
     

@@ -19,7 +19,6 @@ import CMMDB
 #endif
 import Crypto
 import Foundation
-import Helpers
 
 public enum RuleType: String, Codable, CaseIterable {
     case domain = "DOMAIN"

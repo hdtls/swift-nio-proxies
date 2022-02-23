@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
 import Crypto
+import Foundation
 
 /// Generate key like `Evp_BytesToKey`.
 /// - Parameters:

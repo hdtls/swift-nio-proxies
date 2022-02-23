@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import Helpers
 import Logging
 import NIO
 import NIOHTTP1

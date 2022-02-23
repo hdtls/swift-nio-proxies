@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import HTTP
 import Logging
 
 /// A configuration object that defines behavior and policies for a Netbot process.

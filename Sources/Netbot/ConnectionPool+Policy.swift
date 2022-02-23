@@ -13,15 +13,15 @@
 //===----------------------------------------------------------------------===//
 
 import ConnectionPool
-import HTTP
+import Foundation
 import Logging
-import NIOCore
+import NetbotSS
+import NetbotHTTP
+import NIO
 import NIOSSL
 #if canImport(Network)
 import NIOTransportServices
 #endif
-import Shadowsocks
-import SOCKS
 
 func makeUniversalBootstrap(group: EventLoopGroup, serverHostname: String) throws -> NIOClientTCPBootstrap {
 #if canImport(Network)

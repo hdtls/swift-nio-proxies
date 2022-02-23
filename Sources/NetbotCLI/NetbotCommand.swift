@@ -15,7 +15,6 @@
 import ArgumentParser
 import Foundation
 import Logging
-import HTTP
 import Netbot
 
 extension OutboundMode: ExpressibleByArgument {}

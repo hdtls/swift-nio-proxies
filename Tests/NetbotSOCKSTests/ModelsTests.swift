@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import XCTest
-@testable import SOCKS
+@testable import NetbotSOCKS
 
 class ModelsTests: XCTestCase {
     

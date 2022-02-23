@@ -14,7 +14,7 @@
 
 import XCTest
 import NIOCore
-@testable import SOCKS
+@testable import NetbotSOCKS
 
 class ClientGreetingTests: XCTestCase {
     

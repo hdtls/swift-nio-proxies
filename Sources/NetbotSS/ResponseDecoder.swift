@@ -12,10 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
 import Crypto
-import Helpers
 import Foundation
+import NIO
 
 ///
 /// Spec: http://shadowsocks.org/en/wiki/AEAD-Ciphers.html

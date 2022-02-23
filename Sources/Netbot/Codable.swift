@@ -12,9 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import HTTP
-import Logging
 import Foundation
+import Logging
 
 extension Configuration: Codable {
     

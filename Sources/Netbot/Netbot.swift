@@ -13,13 +13,13 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import HTTP
-import Logging
-import NIO
-import NIOExtras
-import NIOHTTP1
-import NIOPosix
-import SOCKS
+@_exported import Logging
+@_exported import NetbotHTTP
+@_exported import NetbotSOCKS
+@_exported import NetbotHelpers
+@_exported import NIO
+@_exported import NIOExtras
+@_exported import NIOHTTP1
 
 public class Netbot {
     

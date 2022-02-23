@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
-import NIOCore
+import NIO
 import NIOSSL
 import NIOTLS
 
