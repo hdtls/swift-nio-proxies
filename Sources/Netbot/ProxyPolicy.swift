@@ -100,6 +100,7 @@ public enum ProxyPolicy: Codable {
     case socks5TLS(SOCKS5TLSPolicy)
     case http(HTTPProxyPolicy)
     case https(HTTPSProxyPolicy)
+    case vmess(VMESSPolicy)
     
     public var name: String {
         switch self {
@@ -118,6 +119,8 @@ public enum ProxyPolicy: Codable {
             case .http(let underlying):
                 return underlying.name
             case .https(let underlying):
+                return underlying.name
+            case .vmess(let underlying):
                 return underlying.name
         }
     }
@@ -149,6 +152,8 @@ public enum ProxyPolicy: Codable {
                 case .https(var underlying):
                     underlying.taskAddress = newValue
                     self = .https(underlying)
+                case .vmess(var underlying):
+                    underlying.taskAddress = newValue
             }
         }
         get {
@@ -168,6 +173,8 @@ public enum ProxyPolicy: Codable {
                 case .http(let underlying):
                     return underlying.taskAddress
                 case .https(let underlying):
+                    return underlying.taskAddress
+                case .vmess(let underlying):
                     return underlying.taskAddress
             }
         }
@@ -200,6 +207,8 @@ public enum ProxyPolicy: Codable {
                 self = .socks5(try SOCKS5Policy.init(stringLiteral: stringLiteral))
             case .some("SOCKS5-TLS"):
                 self = .socks5TLS(try SOCKS5TLSPolicy.init(stringLiteral: stringLiteral))
+            case .some("VMESS"):
+                self = .vmess(try VMESSPolicy.init(stringLiteral: stringLiteral))
             default:
                 throw ConfigurationSerializationError.dataCorrupted
         }
@@ -222,6 +231,8 @@ public enum ProxyPolicy: Codable {
             case .http(let underlying):
                 try underlying.encode(to: encoder)
             case .https(let underlying):
+                try underlying.encode(to: encoder)
+            case .vmess(let underlying):
                 try underlying.encode(to: encoder)
         }
     }
@@ -249,6 +260,8 @@ public enum ProxyPolicy: Codable {
             case .http(let underlying):
                 return underlying.makeConnection(logger: logger, on: eventLoop)
             case .https(let underlying):
+                return underlying.makeConnection(logger: logger, on: eventLoop)
+            case .vmess(let underlying):
                 return underlying.makeConnection(logger: logger, on: eventLoop)
         }
     }
@@ -512,4 +525,38 @@ public struct HTTPSProxyPolicy: Codable, Hashable, Policy {
     }
     
     public init() {}
+}
+
+public struct VMESSPolicy: Codable, Hashable, Policy {
+
+    public static var type: String {
+        "vmess"
+    }
+    
+    public var configuration: Configuration = .init()
+    
+    public var name: String = "vmess"
+    
+    public var taskAddress: NetAddress?
+    
+    public struct Configuration: Codable, Hashable {
+        
+        public var username: String?
+        public var serverHostname: String = ""
+        public var serverPort: Int = 0
+        
+        private enum CodingKeys: String, CodingKey {
+            case username
+            case serverHostname = "server-hostname"
+            case serverPort = "server-port"
+        }
+    }
+    
+    public init() {}
+    
+    public init(name: String, configuration: Configuration, taskAddress: NetAddress? = nil) {
+        self.name = name
+        self.configuration = configuration
+        self.taskAddress = taskAddress
+    }
 }
