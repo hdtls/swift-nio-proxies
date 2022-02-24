@@ -107,7 +107,7 @@ struct KDF {
     ///   - paths: path list.
     ///   - outputByteCount: The desired number of output bytes, if nill output all bytes, default is nil.
     /// - Returns: The derived key
-    static func deriveKey<INFO: Sequence>(inputKeyMaterial: SymmetricKey, info: INFO..., outputByteCount: Int? = nil) -> SymmetricKey where INFO.Element == UInt8 {
+    static func deriveKey<Info>(inputKeyMaterial: SymmetricKey, info: [Info], outputByteCount: Int? = nil) -> SymmetricKey where Info: DataProtocol {
         var updatable: __HMAC = __HMAC.init(H: { SHA256() }, key: .init(data: KDFSaltConstVMessAEADKDF))
         for path in info {
             updatable = __HMAC.init(H: {
@@ -123,5 +123,32 @@ struct KDF {
             return .init(data: updatable.get())
         }
         return .init(data: updatable.get().prefix(maxLength))
+    }
+}
+
+struct KDF12 {
+    
+    /// Derives a 12 byte symmetric key using the KDF algorithm.
+    ///
+    /// - Parameters:
+    ///   - inputKeyMaterial: Input key material.
+    ///   - paths: path list.
+    ///   - outputByteCount: The desired number of output bytes, if nill output all bytes, default is nil.
+    /// - Returns: The derived key
+    static func deriveKey<Info>(inputKeyMaterial: SymmetricKey, info: [Info]) -> SymmetricKey where Info: DataProtocol {
+        KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info, outputByteCount: 12)
+    }
+}
+
+struct KDF16 {
+    /// Derives a 16 byte symmetric key using the KDF algorithm.
+    ///
+    /// - Parameters:
+    ///   - inputKeyMaterial: Input key material.
+    ///   - paths: path list.
+    ///   - outputByteCount: The desired number of output bytes, if nill output all bytes, default is nil.
+    /// - Returns: The derived key
+    static func deriveKey<Info>(inputKeyMaterial: SymmetricKey, info: [Info]) -> SymmetricKey where Info: DataProtocol {
+        KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info, outputByteCount: 16)
     }
 }

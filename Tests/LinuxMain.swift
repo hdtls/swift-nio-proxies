@@ -30,6 +30,7 @@ import XCTest
    XCTMain([
          testCase(ClientGreetingTests.allTests),
          testCase(ConfigurationParserTests.allTests),
+         testCase(KDFTests.allTests),
          testCase(ModelsTests.allTests),
          testCase(NetAddressTests.allTests),
          testCase(ProxyPolicyTests.allTests),
