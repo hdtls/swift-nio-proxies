@@ -16,19 +16,13 @@ import XCTest
 @testable import NetbotVMESS
 @testable import SHAKE128
 
-class VMESSTests: XCTestCase {
-    
-    func testGenerateChaChaPolySymmetricKey() throws {
-        let result = try generateChaChaPolySymmetricKey(inputKeyMaterial: Data(hexString: "96b727f438a60a07ca1f554ec689862e"))
-        result.withUnsafeBytes {
-            XCTAssertEqual($0.hexString, "80c2c504eca628a44855d24e6a9478841d87e34a09027344ebf659d22fb2b88b")
-        }
-    }
+class ByteBufferTests: XCTestCase {
 
-    func testPerformanceExample() throws {
-        // This is an example of a performance test case.
-        self.measure {
-            // Put the code you want to measure the time of here.
+    func testWriteAddress() throws {
+        var buffer = ByteBuffer()
+        buffer.writeAddress(.domainPort("www.v2fly.org", 443))
+        buffer.withUnsafeReadableBytes {
+            XCTAssertEqual($0.hexString, "01bb020d7777772e7632666c792e6f7267")
         }
     }
 }

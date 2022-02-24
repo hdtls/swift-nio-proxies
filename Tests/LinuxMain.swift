@@ -28,6 +28,7 @@ import XCTest
    @testable import SHAKE128Tests
 
    XCTMain([
+         testCase(ByteBufferTests.allTests),
          testCase(ClientGreetingTests.allTests),
          testCase(ConfigurationParserTests.allTests),
          testCase(KDFTests.allTests),
