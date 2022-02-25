@@ -26,10 +26,8 @@ public struct SHAKE128Digest: DigestPrivate {
     }
     
     public func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {
-        return try Swift.withUnsafeBytes(of: bytes) {
-            let boundsCheckedPtr = UnsafeRawBufferPointer(start: $0.baseAddress,
-                                                          count: $0.count)
-            return try body(boundsCheckedPtr)
+        try bytes.withUnsafeBytes {
+            try body($0)
         }
     }
     
