@@ -26,7 +26,16 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+#if canImport(Crypto)
 @_exported import Crypto
+#endif
+
+#if !canImport(Crypto)
+/// A protocol defining requirements for digests
+public protocol Digest: Hashable, ContiguousBytes, CustomStringConvertible, Sequence where Element == UInt8 {
+    static var byteCount: Int { get }
+}
+#endif
 
 protocol DigestPrivate: Digest {
     init?(bufferPointer: UnsafeRawBufferPointer)

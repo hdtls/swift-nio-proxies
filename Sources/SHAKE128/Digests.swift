@@ -15,18 +15,10 @@
 import Foundation
 
 public struct SHAKE128Digest: DigestPrivate {
-    let bytes: (UInt64, UInt64)
+    let bytes: [UInt8]
     
     init?(bufferPointer: UnsafeRawBufferPointer) {
-        guard bufferPointer.count == 16 else {
-            return nil
-        }
-        
-        var bytes = (UInt64(0), UInt64(0))
-        withUnsafeMutableBytes(of: &bytes) { targetPtr in
-            targetPtr.copyMemory(from: bufferPointer)
-        }
-        self.bytes = bytes
+        self.bytes = Array(bufferPointer)
     }
     
     public static var byteCount: Int {
@@ -36,16 +28,13 @@ public struct SHAKE128Digest: DigestPrivate {
     public func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {
         return try Swift.withUnsafeBytes(of: bytes) {
             let boundsCheckedPtr = UnsafeRawBufferPointer(start: $0.baseAddress,
-                                                          count: Self.byteCount)
+                                                          count: $0.count)
             return try body(boundsCheckedPtr)
         }
     }
     
     private func toArray() -> ArraySlice<UInt8> {
-        var array = [UInt8]()
-        array.appendByte(bytes.0)
-        array.appendByte(bytes.1)
-        return array.prefix(upTo: Self.byteCount)
+        return bytes.prefix(Self.byteCount)
     }
     
     public var description: String {

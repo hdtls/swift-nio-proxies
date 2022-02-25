@@ -1,5 +1,0 @@
-module COpenSSLCrypto [system] {
-       header "include/COpenSSLCrypto.h"
-       link "crypto"
-       link "ssl"
-}

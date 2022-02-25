@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+@_implementationOnly import CTinySHA3
 
 public struct SHAKE128: HashFunctionImplementationDetails {
     
@@ -38,6 +39,10 @@ public struct SHAKE128: HashFunctionImplementationDetails {
     
     public mutating func update(bufferPointer: UnsafeRawBufferPointer) {
         impl.update(data: bufferPointer)
+    }
+    
+    public func read(digestSize: Int) -> Self.Digest {
+        return impl.read(digestSize: digestSize)
     }
     
     /// Returns the digest from the data input in the hash function instance.

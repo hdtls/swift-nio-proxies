@@ -24,7 +24,8 @@ extension SHAKE128Tests {
 
    static var allTests : [(String, (SHAKE128Tests) -> () throws -> Void)] {
       return [
-                ("testExample", testExample),
+                ("testSHAKE128Finalize", testSHAKE128Finalize),
+                ("testSHAKE128Read", testSHAKE128Read),
            ]
    }
 }

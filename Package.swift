@@ -36,16 +36,9 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0")
     ],
     targets: [
-        .systemLibrary(
-            name: "COpenSSLCrypto",
-            pkgConfig: "openssl",
-            providers: [
-                .apt(["openssl libssl-dev"]),
-                .brew(["openssl"]),
-            ]
-        ),
+        .target(name: "CTinySHA3"),
         .target(name: "SHAKE128", dependencies: [
-            "COpenSSLCrypto",
+            "CTinySHA3",
             .product(name: "Crypto", package: "swift-crypto")
         ]),
         .target(name: "CMMDB",
