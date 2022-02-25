@@ -13,9 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-@_exported import Crypto
-@_exported import Logging
-@_exported import NetbotHelpers
-@_exported import NIO
-@_exported import NIOHTTP1
-@_exported import NIOWebSocket
+
+enum CodingError: Error {
+    case payloadTooLarge
+}

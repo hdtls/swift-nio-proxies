@@ -84,6 +84,15 @@ public enum Algorithm: UInt8 {
     var shouldEnablePadding: Bool {
         self == .aes128gcm || self == .chacha20poly1305
     }
+    
+    var overhead: Int {
+        switch self {
+            case .aes128gcm, .chacha20poly1305:
+                return 16
+            default:
+                return 0
+        }
+    }
 }
 
 public struct Options: OptionSet {
@@ -98,6 +107,10 @@ public struct Options: OptionSet {
     public static let chunkMasking = Options.init(rawValue: 1 << 2)
     public static let globalPadding = Options.init(rawValue: 0x08)
     public static let authenticatedLength = Options.init(rawValue: 0x10)
+    
+    var shouldPadding: Bool {
+        contains(.chunkMasking) && contains(.globalPadding)
+    }
     
     public init(rawValue: RawValue) {
         self.rawValue = rawValue
