@@ -13,27 +13,10 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import Crypto
 
-public struct Account {
+/// `ProtocolVersion` defines VMESS protocol version.
+public struct ProtocolVersion: Codable, Equatable, RawRepresentable {
 
-    /// ID is the main ID of the account.
-    public var id: UUID
-    
-    /// AlterIDs are the alternative IDs of the account.
-    public var alterIDs: [UUID]
-    
-    /// Security type of the account. Used for client connections.
-    public var security: Algorithm
-        
-    public var authenticatedLengthExperiment: Bool = false
-}
-
-/// A enum representing a VMESS protocol version.
-public struct ProtocolVersion: Equatable, Codable {
-
-    public static let v1 = ProtocolVersion.init(rawValue: 0x01)
-    
     public var rawValue: UInt8
     
     public init(rawValue: UInt8) {
@@ -41,44 +24,26 @@ public struct ProtocolVersion: Equatable, Codable {
     }
 }
 
-public struct VMESSRequestHead: Equatable {
+extension ProtocolVersion {
     
-    /// The VMESS protocol version.
-    public var version: ProtocolVersion = .v1
- 
-    public var command: Command
-
-    public var options: Options
-
-    /// Specify the encryption method of the data part, the optional values are:
-    /// - 0x00: AES-128-CFB;
-    /// - 0x01: No encryption;
-    /// - 0x02: AES-128-GCM;
-    /// - 0x03: ChaCha20-Poly1305;
-    public var algorithm: Algorithm
-    
-    public var address: NetAddress
-    
-//    public var user: MemoryUser
+    /// VMESS protocol version 1.
+    public static let v1 = ProtocolVersion.init(rawValue: 0x01)
 }
 
-
-fileprivate enum __AddrID: UInt8 {
-    /// IP V4 address: X'01'
-    case v4 = 0x01
+/// `Algorithm` defines current VMESS supported data security algorithm.
+public enum Algorithm: UInt8, Codable, Equatable {
     
-    /// DOMAINNAME: X'02'
-    case domain = 0x02
-    
-    /// IP V6 address
-    case v6 = 0x03
-}
-
-public enum Algorithm: UInt8 {
+    /// AES-128-CFB
     case aes128cfb = 1
+    
+    /// AES-128-GCM
     case aes128gcm = 3
+    
+    /// ChaCha20-Poly1305
     case chacha20poly1305 = 4
+    
     case none = 5
+    
     case zero = 6
     
     var shouldEnablePadding: Bool {
@@ -95,21 +60,39 @@ public enum Algorithm: UInt8 {
     }
 }
 
-public struct Options: OptionSet {
+/// `Command` object defines VMESS command.
+public struct Command: Codable, Equatable, RawRepresentable {
+
+    public typealias RawValue = UInt8
+    
+    public let rawValue: UInt8
+    
+    public init(rawValue: UInt8) {
+        self.rawValue = rawValue
+    }
+}
+
+extension Command {
+    
+    /// The TCP command.
+    public static let tcp = Command.init(rawValue: 0x01)
+    
+    /// The DUP command.
+    public static let udp = Command.init(rawValue: 0x02)
+    
+    /// The MUX command.
+    public static let mux = Command.init(rawValue: 0x03)
+}
+
+/// A `StreamOptions` that contains VMESS stream setting options.
+public struct StreamOptions: Codable, Equatable, OptionSet {
     
     public typealias RawValue = UInt8
-
+    
     public var rawValue: UInt8
     
-    /// Standard
-    public static let chunkStream = Options.init(rawValue: 1 << 0)
-    public static let connectionReuse = Options.init(rawValue: 1 << 1)
-    public static let chunkMasking = Options.init(rawValue: 1 << 2)
-    public static let globalPadding = Options.init(rawValue: 0x08)
-    public static let authenticatedLength = Options.init(rawValue: 0x10)
-    
     var shouldPadding: Bool {
-        contains(.chunkMasking) && contains(.globalPadding)
+        contains(.masking) && contains(.padding)
     }
     
     public init(rawValue: RawValue) {
@@ -117,15 +100,24 @@ public struct Options: OptionSet {
     }
 }
 
-public struct Command: Equatable {
-
-    public static let tcp = Command.init(rawValue: 0x01)
-    public static let udp = Command.init(rawValue: 0x02)
-    public static let mux = Command.init(rawValue: 0x03)
-
-    public let rawValue: UInt8
+extension StreamOptions {
     
-    public init(rawValue: UInt8) {
-        self.rawValue = rawValue
-    }
+    /// Standard data stream option
+    public static let chunked = StreamOptions.init(rawValue: 1 << 0)
+    
+    @available(*, deprecated, message: "This options is deprecated from V2Ray 2.23+.")
+    public static let connectionReuse = StreamOptions.init(rawValue: 1 << 1)
+    
+    /// Turn on stream masking.
+    ///
+    /// This options is valid only when `.chunked` is turned on.
+    public static let masking = StreamOptions.init(rawValue: 1 << 2)
+    
+    /// Turn on stream padding.
+    ///
+    /// This options is valid only when `.chunked` is turned on.
+    public static let padding = StreamOptions.init(rawValue: 0x08)
+    
+    /// Turn on packet length authentication.
+    public static let authenticatedLength = StreamOptions.init(rawValue: 0x10)
 }

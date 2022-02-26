@@ -12,39 +12,26 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
 import NIOCore
 
-/// `Response` object defines VMESS response data object.
-public struct Response {
+/// `Request` object defines VMESS request infomation.
+public struct Request {
     
-    /// Authentication code.
-    public var authenticationCode: UInt8
+    /// The VMESS protocol version.
+    public var version: ProtocolVersion = .v1
     
-    /// Stream options.
+    /// Request command.
+    public var command: Command
+    
+    /// Current request stream options.
     public var options: StreamOptions
     
-    /// Command code.
-    public var commandCode: UInt8
+    /// The encryption method.
+    public var algorithm: Algorithm
     
-    /// Command.
-    public var command: ResponseCommand?
+    /// Request socks address or domain port.
+    public var address: NetAddress
     
-    /// Plain response body data.
+    /// Request body.
     public var body: ByteBuffer?
-}
-
-public protocol ResponseCommand {}
-
-public struct SwitchAccountCommand: ResponseCommand {
-        
-    var id: UUID
-    
-    var level: UInt32
-    
-    var countOfAlterIDs: UInt16
-    
-    var address: NetAddress?
-
-    var validMin: UInt8
 }
