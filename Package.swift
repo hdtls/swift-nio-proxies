@@ -22,7 +22,6 @@ let package = Package(
         .iOS(.v13),
     ],
     products: [
-        .library(name: "SHAKE128", targets: ["SHAKE128"]),
         .library(name: "Netbot", targets: ["Netbot"]),
         .executable(name: "netbotcli", targets: ["NetbotCLI"])
     ],
@@ -37,10 +36,11 @@ let package = Package(
     ],
     targets: [
         .target(name: "CTinySHA3"),
-        .target(name: "SHAKE128", dependencies: [
-            "CTinySHA3",
-            .product(name: "Crypto", package: "swift-crypto")
-        ]),
+        .target(name: "SHAKE128",
+                dependencies: [
+                    "CTinySHA3",
+                    .product(name: "Crypto", package: "swift-crypto")
+                ]),
         .target(name: "CMMDB",
                 cSettings: [.define("HAVE_CONFIG_H")]),
         .target(name: "ConnectionPool",
@@ -51,7 +51,7 @@ let package = Package(
                 ]),
         .target(name: "NetbotHelpers",
                 dependencies: [
-                    .product(name: "NIO", package: "swift-nio"),
+                    .product(name: "NIOCore", package: "swift-nio"),
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "Logging", package: "swift-log")
                 ]),
@@ -60,7 +60,7 @@ let package = Package(
                     "NetbotHelpers",
                     "ConnectionPool",
                     .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                    .product(name: "NIO", package: "swift-nio"),
+                    .product(name: "NIOCore", package: "swift-nio"),
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
                     .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
@@ -68,23 +68,23 @@ let package = Package(
         .target(name: "NetbotSOCKS",
                 dependencies: [
                     "NetbotHelpers",
-                    .product(name: "NIO", package: "swift-nio"),
+                    .product(name: "NIOCore", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 ]),
         .target(name: "NetbotSS",
                 dependencies: [
                     "NetbotHelpers",
                     .product(name: "Crypto", package: "swift-crypto"),
-                    .product(name: "NIO", package: "swift-nio"),
+                    .product(name: "NIOCore", package: "swift-nio"),
                 ]),
         .target(name: "NetbotVMESS",
-               dependencies: [
+                dependencies: [
                     "NetbotHelpers",
                     "SHAKE128",
                     .product(name: "Crypto", package: "swift-crypto"),
-                    .product(name: "NIO", package: "swift-nio"),
+                    .product(name: "NIOCore", package: "swift-nio"),
                     .product(name: "NIOWebSocket", package: "swift-nio")
-               ]),
+                ]),
         .target(name: "Netbot",
                 dependencies: [
                     "CMMDB",
@@ -93,7 +93,7 @@ let package = Package(
                     "NetbotSS",
                     "NetbotVMESS",
                     .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                    .product(name: "NIO", package: "swift-nio"),
+                    .product(name: "NIOCore", package: "swift-nio"),
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
                     .product(name: "NIOExtras", package: "swift-nio-extras"),
@@ -101,25 +101,33 @@ let package = Package(
                 ]),
         .executableTarget(name: "NetbotCLI",
                           dependencies: [
-                            .product(name: "NIO", package: "swift-nio"),
-                            .product(name: "NIOSSL", package: "swift-nio-ssl"),
-                            .product(name: "NIOSOCKS", package: "swift-nio-extras"),
-                            .product(name: "Logging", package: "swift-log"),
-                            .target(name: "Netbot")
+                            "Netbot",
+                            .product(name: "ArgumentParser", package: "swift-argument-parser")
                           ]),
         .testTarget(name: "NetbotHelpersTests",
                     dependencies: [
                         "NetbotHelpers",
-                        .product(name: "NIOCore", package: "swift-nio")
+                        .product(name: "NIO", package: "swift-nio")
                     ]),
         .testTarget(name: "NetbotTests",
                     dependencies: [
                         "Netbot",
-                        .product(name: "NIOEmbedded", package: "swift-nio")
+                        "NetbotHTTP",
+                        "NetbotSOCKS",
+                        "NetbotSS",
+                        "NetbotVMESS",
+                        .product(name: "NIO", package: "swift-nio"),
+                        .product(name: "NIOHTTP1", package: "swift-nio"),
+                        .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                        .product(name: "NIOExtras", package: "swift-nio-extras"),
+                        .product(name: "NIOTransportServices", package: "swift-nio-transport-services")
                     ]),
-        .testTarget(name: "SHAKE128Tests", dependencies: [ "SHAKE128" ]),
-        .testTarget(name: "NetbotSOCKSTests", dependencies: [ "NetbotSOCKS" ]),
-        .testTarget(name: "NetbotVMESSTests", dependencies: [ "NetbotVMESS" ])
+        .testTarget(name: "SHAKE128Tests",
+                    dependencies: [ "SHAKE128" ]),
+        .testTarget(name: "NetbotSOCKSTests",
+                    dependencies: [ "NetbotSOCKS" ]),
+        .testTarget(name: "NetbotVMESSTests",
+                    dependencies: [ "NetbotVMESS" ])
     ],
     swiftLanguageVersions: [.v5]
 )

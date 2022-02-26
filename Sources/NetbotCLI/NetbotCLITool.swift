@@ -14,11 +14,11 @@
 
 import ArgumentParser
 import Foundation
-import Logging
 import Netbot
 
 extension OutboundMode: ExpressibleByArgument {}
 
+@main
 public struct NetbotCommand: ParsableCommand {
     
 #if os(macOS)
