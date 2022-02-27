@@ -152,3 +152,24 @@ struct KDF16 {
         KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info, outputByteCount: 16)
     }
 }
+
+func generateCmdKey(_ id: UUID) -> SymmetricKey {
+    withUnsafeBytes(of: id) {
+        var hasher = Insecure.MD5.init()
+        hasher.update(bufferPointer: $0)
+        hasher.update(data: "c48619fe-8f02-49e0-b9e9-edf763e17e21".data(using: .utf8)!)
+        return .init(data: hasher.finalize())
+    }
+}
+
+func generateChaChaPolySymmetricKey<Key>(inputKeyMaterial: Key) -> SymmetricKey where Key: DataProtocol {
+    var md5 = Insecure.MD5()
+    md5.update(data: inputKeyMaterial)
+    return md5.finalize().withUnsafeBytes { ptr in
+        var hasher = Insecure.MD5()
+        hasher.update(bufferPointer: ptr)
+        return hasher.finalize().withUnsafeBytes {
+            return .init(data: Array(ptr) + Array($0))
+        }
+    }
+}

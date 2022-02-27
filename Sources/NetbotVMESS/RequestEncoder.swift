@@ -23,109 +23,34 @@ import Logging
 import NIO
 import SHAKE128
 
-public final class RequestEncoder: MessageToByteEncoder {
+final public class RequestEncoder: MessageToByteEncoder {
     
     public typealias OutboundIn = ByteBuffer
     
-    private let id: UUID
-    
     public let logger: Logger
     
-    private var requestHead: VMESSRequestHead
+    var requestHead: Request!
+        
+    private let id: UUID
+
+    private let session: Session
+
+    private let symmetricKey: [UInt8]
     
+    private let nonce: [UInt8]
+
     private var packetIndex: UInt16 = 0
-    
-    struct Session {
-        var isAEAD: Bool
-        var symmetricKey: [UInt8]
-        var nonce: [UInt8]
-        var symmetricKey2: [UInt8]
-        var nonce2: [UInt8]
-        var responseHeader: UInt8
-        
-        init(isAEAD: Bool) {
-            let securityBytes = Array<UInt8>(capacity: 33)
-            
-            symmetricKey = Array(securityBytes.prefix(16))
-            nonce = Array(securityBytes[16..<32])
-            responseHeader = securityBytes.last!
-            self.isAEAD = isAEAD
-            
-            if isAEAD {
-                symmetricKey2 = symmetricKey.withUnsafeBytes {
-                    var sha256 = SHA256()
-                    sha256.update(bufferPointer: $0)
-                    return sha256.finalize().withUnsafeBytes {
-                        Array($0.prefix(16))
-                    }
-                }
-                
-                nonce2 = nonce.withUnsafeBytes {
-                    var sha256 = SHA256()
-                    sha256.update(bufferPointer: $0)
-                    return sha256.finalize().withUnsafeBytes {
-                        Array($0.prefix(16))
-                    }
-                }
-            } else {
-                symmetricKey2 = symmetricKey.withUnsafeBytes {
-                    var md5 = Insecure.MD5()
-                    md5.update(bufferPointer: $0)
-                    return md5.finalize().withUnsafeBytes {
-                        Array($0)
-                    }
-                }
-                
-                nonce2 = nonce.withUnsafeBytes {
-                    var sha256 = SHA256()
-                    sha256.update(bufferPointer: $0)
-                    return sha256.finalize().withUnsafeBytes {
-                        Array($0)
-                    }
-                }
-            }
-        }
-    }
-    
-    private var session: Session
-    
-    public init(logger: Logger, taskAddress: NetAddress, id: UUID) {
-        
+
+    public init(logger: Logger, session: Session, id: UUID, taskAddress: NetAddress) {
         self.logger = logger
+        self.session = session
+        self.symmetricKey = Array(session.sharedSecretBytes.prefix(16))
+        self.nonce = Array(session.sharedSecretBytes[16..<32])
         self.id = id
-        
-        var algorithm: Algorithm = .aes128gcm
-        
-        var options: Options = .chunkStream
-        let account = Account(id: .init(), alterIDs: [], security: algorithm)
-        
-        if algorithm == .aes128gcm || algorithm == .none || algorithm == .chacha20poly1305 {
-            options.insert(.chunkMasking)
-        }
-        
-        if algorithm.shouldEnablePadding && options.contains(.chunkMasking) {
-            options.insert(.globalPadding)
-        }
-        
-        if algorithm == .zero {
-            algorithm = .none
-            options.remove(.chunkStream)
-            options.remove(.chunkMasking)
-        }
-        
-        if account.authenticatedLengthExperiment {
-            options.insert(.authenticatedLength)
-        }
-        
-        session = .init(isAEAD: true)
-        
-        self.requestHead = .init(version: .v1, command: .tcp, options: options, algorithm: algorithm, address: taskAddress)
     }
     
     public func encode(data: ByteBuffer, out: inout ByteBuffer) throws {
-        let headPart = try prepareHeadPart()
-        print(Array(headPart))
-        out.writeBytes(headPart)
+        out.writeBytes(try prepareHeadPart())
         out.writeBytes(try prepareBodyPart(data: data))
         out.writeBytes(try prepareEndPart())
     }
@@ -140,29 +65,26 @@ public final class RequestEncoder: MessageToByteEncoder {
         let timestamp = UInt64(date.timeIntervalSince1970)
         
         var result = Data()
-        result += try prepareCertificationInfoPart(timestamp: timestamp)
+        result += try prepareAuthenticationInfoPart(timestamp: timestamp)
         result += try prepareInstructionPart(timestamp: timestamp)
         return result
     }
     
-    /// Prepare HEAD certification part data with specified timestamp.
+    /// Prepare HEAD authentication info part data with specified timestamp.
     ///
     /// If use AEAD to encrypt request just return empty data instead.
     /// - Parameter timestamp: UTC UInt64 timestamp.
-    /// - Returns: Encrypted certification part data.
-    private func prepareCertificationInfoPart(timestamp: UInt64) throws -> Data {
+    /// - Returns: Encrypted authentication info part data.
+    private func prepareAuthenticationInfoPart(timestamp: UInt64) throws -> Data {
         guard !session.isAEAD else {
             return .init()
         }
         
-        // TODO: Random Alter IDs
         return withUnsafeBytes(of: id) {
             var hasher = HMAC<Insecure.MD5>(key: .init(data: $0))
             return withUnsafeBytes(of: timestamp.bigEndian) {
                 hasher.update(data: $0)
-                return hasher.finalize().withUnsafeBytes {
-                    Data($0)
-                }
+                return Data(hasher.finalize())
             }
         }
     }
@@ -173,9 +95,9 @@ public final class RequestEncoder: MessageToByteEncoder {
     private func prepareInstructionPart(timestamp: UInt64) throws -> Data {
         var buffer = ByteBuffer()
         buffer.writeInteger(ProtocolVersion.v1.rawValue)
-        buffer.writeBytes(session.nonce)
-        buffer.writeBytes(session.symmetricKey)
-        buffer.writeInteger(session.responseHeader)
+        buffer.writeBytes(nonce)
+        buffer.writeBytes(symmetricKey)
+        buffer.writeInteger(session.sharedSecretBytes.last!)
         buffer.writeInteger(requestHead.options.rawValue)
         
         let padding = UInt8.random(in: 0...16)
@@ -340,9 +262,9 @@ public final class RequestEncoder: MessageToByteEncoder {
                 let packetLengthSize = requestHead.options.contains(.authenticatedLength) ? 2 + overhead : 2
          
                 var shake128: SHAKE128?
-                if requestHead.options.contains(.chunkMasking) {
+                if requestHead.options.contains(.masking) {
                     shake128 = .init()
-                    shake128?.update(data: session.nonce)
+                    shake128?.update(data: nonce)
                 }
                 
                 let maxPadding = requestHead.options.shouldPadding ? 64 : 0
@@ -356,22 +278,21 @@ public final class RequestEncoder: MessageToByteEncoder {
                     if requestHead.options.shouldPadding {
                         assert(shake128 != nil)
                         shake128!.read(digestSize: 2).withUnsafeBytes {
-                            assert($0.count == 2)
                             padding = Int($0.load(as: UInt16.self).bigEndian % 64)
                         }
                     }
                     
                     let nonce = withUnsafeBytes(of: packetIndex.bigEndian) {
-                        Array($0) + session.nonce[2..<12]
+                        Array($0) + self.nonce[2..<12]
                     }
                     
                     var packet: Data = .init()
                     
                     if requestHead.algorithm == .aes128gcm {
-                        let sealedBox = try AES.GCM.seal(message, using: .init(data: session.symmetricKey), nonce: .init(data: nonce))
+                        let sealedBox = try AES.GCM.seal(message, using: .init(data: symmetricKey), nonce: .init(data: nonce))
                         packet = sealedBox.ciphertext + sealedBox.tag
                     } else {
-                        let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: session.symmetricKey)
+                        let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
                         let sealedBox = try ChaChaPoly.seal(message, using: symmetricKey, nonce: .init(data: nonce))
                         packet = sealedBox.ciphertext + sealedBox.tag
                     }
@@ -387,7 +308,7 @@ public final class RequestEncoder: MessageToByteEncoder {
                         nonce: nonce,
                         shake128: &shake128
                     )
-                    
+                    logger.debug("\(packet.count) \(padding)")
                     byteBuffer.writeBytes(packetLengthData)
                     byteBuffer.writeBytes(packet)
                     byteBuffer.writeBytes(Array<UInt8>(capacity: padding))
@@ -416,7 +337,7 @@ public final class RequestEncoder: MessageToByteEncoder {
     private func preparePacketLengthData(packetLength: Int, nonce: [UInt8], shake128: inout SHAKE128?) throws -> Data {
         if requestHead.options.contains(.authenticatedLength) {
             return try withUnsafeBytes(of: UInt16(packetLength - requestHead.algorithm.overhead).bigEndian) {
-                var symmetricKey = KDF16.deriveKey(inputKeyMaterial: .init(data: session.symmetricKey), info: ["auth_len".data(using: .utf8)!])
+                var symmetricKey = KDF16.deriveKey(inputKeyMaterial: .init(data: symmetricKey), info: ["auth_len".data(using: .utf8)!])
                 
                 if requestHead.algorithm == .aes128gcm {
                     let sealedBox = try AES.GCM.seal($0, using: symmetricKey, nonce: .init(data: nonce))
@@ -429,11 +350,10 @@ public final class RequestEncoder: MessageToByteEncoder {
                     return sealedBox.ciphertext + sealedBox.tag
                 }
             }
-        } else if requestHead.options.contains(.chunkMasking) {
+        } else if requestHead.options.contains(.masking) {
             assert(shake128 != nil)
             return shake128!.read(digestSize: 2).withUnsafeBytes {
-                assert($0.count == 2)
-                let mask = UInt16($0[1]) | UInt16($0[0]) << 8
+                let mask = $0.load(as: UInt16.self).bigEndian
                 return withUnsafeBytes(of: (mask ^ UInt16(packetLength)).bigEndian) {
                     Data($0)
                 }
@@ -450,33 +370,10 @@ public final class RequestEncoder: MessageToByteEncoder {
     /// If request should trunk stream then return encrypted empty buffer as END part data else just return empty data.
     /// - Returns: Encrypted END part data.
     private func prepareEndPart() throws -> Data {
-        guard requestHead.options.contains(.chunkStream) else {
+        guard requestHead.options.contains(.chunked) else {
             return .init()
         }
 
         return try prepareBodyPart(data: .init())
-    }
-}
-
-func generateCmdKey(_ id: UUID) -> SymmetricKey {
-    withUnsafeBytes(of: id) {
-        var hasher = Insecure.MD5.init()
-        hasher.update(bufferPointer: $0)
-        return withUnsafeBytes(of: UUID(uuidString: "C48619FE-8F02-49E0-B9E9-EDF763E17E21")!) {
-            hasher.update(bufferPointer: $0)
-            return .init(data: hasher.finalize())
-        }
-    }
-}
-
-func generateChaChaPolySymmetricKey<Key>(inputKeyMaterial: Key) -> SymmetricKey where Key: DataProtocol {
-    var md5 = Insecure.MD5()
-    md5.update(data: inputKeyMaterial)
-    return md5.finalize().withUnsafeBytes { ptr in
-        var hasher = Insecure.MD5()
-        hasher.update(bufferPointer: ptr)
-        return hasher.finalize().withUnsafeBytes {
-            return .init(data: Array(ptr) + Array($0))
-        }
     }
 }

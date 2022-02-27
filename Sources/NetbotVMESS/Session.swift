@@ -14,9 +14,14 @@
 
 import Foundation
 
-enum CodingError: Error {
+public class Session {
     
-    case payloadTooLarge
+    let sharedSecretBytes: [UInt8]
     
-    case invalidPacketSize
+    var isAEAD: Bool
+    
+    init(isAEAD: Bool) {
+        sharedSecretBytes = Array<UInt8>(capacity: 33)
+        self.isAEAD = isAEAD
+    }
 }
