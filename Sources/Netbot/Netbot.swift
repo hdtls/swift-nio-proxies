@@ -14,9 +14,11 @@
 
 import Foundation
 @_exported import Logging
+@_exported import NetbotHelpers
 @_exported import NetbotHTTP
 @_exported import NetbotSOCKS
-@_exported import NetbotHelpers
+@_exported import NetbotSS
+@_exported import NetbotVMESS
 @_exported import NIO
 @_exported import NIOExtras
 @_exported import NIOHTTP1
@@ -41,24 +43,24 @@ public class Netbot {
         NIOThreadPool.init(numberOfThreads: System.coreCount)
     }()
     
-    public init(logger: Logger = .init(label: "io.tenbits.Netbot"),
-                configuration: Configuration,
+    public init(configuration: Configuration,
                 outboundMode: OutboundMode = .direct,
                 enableHTTPCapture: Bool = false,
                 enableMitm: Bool = false,
                 geoLite2: GeoLite2) {
-        self.logger = logger
-        self.configuration = configuration
-        self.outboundMode = outboundMode
-        self.isHTTPCaptureEnabled = enableHTTPCapture
-        self.isMitmEnabled = enableMitm
-        self.geoLite2 = geoLite2
         
         LoggingSystem.bootstrap { label in
             var handler = StreamLogHandler.standardOutput(label: label)
             handler.logLevel = configuration.general.logLevel
             return handler
         }
+
+        self.logger = .init(label: "io.tenbits.Netbot")
+        self.configuration = configuration
+        self.outboundMode = outboundMode
+        self.isHTTPCaptureEnabled = enableHTTPCapture
+        self.isMitmEnabled = enableMitm
+        self.geoLite2 = geoLite2
     }
     
     public func run() throws {

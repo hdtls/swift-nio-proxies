@@ -100,7 +100,7 @@ final public class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
                                 msg += "\n"
                                 msg += "\(field.name) \(field.value)"
                             }
-                            logger.info("\(msg)")
+//                            logger.info("\(msg)")
                         }
                         return
                     }
@@ -123,7 +123,7 @@ final public class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
                                 msg += "\(field.name) \(field.value)"
                             }
                             msg += "\n"
-                            logger.info("\(msg)")
+//                            logger.info("\(msg)")
                         }
                         return
                     }
