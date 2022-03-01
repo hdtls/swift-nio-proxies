@@ -154,6 +154,7 @@ public enum ProxyPolicy: Codable {
                     self = .https(underlying)
                 case .vmess(var underlying):
                     underlying.taskAddress = newValue
+                    self = .vmess(underlying)
             }
         }
         get {

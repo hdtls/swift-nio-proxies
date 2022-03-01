@@ -15,8 +15,6 @@
 import ConnectionPool
 import Foundation
 import Logging
-import NetbotSS
-import NetbotHTTP
 import NIO
 import NIOSSL
 #if canImport(Network)
@@ -140,5 +138,28 @@ extension HTTPSProxyPolicy: ConnectionPoolSource {
     
     public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
         eventLoop.makeFailedFuture(ConnectionPoolError.shutdown)
+    }
+}
+
+extension VMESSPolicy: ConnectionPoolSource {
+    
+    public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
+        do {
+            guard let taskAddress = taskAddress else {
+                throw HTTPProxyError.invalidURL(url: String(describing: taskAddress))
+            }
+            
+            guard let uuidString = configuration.username, let id = UUID(uuidString: uuidString) else {
+                throw EventLoopError.unsupportedOperation
+            }
+            
+            return ClientBootstrap.init(group: eventLoop.next())
+                .channelInitializer { channel in
+                    channel.pipeline.addVMESSClientHandlers(logger: logger, taskAddress: taskAddress, id: id)
+                }
+                .connect(host: configuration.serverHostname, port: configuration.serverPort)
+        } catch {
+            return eventLoop.makeFailedFuture(error)
+        }
     }
 }
