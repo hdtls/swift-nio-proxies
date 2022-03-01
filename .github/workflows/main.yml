@@ -1,0 +1,25 @@
+name: Swift CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    name: Build & test Netbot on ${{ matrix.os }}.
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+        
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+    
+    - name: Build the projects in verbose mode.
+      run: swift build --verbose
+      
+    - name: Run tests in verbose mode.
+      run: swift test --verbose
