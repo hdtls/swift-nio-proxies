@@ -56,7 +56,6 @@ final public class RequestEncoder: MessageToByteEncoder {
     /// Initialize an instance of `RequestEncoder` with specified logger, session, configuration and address.
     /// - Parameters:
     ///   - logger: The logger object use to logging.
-    ///   - session: <#session description#>
     ///   - configuration: The configuration object contains encoder configurations.
     ///   - address: The requet address.
     public init(logger: Logger, session: Session, configuration: Configuration, address: NetAddress) {
@@ -69,7 +68,9 @@ final public class RequestEncoder: MessageToByteEncoder {
     }
     
     public func encode(data: ByteBuffer, out: inout ByteBuffer) throws {
-        out.writeBytes(try prepareHeadPart())
+        if packetIndex == 0 {
+            out.writeBytes(try prepareHeadPart())
+        }
         out.writeBytes(try prepareBodyPart(data: data))
         out.writeBytes(try prepareEndPart())
     }
@@ -289,7 +290,6 @@ final public class RequestEncoder: MessageToByteEncoder {
                     
                     var padding = 0
                     if configuration.options.shouldPadding {
-                        assert(shake128 != nil)
                         shake128!.read(digestSize: 2).withUnsafeBytes {
                             padding = Int($0.load(as: UInt16.self).bigEndian % 64)
                         }
@@ -309,8 +309,6 @@ final public class RequestEncoder: MessageToByteEncoder {
                         let sealedBox = try ChaChaPoly.seal(message, using: symmetricKey, nonce: .init(data: nonce))
                         packet = sealedBox.ciphertext + sealedBox.tag
                     }
-
-                    assert(packet.count == data.readableBytes + overhead)
 
                     guard packetLengthSize + packet.count + padding <= 2048 else {
                         throw CodingError.payloadTooLarge
@@ -381,14 +379,6 @@ final public class RequestEncoder: MessageToByteEncoder {
     /// If request should trunk stream then return encrypted empty buffer as END part data else just return empty data.
     /// - Returns: Encrypted END part data.
     private func prepareEndPart() throws -> Data {
-        defer {
-            packetIndex = 0
-            if configuration.options.contains(.masking) {
-                shake128 = SHAKE128()
-                shake128?.update(data: nonce)
-            }
-        }
-        
         guard configuration.options.contains(.chunked) else {
             return .init()
         }
