@@ -105,9 +105,12 @@ extension HTTPHeaders: Codable {
     public init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
         
-        let dictionaryLiteral: [(String, String)] = try container.decode([String].self).map {
-            let components = $0.components(separatedBy: ": ")
-            return (components[0], components[1])
+        var dictionaryLiteral: [(String, String)] = []
+        
+        while !container.isAtEnd {
+            let element = try container.decode(String.self)
+            let components = element.components(separatedBy: ": ")
+            dictionaryLiteral.append((components[0], components[1]))
         }
         
         self.init(dictionaryLiteral)
@@ -115,9 +118,9 @@ extension HTTPHeaders: Codable {
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.unkeyedContainer()
-        try container.encode(contentsOf: self.map { (name: String, value: String) in
-            name + ": " + value
-        })
+        try self.forEach { (name: String, value: String) in
+            try container.encode(name + ": " + value)
+        }
     }
 }
 

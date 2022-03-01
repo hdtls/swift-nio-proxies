@@ -18,6 +18,13 @@ import XCTest
 
 class VMESSTests: XCTestCase {
     
+    func testGenerateCMDSymmetricKey() throws {
+        let result = generateCmdKey(.init(uuidString: "450bae28-b9da-67d0-16bc-4918dc8d79b5")!)
+        result.withUnsafeBytes {
+            XCTAssertEqual($0.hexString, "da8b7df4396329ebe7a74afc62a9e7c8")
+        }
+    }
+    
     func testGenerateChaChaPolySymmetricKey() throws {
         let result = try generateChaChaPolySymmetricKey(inputKeyMaterial: Data(hexString: "96b727f438a60a07ca1f554ec689862e"))
         result.withUnsafeBytes {
