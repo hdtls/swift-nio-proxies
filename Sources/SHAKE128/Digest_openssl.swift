@@ -37,12 +37,15 @@ struct OpenSSLDigestImpl<H: HashFunctionImplementationDetails> {
     }
     
     internal mutating func update(data: UnsafeRawBufferPointer) {
+        if !isKnownUniquelyReferenced(&self.context) {
+            self.context = DigestContext(copying: self.context)
+        }
         self.context.update(data: data)
     }
     
     internal func finalize() -> H.Digest {
         // To have a non-destructive finalize operation we must allocate.
-        let copyContext = self.context
+        let copyContext = DigestContext(copying: self.context)
         let digestBytes = copyContext.finalize()
         return digestBytes.withUnsafeBytes {
             // We force unwrap here because if the digest size is wrong it's an internal error.
@@ -71,6 +74,12 @@ class DigestContext {
         self.contextPointer.initialize(to: .init())
 
         CTINYSHA3_shake128_init(self.contextPointer)
+    }
+    
+    init(copying original: DigestContext) {
+        // We force unwrap because we cannot recover from allocation failure.
+        self.contextPointer = UnsafeMutablePointer<CTinySHA3.sha3_ctx_t>.allocate(capacity: MemoryLayout<CTinySHA3.sha3_ctx_t>.size)
+        self.contextPointer.initialize(to: original.contextPointer.pointee)
     }
     
     func update(data: UnsafeRawBufferPointer) {
