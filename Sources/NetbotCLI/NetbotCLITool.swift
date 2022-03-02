@@ -15,8 +15,9 @@
 import ArgumentParser
 import Foundation
 import Netbot
-
-extension OutboundMode: ExpressibleByArgument {}
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 @main
 public struct NetbotCommand: ParsableCommand {
@@ -157,7 +158,7 @@ public struct NetbotCommand: ParsableCommand {
             let totalSize: Double = 60
             var prettyPrint = String.init(repeating: "-", count: Int(totalSize))
             print("\r[\(prettyPrint)] 0%", terminator: "")
-            fflush(__stdoutp)
+            fflush(stdout)
             
             let task = URLSession(configuration: .ephemeral).downloadTask(with: URL(string: "https://git.io/GeoLite2-Country.mmdb")!) { url, response, error in
                 defer {
@@ -166,6 +167,7 @@ public struct NetbotCommand: ParsableCommand {
                 guard let url = url, error == nil else {
                     return
                 }
+                
                 do {
                     let supportDirectory = dstURL.deletingLastPathComponent()
                     try FileManager.default.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
@@ -177,6 +179,7 @@ public struct NetbotCommand: ParsableCommand {
             
             task.resume()
             
+            #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
             let observation = task.progress.observe(\.fractionCompleted, options: .new) { progress, _ in
                 let range = Range.init(.init(location: 0, length: Int(progress.fractionCompleted * totalSize)), in: prettyPrint)
                 prettyPrint = prettyPrint.replacingOccurrences(of: "-", with: "#", range: range)
@@ -184,10 +187,14 @@ public struct NetbotCommand: ParsableCommand {
                 print("\r[\(prettyPrint)] \(Int(progress.fractionCompleted * 100))%", terminator: progress.fractionCompleted < 1 ? "" : "\n")
                 fflush(__stdoutp)
             }
+            #endif
             
             // Wait downloading done.
             g.wait()
+            
+            #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
             observation.invalidate()
+            #endif
         }
         
         let netbot = Netbot.init(
