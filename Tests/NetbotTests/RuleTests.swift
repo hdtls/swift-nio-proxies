@@ -14,13 +14,16 @@
 
 import XCTest
 @testable import Netbot
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 fileprivate let domainsetString = """
 apple.com
 .apple.com
 """
 
-final fileprivate class MockURLProtocol: URLProtocol {
+private class MockURLProtocol: URLProtocol {
     
     static var stubs: [URL : Data] = [:]
     static func stub(url: URL, response: Data) {
@@ -87,7 +90,7 @@ extension DomainSet: Equatable {}
 final class RuleTests: XCTestCase {
     
     override class func setUp() {
-        URLProtocol.registerClass(MockURLProtocol.self)
+        _ = URLProtocol.registerClass(MockURLProtocol.self)
         URLSession.shared.configuration.protocolClasses?.insert(MockURLProtocol.self, at: 0)
     }
     
@@ -257,6 +260,7 @@ final class RuleTests: XCTestCase {
         XCTAssertEqual(stringLiteral, expected)
     }
     
+    #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
     func testRuleSetCncoding() throws {
         let text = """
 DOMAIN,apple.com
@@ -268,16 +272,15 @@ DOMAIN-KEYWORD,apple
         MockURLProtocol.stub(url: .init(string: "https://ruleset")!, response: text.data(using: .utf8)!)
         let stringLiteral = "RULE-SET,https://ruleset,DIRECT"
         let ruleset = try RuleSet.init(stringLiteral: stringLiteral)
+        ruleset.performLoadingExternalResources { _ in
+            expectation.fulfill()
+        }
+        waitForExpectations(timeout: 5, handler: nil)
+
         XCTAssertEqual(ruleset.type, .ruleSet)
         XCTAssertEqual(ruleset.pattern, "https://ruleset")
         XCTAssertEqual(ruleset.policy, "DIRECT")
         XCTAssertNil(ruleset.comment)
-        
-        // wait for 1 seconds for mock execute.
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
-            expectation.fulfill()
-        }
-        waitForExpectations(timeout: 5, handler: nil)
         XCTAssertEqual(ruleset.standardRules, try text.components(separatedBy: "\n").map { try StandardRule.init(stringLiteral: $0 + ",DIRECT") })
     
         XCTAssertEqual(try JSONSerialization.jsonObject(with: try JSONEncoder().encode(ruleset), options: .fragmentsAllowed) as? String, stringLiteral)
@@ -292,20 +295,27 @@ test.com
         MockURLProtocol.stub(url: .init(string: "https://domainset")!, response: text.data(using: .utf8)!)
         let stringLiteral = "DOMAIN-SET,https://domainset,DIRECT"
         let domainset = try DomainSet.init(stringLiteral: stringLiteral)
+        print(domainset.dstURL)
+        domainset.performLoadingExternalResources {
+            switch $0 {
+                case .success(let r):
+                    print(r)
+                case .failure(let e):
+                    print(e)
+            }
+            expectation.fulfill()
+        }
+        waitForExpectations(timeout: 5, handler: nil)
+
         XCTAssertEqual(domainset.type, .domainSet)
         XCTAssertEqual(domainset.pattern, "https://domainset")
         XCTAssertEqual(domainset.policy, "DIRECT")
         XCTAssertNil(domainset.comment)
-        
-        // wait for 1 seconds for mock execute.
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
-            expectation.fulfill()
-        }
-        waitForExpectations(timeout: 5, handler: nil)
         XCTAssertEqual(domainset.standardRules, try text.components(separatedBy: "\n").map { try StandardRule.init(stringLiteral: "DOMAIN-SUFFIX,\($0),DIRECT") })
         
         XCTAssertEqual(try JSONSerialization.jsonObject(with: try JSONEncoder().encode(domainset), options: .fragmentsAllowed) as? String, stringLiteral)
     }
+    #endif
     
     func testParsingAnyRule() throws {
         func assertUnderliyingRule<T: Rule & Equatable>(_ stringLiteral: String, _ type: T.Type) throws {
@@ -323,7 +333,7 @@ test.com
         try assertUnderliyingRule("FINAL,DIRECT", FinalRule.self)
         try assertUnderliyingRule("GEOIP,CN,DIRECT", GeoIPRule.self)
         
-        
+        #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
         let expected = try RuleSet.init(stringLiteral: "RULE-SET,https://ruleset,DIRECT")
         let actual = try AnyRule.init(stringLiteral: "RULE-SET,https://ruleset,DIRECT")
         
@@ -348,5 +358,6 @@ test.com
         } else {
             XCTFail()
         }
+        #endif
     }
 }

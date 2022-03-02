@@ -68,7 +68,7 @@ extension Response: Codable {
         try container.encode(status, forKey: .status)
         try container.encode(httpVersion, forKey: .httpVersion)
         try container.encode(httpHeaders, forKey: .httpHeaders)
-        try container.encodeIfPresent(httpBody != nil ? Data(buffer: httpBody!) : nil, forKey: .httpBody)
+        try container.encodeIfPresent(httpBody != nil ? Data(Array(buffer: httpBody!)) : nil, forKey: .httpBody)
     }
 }
 

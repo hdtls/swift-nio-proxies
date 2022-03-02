@@ -19,6 +19,9 @@ import CMMDB
 #endif
 import Crypto
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public enum RuleType: String, Codable, CaseIterable {
     case domain = "DOMAIN"
@@ -32,8 +35,6 @@ public enum RuleType: String, Codable, CaseIterable {
     case processName = "PROCESS-NAME"
     case ruleSet = "RULE-SET"
 }
-
-fileprivate typealias CodableRule = Rule & Codable
 
 public protocol Rule {
     var type: RuleType { get set }
@@ -87,16 +88,14 @@ public protocol RuleCollection: Rule {
     
     var standardRules: [StandardRule] { get }
     
-    // Reload rule data.
+    /// Reload rule data from file store in `dstURL`.
     func reloadData()
 }
-
-fileprivate typealias CodableRuleCollection = RuleCollection & Codable
 
 extension RuleCollection {
     
     /// External resources storage url.
-    var dstURL: URL {
+    public var dstURL: URL {
         if let url = URL(string: pattern), url.isFileURL {
             return url
         }
@@ -105,11 +104,8 @@ extension RuleCollection {
             .compactMap { String(format: "%02x", $0) }
             .joined()
         
-#if os(iOS) || os(macOS) || os(tvOS)
         var dstURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-#else
-        
-#endif
+
         dstURL.appendPathComponent("io.tenbits.Netbot")
         dstURL.appendPathComponent("External Resources")
         do {
@@ -121,15 +117,28 @@ extension RuleCollection {
         return dstURL
     }
     
-    /// Perform external resources loading.
-    func performLoading() {
+    /// Load external resources from url resolved with pattern and a completion will invoke whenever success or failed.
+    ///
+    /// If pattern is file url or is not a valid url string thist will finished with `.invalidExteranlResources` error.
+    /// else start downloading resources from that url and save downloaded file to `dstURL`,
+    /// after that `reloadData()` will be call and completed with resolved standard rules.
+    public func performLoadingExternalResources(completion: @escaping (Result<[StandardRule], Error>) -> Void) {
         guard let url = URL(string: pattern), !url.isFileURL else {
+            completion(.failure(ConfigurationSerializationError.invalidRule(reason: .invalidExternalResources)))
             return
         }
+        
         URLSession.shared.downloadTask(with: url) { srcURL, response, error in
-            guard let srcURL = srcURL, error == nil else {
+            guard error == nil else {
+                completion(.failure(error!))
                 return
             }
+
+            guard let srcURL = srcURL else {
+                completion(.success([]))
+                return
+            }
+            
             do {
                 // Remove older file first if exists.
                 if FileManager.default.fileExists(atPath: self.dstURL.path) {
@@ -137,7 +146,9 @@ extension RuleCollection {
                 }
                 try FileManager.default.moveItem(at: srcURL, to: self.dstURL)
                 self.reloadData()
+                completion(.success(self.standardRules))
             } catch {
+                completion(.failure(error))
                 assertionFailure(error.localizedDescription)
             }
         }.resume()
@@ -150,7 +161,7 @@ extension RuleCollection {
     }
 }
 
-public struct StandardRule: CodableRule {
+public struct StandardRule: Codable, Rule {
     
     public var type: RuleType
     public var pattern: String
@@ -186,7 +197,7 @@ public struct StandardRule: CodableRule {
 }
 
 /// GEOIP,CN,DIRECT
-public struct GeoIPRule: CodableRule {
+public struct GeoIPRule: Codable, Rule {
     
     @Protected static var geo: GeoLite2?
     
@@ -212,7 +223,7 @@ public struct GeoIPRule: CodableRule {
 }
 
 /// FINAL,PROXY,dns-failed
-public struct FinalRule: CodableRule {
+public struct FinalRule: Codable, Rule {
     
     public var type: RuleType
     public var pattern: String
@@ -266,7 +277,7 @@ public struct FinalRule: CodableRule {
     }
 }
 
-final public class DomainSet: CodableRuleCollection {
+public struct DomainSet: Codable, RuleCollection {
     
     public var type: RuleType
     public var pattern: String
@@ -305,14 +316,14 @@ final public class DomainSet: CodableRuleCollection {
             policy = parts[2].trimmingCharacters(in: .whitespaces)
         }
         
-        reloadData()
+        performLoadingExternalResources { _ in }
     }
     
     public func reloadData() {
         guard let data = try? Data(contentsOf: dstURL), let file = String(data: data, encoding: .utf8) else {
-            self.performLoading()
             return
         }
+
         var rules: [StandardRule] = []
         file.split(separator: "\n")
             .forEach {
@@ -322,11 +333,12 @@ final public class DomainSet: CodableRuleCollection {
                 }
                 rules.append(try! .init(stringLiteral: "\(RuleType.domainSuffix.rawValue),\(literal),\(policy)"))
             }
+
         self._standardRules = rules
     }
 }
 
-final public class RuleSet: CodableRuleCollection {
+public struct RuleSet: Codable, RuleCollection {
     
     public var type: RuleType
     public var pattern: String
@@ -366,7 +378,7 @@ final public class RuleSet: CodableRuleCollection {
             policy = parts[2].trimmingCharacters(in: .whitespaces)
         }
         
-        reloadData()
+        performLoadingExternalResources { _ in }
     }
     
     public func reloadData() {
@@ -375,7 +387,6 @@ final public class RuleSet: CodableRuleCollection {
             guard pattern != "SYSTEM", pattern != "LAN" else {
                 return
             }
-            self.performLoading()
             return
         }
         
@@ -394,12 +405,13 @@ final public class RuleSet: CodableRuleCollection {
                 }
                 rules.append(standardRule)
             }
+        
         self._standardRules = rules
     }
 }
 
 /// A type-erased rule.
-public struct AnyRule: CodableRule {
+public struct AnyRule: Codable, Rule {
     
     public var type: RuleType {
         set { underlying.type = newValue }

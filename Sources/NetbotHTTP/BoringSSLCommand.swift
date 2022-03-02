@@ -62,7 +62,9 @@ enum BoringSSLError: Error {
     }
 }
 
+#if canImport(Security)
 struct SecurityInternalError: Equatable, CustomStringConvertible {
+
     let errorCode: OSStatus
     
     var errorMessage: String? {
@@ -82,6 +84,7 @@ enum SecurityError: Error {
     case failedToLoadCertificate
     case unknowError(SecurityInternalError)
 }
+#endif
 
 public struct BoringSSLCommand: ParsableCommand {
     public static var configuration: CommandConfiguration = .init(commandName: "boringssl", abstract: "The BoringSSL Command Line Tool", subcommands: [RSAKeyCommand.self, NewCommand.self, InstallCommand.self])

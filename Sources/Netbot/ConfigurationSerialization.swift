@@ -51,12 +51,17 @@ public enum ConfigurationSerializationError: Error {
         /// Unsupported rule.
         case unsupported
         
+        /// Exteranl resources url is invalid.
+        case invalidExternalResources
+        
         public var description: String {
             switch self {
                 case .missingField:
                     return "missing field."
                 case .unsupported:
                     return "unsupported rule type."
+                case .invalidExternalResources:
+                    return "invalid external resources."
             }
         }
     }

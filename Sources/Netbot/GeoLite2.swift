@@ -56,14 +56,14 @@ public final class GeoLite2 {
     /// - Parameter ipAddress: Query parameter.
     /// - Returns: ISO code string.
     public func queryCountryISOCodeWithIPAddress(_ ipAddress: String) throws -> String? {
-        var gaiError: Int32 = noErr
+        var gaiError: Int32 = 0
         var error: Int32 = MMDB_SUCCESS
         
         var result = ipAddress.withCString {
             MMDB_lookup_string(&db, $0, &gaiError, &error)
         }
         
-        if gaiError != noErr {
+        if gaiError != 0 {
             // TODO: Error handling
             return nil
         }
