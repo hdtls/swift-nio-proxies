@@ -14,14 +14,15 @@
 
 import Foundation
 @_exported import Logging
-@_exported import NetbotHelpers
+@_exported import NetbotCore
 @_exported import NetbotHTTP
 @_exported import NetbotSOCKS
 @_exported import NetbotSS
 @_exported import NetbotVMESS
-@_exported import NIO
+@_exported import NIOCore
 @_exported import NIOExtras
 @_exported import NIOHTTP1
+@_exported import NIOPosix
 
 public class Netbot {
     
@@ -99,6 +100,16 @@ public class Netbot {
                             }
                             
                             let eventLoop = channel.eventLoop.next()
+                            
+                            // TODO: DEBUG ONLY
+                            var debug = self.configuration.policies.first {
+                                //                                $0.name == "🇯🇵 SHADOWSOCKS"
+                                $0.name == "🇯🇵 VMESS"
+                            }!
+                            
+                            debug.taskAddress = taskAddress
+                            
+                            return debug.makeConnection(logger: self.logger, on: eventLoop)
                             
                             guard self.outboundMode != .direct, let rule = self.ruleMatcher.firstMatch(domain) else {
                                 return DirectPolicy.init(taskAddress: taskAddress)

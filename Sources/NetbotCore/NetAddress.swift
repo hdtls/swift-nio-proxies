@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-@_exported import NIOCore
+import NIOCore
 
 /// Represent a socket address or domain port to which we may want to connect or bind.
 public enum NetAddress: Equatable, Hashable {
@@ -100,6 +100,22 @@ extension ByteBuffer {
                 + writeInteger(in_port_t(port))
         }
     }
+    
+    
+    mutating func parseUnwindingIfNeeded<T>(_ closure: (inout ByteBuffer) throws -> T?) rethrows -> T? {
+        let save = self
+        do {
+            guard let value = try closure(&self) else {
+                self = save
+                return nil
+            }
+            return value
+        } catch {
+            self = save
+            throw error
+        }
+    }
+    
 }
 
 extension Data {

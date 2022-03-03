@@ -12,8 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Foundation
 import Logging
-import NIO
+import NetbotCore
+import NIOCore
 
 extension ChannelPipeline {
     

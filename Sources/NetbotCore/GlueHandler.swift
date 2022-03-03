@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
+import NIOCore
 @_exported import Logging
 
 public final class GlueHandler: ChannelDuplexHandler {

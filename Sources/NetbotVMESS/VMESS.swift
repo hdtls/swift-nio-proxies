@@ -15,7 +15,7 @@
 import Foundation
 @_exported import Crypto
 @_exported import Logging
-@_exported import NetbotHelpers
-@_exported import NIO
+@_exported import NetbotCore
+@_exported import NIOCore
 @_exported import NIOHTTP1
 @_exported import NIOWebSocket

@@ -12,21 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIOCore
-
-extension ByteBuffer {
-    
-    public mutating func parseUnwindingIfNeeded<T>(_ closure: (inout ByteBuffer) throws -> T?) rethrows -> T? {
-        let save = self
-        do {
-            guard let value = try closure(&self) else {
-                self = save
-                return nil
-            }
-            return value
-        } catch {
-            self = save
-            throw error
-        }
-    }
-}
+import Foundation
+@_exported import Logging
+@_exported import NIOCore

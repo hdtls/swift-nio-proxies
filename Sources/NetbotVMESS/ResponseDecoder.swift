@@ -19,8 +19,8 @@ import CCryptoBoringSSL
 #endif
 import Crypto
 import Foundation
-import NetbotHelpers
-import NIO
+import NetbotCore
+import NIOCore
 import SHAKE128
 
 final public class ResponseDeocoder: ByteToMessageDecoder {

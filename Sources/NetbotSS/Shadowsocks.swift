@@ -13,5 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-@_exported import NetbotHelpers
-@_exported import NIO
+@_exported import Logging
+@_exported import NetbotCore
+@_exported import NIOCore
