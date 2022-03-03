@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-@_implementationOnly import CTinySHA3
+@_implementationOnly import CSHAKE128
 
 public struct SHAKE128: HashFunctionImplementationDetails {
     

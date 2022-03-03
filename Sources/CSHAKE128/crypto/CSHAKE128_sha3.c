@@ -20,11 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include "CTINYSHA3_sha3.h"
+#include "CSHAKE128_sha3.h"
 
 // update the state with given number of rounds
 
-void CTINYSHA3_sha3_keccakf(uint64_t st[25])
+void CSHAKE128_sha3_keccakf(uint64_t st[25])
 {
     // constants
     const uint64_t keccakf_rndc[24] = {
@@ -116,7 +116,7 @@ void CTINYSHA3_sha3_keccakf(uint64_t st[25])
 
 // Initialize the context for SHA3
 
-int CTINYSHA3_sha3_init(sha3_ctx_t *c, int mdlen)
+int CSHAKE128_sha3_init(sha3_ctx_t *c, int mdlen)
 {
     int i;
     
@@ -131,7 +131,7 @@ int CTINYSHA3_sha3_init(sha3_ctx_t *c, int mdlen)
 
 // update state with more data
 
-int CTINYSHA3_sha3_update(sha3_ctx_t *c, const void *data, size_t len)
+int CSHAKE128_sha3_update(sha3_ctx_t *c, const void *data, size_t len)
 {
     size_t i;
     int j;
@@ -140,7 +140,7 @@ int CTINYSHA3_sha3_update(sha3_ctx_t *c, const void *data, size_t len)
     for (i = 0; i < len; i++) {
         c->st.b[j++] ^= ((const uint8_t *) data)[i];
         if (j >= c->rsiz) {
-            CTINYSHA3_sha3_keccakf(c->st.q);
+            CSHAKE128_sha3_keccakf(c->st.q);
             j = 0;
         }
     }
@@ -151,13 +151,13 @@ int CTINYSHA3_sha3_update(sha3_ctx_t *c, const void *data, size_t len)
 
 // finalize and output a hash
 
-int CTINYSHA3_sha3_final(void *md, sha3_ctx_t *c)
+int CSHAKE128_sha3_final(void *md, sha3_ctx_t *c)
 {
     int i;
     
     c->st.b[c->pt] ^= 0x06;
     c->st.b[c->rsiz - 1] ^= 0x80;
-    CTINYSHA3_sha3_keccakf(c->st.q);
+    CSHAKE128_sha3_keccakf(c->st.q);
     
     for (i = 0; i < c->mdlen; i++) {
         ((uint8_t *) md)[i] = c->st.b[i];
@@ -168,39 +168,39 @@ int CTINYSHA3_sha3_final(void *md, sha3_ctx_t *c)
 
 // compute a SHA-3 hash (md) of given byte length from "in"
 
-void *CTINYSHA3_sha3(const void *in, size_t inlen, void *md, int mdlen)
+void *CSHAKE128_sha3(const void *in, size_t inlen, void *md, int mdlen)
 {
     sha3_ctx_t sha3;
     
-    CTINYSHA3_sha3_init(&sha3, mdlen);
-    CTINYSHA3_sha3_update(&sha3, in, inlen);
-    CTINYSHA3_sha3_final(md, &sha3);
+    CSHAKE128_sha3_init(&sha3, mdlen);
+    CSHAKE128_sha3_update(&sha3, in, inlen);
+    CSHAKE128_sha3_final(md, &sha3);
     
     return md;
 }
 
-int CTINYSHA3_shake128_init(sha3_ctx_t *ctx) {
-    return CTINYSHA3_sha3_init(ctx, 16);
+int CSHAKE128_shake128_init(sha3_ctx_t *ctx) {
+    return CSHAKE128_sha3_init(ctx, 16);
 }
 
-int CTINYSHA3_shake256_init(sha3_ctx_t *ctx) {
-    return CTINYSHA3_sha3_init(ctx, 32);
+int CSHAKE128_shake256_init(sha3_ctx_t *ctx) {
+    return CSHAKE128_sha3_init(ctx, 32);
 }
 
-int CTINYSHA3_shake_update(sha3_ctx_t *ctx, const void *data, size_t len) {
-    return CTINYSHA3_sha3_update(ctx, data, len);
+int CSHAKE128_shake_update(sha3_ctx_t *ctx, const void *data, size_t len) {
+    return CSHAKE128_sha3_update(ctx, data, len);
 }
 
 // SHAKE128 and SHAKE256 extensible-output functionality
-void CTINYSHA3_shake_xof(sha3_ctx_t *c)
+void CSHAKE128_shake_xof(sha3_ctx_t *c)
 {
     c->st.b[c->pt] ^= 0x1F;
     c->st.b[c->rsiz - 1] ^= 0x80;
-    CTINYSHA3_sha3_keccakf(c->st.q);
+    CSHAKE128_sha3_keccakf(c->st.q);
     c->pt = 0;
 }
 
-void CTINYSHA3_shake_read(sha3_ctx_t *c, void *out, size_t len)
+void CSHAKE128_shake_read(sha3_ctx_t *c, void *out, size_t len)
 {
     size_t i;
     int j;
@@ -208,7 +208,7 @@ void CTINYSHA3_shake_read(sha3_ctx_t *c, void *out, size_t len)
     j = c->pt;
     for (i = 0; i < len; i++) {
         if (j >= c->rsiz) {
-            CTINYSHA3_sha3_keccakf(c->st.q);
+            CSHAKE128_sha3_keccakf(c->st.q);
             j = 0;
         }
         ((uint8_t *) out)[i] = c->st.b[j++];

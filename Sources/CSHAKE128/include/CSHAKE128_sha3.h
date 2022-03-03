@@ -44,25 +44,25 @@ typedef struct {
 } sha3_ctx_t;
 
 // Compression function.
-void CTINYSHA3_sha3_keccakf(uint64_t st[25]);
+void CSHAKE128_sha3_keccakf(uint64_t st[25]);
 
 // OpenSSL - like interfece
-int CTINYSHA3_sha3_init(sha3_ctx_t *c, int mdlen);    // mdlen = hash output in bytes
-int CTINYSHA3_sha3_update(sha3_ctx_t *c, const void *data, size_t len);
-int CTINYSHA3_sha3_final(void *md, sha3_ctx_t *c);    // digest goes to md
+int CSHAKE128_sha3_init(sha3_ctx_t *c, int mdlen);    // mdlen = hash output in bytes
+int CSHAKE128_sha3_update(sha3_ctx_t *c, const void *data, size_t len);
+int CSHAKE128_sha3_final(void *md, sha3_ctx_t *c);    // digest goes to md
 
 // compute a sha3 hash (md) of given byte length from "in"
-void *CTINYSHA3_sha3(const void *in, size_t inlen, void *md, int mdlen);
+void *CSHAKE128_sha3(const void *in, size_t inlen, void *md, int mdlen);
 
 // SHAKE128 and SHAKE256 extensible-output functions
-//#define CTINYSHA3_shake128_init(c) CTINYSHA3_sha3_init(c, 16)
-//#define CTINYSHA3_shake256_init(c) CTINYSHA3_sha3_init(c, 32)
-//#define CTINYSHA3_shake_update CTINYSHA3_sha3_update
-int CTINYSHA3_shake128_init(sha3_ctx_t *ctx);
-int CTINYSHA3_shake256_init(sha3_ctx_t *ctx);
-int CTINYSHA3_shake_update(sha3_ctx_t *ctx, const void *data, size_t len);
+//#define CSHAKE128_shake128_init(c) CSHAKE128_sha3_init(c, 16)
+//#define CSHAKE128_shake256_init(c) CSHAKE128_sha3_init(c, 32)
+//#define CSHAKE128_shake_update CSHAKE128_sha3_update
+int CSHAKE128_shake128_init(sha3_ctx_t *ctx);
+int CSHAKE128_shake256_init(sha3_ctx_t *ctx);
+int CSHAKE128_shake_update(sha3_ctx_t *ctx, const void *data, size_t len);
 
-void CTINYSHA3_shake_xof(sha3_ctx_t *c);
-void CTINYSHA3_shake_read(sha3_ctx_t *c, void *out, size_t len);
+void CSHAKE128_shake_xof(sha3_ctx_t *c);
+void CSHAKE128_shake_read(sha3_ctx_t *c, void *out, size_t len);
 
 #endif

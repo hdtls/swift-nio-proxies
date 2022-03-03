@@ -25,7 +25,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_implementationOnly import CTinySHA3
+@_implementationOnly import CSHAKE128
 
 protocol HashFunctionImplementationDetails: HashFunction where Digest: DigestPrivate {}
 
@@ -66,19 +66,19 @@ struct OpenSSLDigestImpl<H: HashFunctionImplementationDetails> {
 
 class DigestContext {
 
-    private var contextPointer: UnsafeMutablePointer<CTinySHA3.sha3_ctx_t>
+    private var contextPointer: UnsafeMutablePointer<CSHAKE128.sha3_ctx_t>
     
     init() {
         // We force unwrap because we cannot recover from allocation failure.
-        self.contextPointer = UnsafeMutablePointer<CTinySHA3.sha3_ctx_t>.allocate(capacity: MemoryLayout<CTinySHA3.sha3_ctx_t>.size)
+        self.contextPointer = UnsafeMutablePointer<CSHAKE128.sha3_ctx_t>.allocate(capacity: MemoryLayout<CSHAKE128.sha3_ctx_t>.size)
         self.contextPointer.initialize(to: .init())
 
-        CTINYSHA3_shake128_init(self.contextPointer)
+        CSHAKE128_shake128_init(self.contextPointer)
     }
     
     init(copying original: DigestContext) {
         // We force unwrap because we cannot recover from allocation failure.
-        self.contextPointer = UnsafeMutablePointer<CTinySHA3.sha3_ctx_t>.allocate(capacity: MemoryLayout<CTinySHA3.sha3_ctx_t>.size)
+        self.contextPointer = UnsafeMutablePointer<CSHAKE128.sha3_ctx_t>.allocate(capacity: MemoryLayout<CSHAKE128.sha3_ctx_t>.size)
         self.contextPointer.initialize(to: original.contextPointer.pointee)
     }
     
@@ -86,8 +86,8 @@ class DigestContext {
         guard let baseAddress = data.baseAddress else {
             return
         }
-        CTINYSHA3_shake_update(self.contextPointer, baseAddress, data.count)
-        CTINYSHA3_shake_xof(self.contextPointer)
+        CSHAKE128_shake_update(self.contextPointer, baseAddress, data.count)
+        CSHAKE128_shake_xof(self.contextPointer)
     }
     
     func read(digestSize: Int) -> [UInt8] {
@@ -95,7 +95,7 @@ class DigestContext {
         
         digestBytes.withUnsafeMutableBytes { digestPointer in
             assert(digestPointer.count == digestSize)
-            CTINYSHA3_shake_read(self.contextPointer, digestPointer.baseAddress, digestSize)
+            CSHAKE128_shake_read(self.contextPointer, digestPointer.baseAddress, digestSize)
         }
         
         return digestBytes
@@ -108,14 +108,14 @@ class DigestContext {
         
         digestBytes.withUnsafeMutableBytes { digestPointer in
             assert(digestPointer.count == digestSize)
-            CTINYSHA3_shake_read(self.contextPointer, digestPointer.baseAddress, digestSize)
+            CSHAKE128_shake_read(self.contextPointer, digestPointer.baseAddress, digestSize)
         }
         
         return digestBytes
     }
     
     deinit {
-        self.contextPointer.deinitialize(count: MemoryLayout<CTinySHA3.sha3_ctx_t>.size)
+        self.contextPointer.deinitialize(count: MemoryLayout<CSHAKE128.sha3_ctx_t>.size)
         self.contextPointer.deallocate()
     }
 }
