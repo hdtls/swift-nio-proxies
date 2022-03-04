@@ -20,7 +20,7 @@ import CCryptoBoringSSL
 import Crypto
 import Foundation
 import Logging
-import NIO
+import NIOCore
 import SHAKE128
 
 final public class RequestEncoder: MessageToByteEncoder {

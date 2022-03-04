@@ -19,75 +19,74 @@ import CCryptoBoringSSL
 #endif
 import Crypto
 import Foundation
+import Logging
 import NetbotCore
 import NIOCore
 import SHAKE128
 
-final public class ResponseDeocoder: ByteToMessageDecoder {
+final public class ResponseHeaderDecoder: ByteToMessageDecoder {
     
     public typealias InboundOut = ByteBuffer
     
-    public let logger: Logger
+    private let logger: Logger
     
-    public let session: Session
+    private let authenticationCode: UInt8
     
-    private let symmetricKey: [UInt8]
+    private let symmetricKey: SecureBytes
     
-    private let nonce: [UInt8]
+    private let nonce: SecureBytes
     
     private let configuration: Configuration!
     
+    private let forceAEADDecoding: Bool
+    
     private var response: Response?
     
-    private var packetIndex: UInt16 = 0
-    
-    /// The packet length and padding record.
-    private var size: (UInt16, Int)?
-    
-    private lazy var shake128: SHAKE128? = {
-        guard configuration.options.contains(.masking) else {
-            return nil
-        }
-        
-        var shake128 = SHAKE128()
-        shake128.update(data: nonce)
-        return shake128
-    }()
-    
-    public init(logger: Logger, session: Session, configuraiton: Configuration) {
-        self.logger = logger
-        self.session = session
-        self.configuration = configuraiton
-        
-        let hash: (ArraySlice<UInt8>) -> [UInt8] = {
+    public init(logger: Logger, authenticationCode: UInt8, symmetricKey: SecureBytes, nonce: SecureBytes, configuration: Configuration, forceAEADDecoding: Bool = true) {
+        let hash: (SecureBytes) -> SecureBytes = {
             var hasher = SHA256()
             hasher.update(data: $0)
-            return Array(hasher.finalize().prefix(16))
+            return SecureBytes(hasher.finalize().prefix(16))
         }
         
-        self.symmetricKey = hash(session.sharedSecretBytes.prefix(16))
-        self.nonce = hash(session.sharedSecretBytes[16..<32])
+        self.logger = logger
+        self.authenticationCode = authenticationCode
+        self.symmetricKey = hash(symmetricKey)
+        self.nonce = hash(nonce)
+        self.configuration = configuration
+        self.forceAEADDecoding = forceAEADDecoding
     }
     
     public func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws -> DecodingState {
-        if response == nil {
-            return try parseHeadPart(context: context, data: &buffer)
+        guard response == nil else {
+            guard let out = buffer.readSlice(length: buffer.readableBytes) else {
+                return .needMoreData
+            }
+            
+            context.fireChannelRead(wrapInboundOut(out))
+            return .needMoreData
         }
         
-        return try parseBodyPart(context: context, data: &buffer)
+        guard let response = try parseHeadPart(context: context, data: &buffer) else {
+            return .needMoreData
+        }
+        
+        self.response = response
+        
+        return .continue
     }
     
     /// Parse VMESS response head part.
     ///
     /// - Parameter data: The data used to parse response head part.
     /// - Returns: Response object contains parsed response head fields.
-    private func parseHeadPart(context: ChannelHandlerContext, data: inout ByteBuffer) throws -> DecodingState {
+    private func parseHeadPart(context: ChannelHandlerContext, data: inout ByteBuffer) throws -> Response? {
         // Cursor used to recoverty data.
         // When we had read some bytes but that is not enough to parse as response
         // we need return `.needMoreData` and reset `data.readerIndex` to cursor.
         let cursor = data.readerIndex
         
-        if session.isAEAD {
+        if forceAEADDecoding {
             var symmetricKey = KDF16.deriveKey(inputKeyMaterial: .init(data: self.symmetricKey), info: [KDFSaltConstAEADRespHeaderLenKey])
             var nonce = KDF12.deriveKey(inputKeyMaterial: .init(data: self.nonce), info: [KDFSaltConstAEADRespHeaderLenIV]).withUnsafeBytes {
                 Array($0)
@@ -97,7 +96,7 @@ final public class ResponseDeocoder: ByteToMessageDecoder {
             let overhead = Algorithm.aes128gcm.overhead
             var readLength = 2 + overhead
             guard data.readableBytes >= readLength else {
-                return .needMoreData
+                return nil
             }
             
             let d = try AES.GCM.open(.init(combined: nonce + data.readBytes(length: readLength)!), using: symmetricKey)
@@ -110,7 +109,7 @@ final public class ResponseDeocoder: ByteToMessageDecoder {
             
             guard data.readableBytes >= readLength else {
                 data.moveReaderIndex(to: cursor)
-                return .needMoreData
+                return nil
             }
             
             symmetricKey = KDF16.deriveKey(inputKeyMaterial: .init(data: self.symmetricKey), info: [KDFSaltConstAEADRespHeaderPayloadKey])
@@ -121,8 +120,7 @@ final public class ResponseDeocoder: ByteToMessageDecoder {
             var headPartData = try AES.GCM.open(.init(combined: nonce + data.readBytes(length: readLength)!), using: symmetricKey)
             assert(headPartData.count >= 4)
             
-            let authenticationCode = headPartData.removeFirst()
-            guard authenticationCode == session.sharedSecretBytes.last else {
+            guard authenticationCode == headPartData.removeFirst() else {
                 // FIXME: FAILED TO VALIDATE RESPONSE
                 throw CodingError.payloadTooLarge
             }
@@ -131,20 +129,20 @@ final public class ResponseDeocoder: ByteToMessageDecoder {
             
             let commandCode = headPartData.removeFirst()
             
-            response = .init(authenticationCode: authenticationCode, options: options, commandCode: commandCode, command: nil, body: nil)
+            var response = Response.init(authenticationCode: authenticationCode, options: options, commandCode: commandCode, command: nil, body: nil)
             
             guard commandCode != 0 else {
-                return .continue
+                return response
             }
             
             if let command = try parseCommand(commandCode: commandCode, data: headPartData) {
-                response?.command = command
+                response.command = command
             }
             
-            return .continue
+            return response
         } else {
             guard data.readableBytes >= 4 else {
-                return .needMoreData
+                return nil
             }
             
             let symmetricKey = UnsafeMutablePointer<AES_KEY>.allocate(capacity: MemoryLayout<AES_KEY>.size)
@@ -163,8 +161,9 @@ final public class ResponseDeocoder: ByteToMessageDecoder {
             var headPartData = Data(repeating: 0, count: 4)
             var outLength: Int32 = 0
             var _nonce = self.nonce
-            let nonce = _nonce.withUnsafeMutableBufferPointer {
-                $0.baseAddress
+            
+            let nonce = _nonce.withUnsafeMutableBytes {
+                $0.bindMemory(to: UInt8.self).baseAddress
             }
             
             data.withUnsafeReadableBytes { inPtr in
@@ -181,8 +180,7 @@ final public class ResponseDeocoder: ByteToMessageDecoder {
             }
             assert(headPartData.count == outLength)
             
-            let authenticationCode = headPartData.removeFirst()
-            guard authenticationCode == session.sharedSecretBytes.last else {
+            guard authenticationCode == headPartData.removeFirst() else {
                 // FIXME: FAILED TO VALIDATE RESPONSE
                 throw CodingError.payloadTooLarge
             }
@@ -191,7 +189,7 @@ final public class ResponseDeocoder: ByteToMessageDecoder {
             
             let commandCode = headPartData.removeFirst()
             
-            response = .init(
+            var response = Response.init(
                 authenticationCode: authenticationCode,
                 options: options,
                 commandCode: commandCode,
@@ -200,17 +198,17 @@ final public class ResponseDeocoder: ByteToMessageDecoder {
             )
             
             guard commandCode != 0 else {
-                return .continue
+                return response
             }
             
             let commandLength = Int(headPartData.removeFirst())
             guard commandLength != 0 else {
-                return .continue
+                return response
             }
             
             guard data.readableBytes >= commandLength else {
                 data.moveReaderIndex(to: cursor)
-                return .needMoreData
+                return nil
             }
             
             headPartData = Data(repeating: 0, count: commandLength)
@@ -230,10 +228,10 @@ final public class ResponseDeocoder: ByteToMessageDecoder {
             assert(headPartData.count == outLength)
             
             if let command = try parseCommand(commandCode: commandCode, data: headPartData) {
-                response?.command = command
+                response.command = command
             }
             
-            return .continue
+            return response
         }
     }
     
@@ -360,159 +358,10 @@ final public class ResponseDeocoder: ByteToMessageDecoder {
             throw SocketAddressError.unsupported
         }
         
-        guard string.isIPAddr() else {
+        guard string.isIPAddress() else {
             return .domainPort(string, 0)
         }
         
         return .socketAddress(try .init(ipAddress: string, port: 0))
-    }
-    
-    /// Parse response body with specified response and data.
-    ///
-    /// *Return nil to wait for more bytes.*
-    /// - Parameters:
-    ///   - response: The response contains head fields.
-    ///   - data: The data used to parse response body.
-    /// - Returns: Parsed response object.
-    private func parseBodyPart(context: ChannelHandlerContext, data: inout ByteBuffer) throws -> DecodingState {
-        switch configuration.algorithm {
-            case .none:
-                // TODO: None Security Support
-                fatalError()
-            case .aes128cfb:
-                // TODO: Legacy Security Support
-                fatalError()
-            case .aes128gcm, .chacha20poly1305:
-                // TCP
-                let overhead = configuration.algorithm.overhead
-                
-                let nonce = withUnsafeBytes(of: packetIndex.bigEndian) {
-                    Array($0) + self.nonce[2..<12]
-                }
-                
-                var size: (packetLength: UInt16, padding: Int)
-                
-                if self.size == nil {
-                    guard let parsedSize = try parsePacketLength(data: &data, nonce: nonce) else {
-                        return .needMoreData
-                    }
-                    
-                    self.size = parsedSize
-                }
-                
-                assert(self.size != nil, "Illegal size should not be nil")
-                size = self.size!
-                
-                guard data.readableBytes >= Int(size.packetLength) else {
-                    return .needMoreData
-                }
-                
-                // Remove random padding bytes.
-                let combined = nonce + data.readBytes(length: Int(size.packetLength))!.dropLast(size.padding)
-                
-                var packet: Data
-                if configuration.algorithm == .aes128gcm {
-                    packet = try AES.GCM.open(.init(combined: combined), using: .init(data: symmetricKey))
-                } else {
-                    let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
-                    packet = try ChaChaPoly.open(.init(combined: combined), using: symmetricKey)
-                }
-                
-                assert(response != nil)
-                if response?.body != nil {
-                    response?.body?.writeBytes(packet)
-                } else {
-                    response?.body = context.channel.allocator.buffer(bytes: packet)
-                }
-                
-                packetIndex += 1
-                self.size = nil
-                
-                context.fireChannelRead(wrapInboundOut(ByteBuffer(bytes: packet)))
-                
-                guard size.packetLength == overhead + size.padding else {
-                    return .continue
-                }
-                
-                return parseEndPart(context: context)
-            default:
-                fatalError("Unsupported security")
-        }
-    }
-    
-    private func parsePacketLength(data: inout ByteBuffer, nonce: [UInt8]) throws -> (UInt16, Int)? {
-        let overhead = configuration.algorithm.overhead
-        
-        let packetLength = configuration.options.contains(.authenticatedLength) ? 2 + overhead : 2
-        
-        guard data.readableBytes >= packetLength else {
-            return nil
-        }
-        
-        let packetLengthData = data.readBytes(length: packetLength)!
-        
-        var padding = 0
-        if configuration.options.shouldPadding {
-            assert(shake128 != nil)
-            shake128!.read(digestSize: 2).withUnsafeBytes {
-                padding = Int($0.load(as: UInt16.self).bigEndian % 64)
-            }
-        }
-        
-        guard configuration.options.contains(.authenticatedLength) else {
-            guard configuration.options.contains(.masking) else {
-                return packetLengthData.withUnsafeBytes {
-                    ($0.load(as: UInt16.self), padding)
-                }
-            }
-            
-            assert(shake128 != nil)
-            return shake128!.read(digestSize: 2).withUnsafeBytes {
-                let mask = $0.load(as: UInt16.self).bigEndian
-                
-                return packetLengthData.withUnsafeBytes {
-                    (mask ^ $0.load(as: UInt16.self).bigEndian, padding)
-                }
-            }
-        }
-        
-        var symmetricKey = KDF16.deriveKey(inputKeyMaterial: .init(data: symmetricKey), info: ["auth_len".data(using: .utf8)!])
-        
-        if configuration.algorithm == .aes128gcm {
-            let sealedBox = try AES.GCM.SealedBox.init(combined: nonce + packetLengthData)
-            return try AES.GCM.open(sealedBox, using: symmetricKey).withUnsafeBytes {
-                ($0.load(as: UInt16.self).bigEndian + UInt16(overhead), padding)
-            }
-        } else {
-            symmetricKey = symmetricKey.withUnsafeBytes {
-                generateChaChaPolySymmetricKey(inputKeyMaterial: $0)
-            }
-            let sealedBox = try ChaChaPoly.SealedBox.init(combined: nonce + packetLengthData)
-            return try ChaChaPoly.open(sealedBox, using: symmetricKey).withUnsafeBytes {
-                ($0.load(as: UInt16.self).bigEndian + UInt16(overhead), padding)
-            }
-        }
-    }
-    
-    private func parseEndPart(context: ChannelHandlerContext) -> DecodingState {
-        //        if let response = response?.body {
-        //            context.fireChannelRead(wrapInboundOut(response))
-        //        } else {
-        //            context.fireChannelRead(wrapInboundOut(context.channel.allocator.buffer(capacity: 0)))
-        //        }
-        print("EOF")
-        // Restore state to initial.
-        response = nil
-        packetIndex = 0
-        size = nil
-        
-        guard configuration.options.contains(.masking) else {
-            return .continue
-        }
-        
-        shake128 = .init()
-        shake128?.update(data: nonce)
-        
-        return .continue
     }
 }
