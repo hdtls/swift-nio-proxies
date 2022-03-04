@@ -15,7 +15,7 @@
 import ConnectionPool
 import Foundation
 import Logging
-import NIO
+import NIOCore
 import NIOSSL
 #if canImport(Network)
 import NIOTransportServices

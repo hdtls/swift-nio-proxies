@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
+import NIOCore
 import NIOHTTP1
 
 /// Transfer inbound from `HTTPPart<HeadT, ByteBuffer>` to `HTTPPart<HeadT, IOData>`.

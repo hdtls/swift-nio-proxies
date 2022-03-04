@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import NIO
+import NIOCore
 
 /// Errors that can be raised while parsing configuration file.
 public enum ConfigurationSerializationError: Error {

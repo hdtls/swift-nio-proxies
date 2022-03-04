@@ -26,16 +26,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
-
-// MARK: - Response
+import NetbotCore
+import NIOCore
 
 /// The SOCKS Server's response to the client's request
 /// indicating if the request succeeded or failed.
 public struct Response: Hashable {
     
     /// The SOCKS protocol version - we currently only support v5.
-    public let version: SOCKSProtocolVersion = .v5
+    public let version: ProtocolVersion = .v5
     
     /// The status of the connection - used to check if the request
     /// succeeded or failed.
@@ -78,8 +77,6 @@ extension ByteBuffer {
     }
     
 }
-
-// MARK: - SOCKSServerReply
 
 /// Used to indicate if the SOCKS client's connection request succeeded
 /// or failed.

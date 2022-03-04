@@ -147,7 +147,7 @@ extension Data {
 
 extension String {
     
-    public func isIPAddr() -> Bool {
+    public func isIPAddress() -> Bool {
         (try? SocketAddress(ipAddress: self, port: 0)) != nil
     }
 }

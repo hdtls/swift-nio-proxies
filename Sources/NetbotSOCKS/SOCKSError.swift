@@ -12,8 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-
 public enum SOCKS5ProxyError: Error, Equatable {
     
     public enum SerializationFailureReason {

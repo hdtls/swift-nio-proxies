@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
+import NIOCore
 
 /// The SOCKS V5 Username/Password Authentication request, defined in RFC 1929.
 public struct UsernamePasswordAuthentication: Hashable {

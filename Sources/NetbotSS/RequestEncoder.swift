@@ -15,7 +15,7 @@
 import Crypto
 import Foundation
 import Logging
-import NIO
+import NIOCore
 
 public class RequestEncoder: MessageToByteEncoder {
     

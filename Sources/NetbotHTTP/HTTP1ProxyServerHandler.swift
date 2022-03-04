@@ -14,7 +14,7 @@
 
 import Foundation
 import Logging
-import NIO
+import NIOCore
 import NIOHTTP1
 import NIOSSL
 
@@ -218,7 +218,7 @@ extension HTTP1ProxyServerHandler {
     }
     
     private func remoteDidConnected(_ serverHostname: String, channel: Channel, context: ChannelHandlerContext) {
-        logger.trace("proxy server connected \(String(describing: channel.remoteAddress?.description))")
+        logger.info("Tunneling request to \(serverHostname):\(requestHead.port) via \(String(describing: channel.remoteAddress))")
         
         do {
             try state.established()
@@ -230,7 +230,6 @@ extension HTTP1ProxyServerHandler {
         
         // Only CONNECT tunnel need established response and remove default http server pipelines.
         if requestHead.method == .CONNECT {
-            logger.trace("sending establish message to \(String(describing: context.channel.localAddress))...")
             // Ok, upgrade has completed! We now need to begin the upgrade process.
             // First, send the 200 connection established message.
             // This content-length header is MUST NOT, but we need to workaround NIO's insistence that we set one.

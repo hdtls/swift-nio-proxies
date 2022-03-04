@@ -101,16 +101,6 @@ public class Netbot {
                             
                             let eventLoop = channel.eventLoop.next()
                             
-                            // TODO: DEBUG ONLY
-                            var debug = self.configuration.policies.first {
-                                //                                $0.name == "🇯🇵 SHADOWSOCKS"
-                                $0.name == "🇯🇵 VMESS"
-                            }!
-                            
-                            debug.taskAddress = taskAddress
-                            
-                            return debug.makeConnection(logger: self.logger, on: eventLoop)
-                            
                             guard self.outboundMode != .direct, let rule = self.ruleMatcher.firstMatch(domain) else {
                                 return DirectPolicy.init(taskAddress: taskAddress)
                                     .makeConnection(logger: self.logger, on: eventLoop)

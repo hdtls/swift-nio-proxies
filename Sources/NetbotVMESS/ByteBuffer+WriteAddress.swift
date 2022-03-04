@@ -12,7 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
+import Foundation
+import NIOCore
 
 extension ByteBuffer {
     

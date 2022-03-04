@@ -12,9 +12,18 @@
 //
 //===----------------------------------------------------------------------===//
 
-/// A enum representing a SOCKS protocol version.
-public enum SOCKSProtocolVersion: UInt8, Equatable {
+/// `ProtocolVersion` defines SOCKS protocol version.
+public struct ProtocolVersion: Codable, Hashable, RawRepresentable {
+    
+    public var rawValue: UInt8
+    
+    public init(rawValue: UInt8) {
+        self.rawValue = rawValue
+    }
+}
 
-    /// SOCKS/5
-    case v5 = 5
+extension ProtocolVersion {
+    
+    /// SOCKS5.
+    public static let v5 = ProtocolVersion.init(rawValue: 0x05)
 }

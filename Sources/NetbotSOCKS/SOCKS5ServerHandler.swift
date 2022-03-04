@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
 import Logging
+import NIOCore
 
 /// Add this handshake handler to the front of your channel, closest to the network.
 /// The handler will receive bytes from the network and run them through a state machine

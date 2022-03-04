@@ -28,8 +28,6 @@ import Glibc
 #error("unsupported os")
 #endif
 
-import NIO
-
 #if os(Android)
 internal typealias FILEPointer = OpaquePointer
 #else

@@ -14,7 +14,7 @@
 
 import Foundation
 import Logging
-import NIO
+import NIOCore
 import NIOHTTP1
 
 /// Credential use for username and password authentication.

@@ -12,8 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-
 enum HandshakeState: Equatable {
     case idle
     case greeting

@@ -26,12 +26,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
+import NIOCore
 
+/// Clients begin the SOCKS handshake process
+/// by providing an array of suggested authentication
+/// methods.
 public struct ClientGreeting: Hashable {
     
     /// The protocol version.
-    public let version: SOCKSProtocolVersion = .v5
+    public let version: ProtocolVersion = .v5
     
     /// The client-supported authentication methods.
     /// The SOCKS server will select one to use.
@@ -62,7 +65,8 @@ extension ByteBuffer {
         }
     }
     
-    @discardableResult mutating func writeClientGreeting(_ greeting: ClientGreeting) -> Int {
+    @discardableResult
+    mutating func writeClientGreeting(_ greeting: ClientGreeting) -> Int {
         var written = 0
         written += writeInteger(greeting.version.rawValue)
         written += writeInteger(UInt8(greeting.methods.count))
@@ -73,5 +77,4 @@ extension ByteBuffer {
         
         return written
     }
-    
 }

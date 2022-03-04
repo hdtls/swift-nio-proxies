@@ -26,16 +26,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
-
-// MARK: - ClientRequest
+import NetbotCore
+import NIOCore
 
 /// Instructs the SOCKS proxy server of the target host,
 /// and how to connect.
 public struct Request: Hashable {
     
     /// The SOCKS protocol version - we currently only support v5.
-    public let version: SOCKSProtocolVersion = .v5
+    public let version: ProtocolVersion = .v5
     
     /// How to connect to the host.
     public var command: Command
@@ -50,7 +49,6 @@ public struct Request: Hashable {
         self.command = command
         self.address = address
     }
-    
 }
 
 extension ByteBuffer {
@@ -78,8 +76,6 @@ extension ByteBuffer {
     }
     
 }
-
-// MARK: - Command
 
 /// What type of connection the SOCKS server should establish with
 /// the target host.

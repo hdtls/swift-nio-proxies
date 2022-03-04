@@ -26,7 +26,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
+import NIOCore
 
 /// Used by the SOCKS server to inform the client which
 /// authentication method it would like to use out of those
@@ -34,7 +34,7 @@ import NIO
 public struct SelectedAuthenticationMethod: Hashable {
     
     /// The SOCKS protocol version - we currently only support v5.
-    public let version: SOCKSProtocolVersion = .v5
+    public let version: ProtocolVersion = .v5
     
     /// The server's selected authentication method.
     public var method: AuthenticationMethod
@@ -63,5 +63,4 @@ extension ByteBuffer {
     @discardableResult mutating func writeMethodSelection(_ method: SelectedAuthenticationMethod) -> Int {
         return writeInteger(method.version.rawValue) + writeInteger(method.method.value)
     }
-    
 }

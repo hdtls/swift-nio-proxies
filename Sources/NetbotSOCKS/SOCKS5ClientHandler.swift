@@ -12,7 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIO
+import NetbotCore
+import NIOCore
 
 /// Credential use for username and password authentication.
 public struct Credential {
