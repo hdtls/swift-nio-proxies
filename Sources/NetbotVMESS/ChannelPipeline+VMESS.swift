@@ -15,7 +15,6 @@
 import Foundation
 import NetbotCore
 import NIOCore
-import NIOPosix
 
 extension ChannelPipeline {
     
@@ -54,11 +53,7 @@ extension ChannelPipeline.SynchronousOperations {
                                        position: ChannelPipeline.Position = .last) throws {
         eventLoop.assertInEventLoop()
         
-        let session: Session = .init(isAEAD: true)
-        
         let configuration: Configuration = .init(id: id, algorithm: .aes128gcm, command: .tcp, options: .masking)
-        
-        let requestEncoder = RequestEncoder(logger: logger, session: session, configuration: configuration, address: taskAddress)
         
         let symmetricKey = SecureBytes(count: 16)
         
@@ -66,6 +61,15 @@ extension ChannelPipeline.SynchronousOperations {
         
         let authenticationCode = UInt8.random(in: 0...UInt8.max)
         
+        let outboundHandler = RequestEncodingHandler(
+            logger: logger,
+            authenticationCode: authenticationCode,
+            symmetricKey: symmetricKey,
+            nonce: nonce,
+            configuration: configuration,
+            taskAddress: taskAddress
+        )
+                
         let responseDecoder = ResponseHeaderDecoder(
             logger: logger,
             authenticationCode: authenticationCode,
@@ -84,7 +88,7 @@ extension ChannelPipeline.SynchronousOperations {
         let handlers: [ChannelHandler] = [
             ByteToMessageHandler(responseDecoder),
             ByteToMessageHandler(frameDecoder),
-            MessageToByteHandler(requestEncoder)
+            outboundHandler
         ]
         
         try addHandlers(handlers, position: position)

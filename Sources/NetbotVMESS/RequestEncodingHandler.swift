@@ -20,59 +20,110 @@ import CCryptoBoringSSL
 import Crypto
 import Foundation
 import Logging
+import NetbotCore
 import NIOCore
 import SHAKE128
 
-final public class RequestEncoder: MessageToByteEncoder {
+final public class RequestEncodingHandler: ChannelOutboundHandler {
     
     public typealias OutboundIn = ByteBuffer
     
+    public typealias OutboundOut = ByteBuffer
+    
     private let logger: Logger
     
+    private let authenticationCode: UInt8
+    
+    private let symmetricKey: SecureBytes
+    
+    private let nonce: SecureBytes
+    
     /// Request encoder configuration object.
-    private let configuration: Configuration!
+    private let configuration: Configuration
+    
+    private let forceAEADEncoding: Bool
     
     /// Request address.
     private let address: NetAddress
-
-    private let session: Session
-
-    private let symmetricKey: [UInt8]
-    
-    private let nonce: [UInt8]
-
-    private lazy var shake128: SHAKE128? = {
-        guard configuration.options.contains(.masking) else {
-            return nil
-        }
         
-        var shake128 = SHAKE128()
-        shake128.update(data: nonce)
-        return shake128
-    }()
+    private var encoder: LengthFieldBasedFrameEncoder
     
-    private var packetIndex: UInt16 = 0
+    private var buffer: ByteBuffer?
     
-    /// Initialize an instance of `RequestEncoder` with specified logger, session, configuration and address.
-    /// - Parameters:
-    ///   - logger: The logger object use to logging.
-    ///   - configuration: The configuration object contains encoder configurations.
-    ///   - address: The requet address.
-    public init(logger: Logger, session: Session, configuration: Configuration, address: NetAddress) {
-        self.logger = logger
-        self.session = session
-        self.symmetricKey = Array(session.sharedSecretBytes.prefix(16))
-        self.nonce = Array(session.sharedSecretBytes[16..<32])
-        self.configuration = configuration
-        self.address = address
+    private enum State {
+        case idle
+        case preparing
+        case processing
+        case complete
+        case fail(Error)
+        
+        var isIdle: Bool {
+            guard case .idle = self else {
+                return false
+            }
+            return true
+        }
     }
     
-    public func encode(data: ByteBuffer, out: inout ByteBuffer) throws {
-        if packetIndex == 0 {
-            out.writeBytes(try prepareHeadPart())
+    private var state: State = .idle
+    
+    /// Initialize an instance of `RequestHeaderEncoder` with specified logger, authenticationCode, symmetricKey, nonce, configuration, forceAEADEncoding and address.
+    /// - Parameters:
+    ///   - logger: The logger object use to logging.
+    ///   - authenticationCode: Request header authentication code.
+    ///   - symmetricKey: SymmetricKey of the encrpytor.
+    ///   - nonce: Nonce of the encryptor.
+    ///   - configuration: The configuration object contains encoder configurations.
+    ///   - forceAEADEncoding: A boolean value determinse whether encoder should use AEAD encoding.
+    ///   - taskAddress: The requet address.
+    public init(logger: Logger, authenticationCode: UInt8, symmetricKey: SecureBytes, nonce: SecureBytes, configuration: Configuration, forceAEADEncoding: Bool = true, taskAddress: NetAddress) {
+        self.logger = logger
+        self.authenticationCode = authenticationCode
+        self.symmetricKey = symmetricKey
+        self.nonce = nonce
+        self.configuration = configuration
+        self.forceAEADEncoding = forceAEADEncoding
+        self.address = taskAddress
+        self.encoder = .init(logger: logger, symmetricKey: symmetricKey, nonce: nonce, configuration: configuration)
+    }
+    
+    public func handlerAdded(context: ChannelHandlerContext) {
+        precondition(state.isIdle, "Illegal state when adding to channel: \(state)")
+        state = .preparing
+        buffer = context.channel.allocator.buffer(capacity: 256)
+    }
+    
+    public func handlerRemoved(context: ChannelHandlerContext) {
+        state = .complete
+        buffer = nil
+    }
+    
+    public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
+        do {
+            buffer?.clear()
+            
+            switch state {
+                case .idle:
+                    preconditionFailure("\(self) \(#function) called before it was added to a channel.")
+                case .preparing:
+                    buffer?.writeBytes(try prepareHeadPart())
+                    state = .processing
+                    break
+                case .processing:
+                    break
+                case .complete:
+                    return
+                case .fail:
+                    return
+            }
+            
+            try encoder.encode(data: unwrapOutboundIn(data), out: &buffer!)
+            context.write(wrapOutboundOut(buffer!), promise: promise)
+        } catch {
+            state = .fail(error)
+            promise?.fail(error)
+            context.fireErrorCaught(error)
         }
-        out.writeBytes(try prepareBodyPart(data: data))
-        out.writeBytes(try prepareEndPart())
     }
     
     /// Prepare HEAD part data for request.
@@ -96,7 +147,7 @@ final public class RequestEncoder: MessageToByteEncoder {
     /// - Parameter timestamp: UTC UInt64 timestamp.
     /// - Returns: Encrypted authentication info part data.
     private func prepareAuthenticationInfoPart(timestamp: UInt64) throws -> Data {
-        guard !session.isAEAD else {
+        guard !forceAEADEncoding else {
             return .init()
         }
         
@@ -117,7 +168,7 @@ final public class RequestEncoder: MessageToByteEncoder {
         buffer.writeInteger(ProtocolVersion.v1.rawValue)
         buffer.writeBytes(nonce)
         buffer.writeBytes(symmetricKey)
-        buffer.writeInteger(session.sharedSecretBytes.last!)
+        buffer.writeInteger(authenticationCode)
         buffer.writeInteger(configuration.options.rawValue)
         
         let padding = UInt8.random(in: 0...16)
@@ -131,7 +182,7 @@ final public class RequestEncoder: MessageToByteEncoder {
         }
         
         if padding > 0 {
-            buffer.writeBytes(Array<UInt8>(capacity: Int(padding)))
+            buffer.writeBytes(SecureBytes(count: Int(padding)))
         }
         
         buffer.writeInteger(buffer.withUnsafeReadableBytes {
@@ -139,9 +190,9 @@ final public class RequestEncoder: MessageToByteEncoder {
         })
         
         let inputKeyMaterial = generateCmdKey(configuration.id)
-        if session.isAEAD {
+        if forceAEADEncoding {
             let authenticatedData = try generateAuthenticatedData(inputKeyMaterial)
-            let randomPath = Array<UInt8>.init(capacity: 8)
+            let randomPath = Array(SecureBytes(count: 8))
             
             var info = [
                 [],
@@ -223,7 +274,7 @@ final public class RequestEncoder: MessageToByteEncoder {
     /// - Returns: Encrypted authenticated data bytes.
     private func generateAuthenticatedData(_ key: SymmetricKey) throws -> [UInt8] {
         var byteBuffer = withUnsafeBytes(of: UInt64(Date().timeIntervalSince1970).bigEndian, Array.init)
-        byteBuffer += Array<UInt8>.init(capacity: 4)
+        byteBuffer += Array(SecureBytes(count: 4))
         byteBuffer += withUnsafeBytes(of: CRC32.checksum(byteBuffer).bigEndian, Array.init)
         
         let inputKeyMaterial = KDF16.deriveKey(
@@ -253,136 +304,5 @@ final public class RequestEncoder: MessageToByteEncoder {
         }
         
         return result
-    }
-    
-    /// Prepare Body part data with specified data.
-    /// - Parameter data: Original body data.
-    /// - Returns: Encrypted body part data.
-    private func prepareBodyPart(data: ByteBuffer) throws -> Data {
-        var mutableData = data
-        
-        var byteBuffer = ByteBuffer()
-        
-        switch configuration.algorithm {
-            case .none:
-                // TODO: None Security Support
-                fatalError()
-            case .aes128cfb:
-                // TODO: Legacy Security Support
-                fatalError()
-            case .aes128gcm, .chacha20poly1305:
-                // TCP
-                let maxAllowedMemorySize = 64 * 1024 * 1024
-                guard data.readableBytes + 10 <= maxAllowedMemorySize else {
-                    throw CodingError.payloadTooLarge
-                }
-                
-                let overhead = configuration.algorithm.overhead
-                
-                let packetLengthSize = configuration.options.contains(.authenticatedLength) ? 2 + overhead : 2
-                
-                let maxPadding = configuration.options.shouldPadding ? 64 : 0
-                
-                let maxLength = 2048 - overhead - packetLengthSize - maxPadding
-                
-                while mutableData.readableBytes > 0 {
-                    let message = mutableData.readBytes(length: min(maxLength, mutableData.readableBytes))!
-                    
-                    var padding = 0
-                    if configuration.options.shouldPadding {
-                        shake128!.read(digestSize: 2).withUnsafeBytes {
-                            padding = Int($0.load(as: UInt16.self).bigEndian % 64)
-                        }
-                    }
-                    
-                    let nonce = withUnsafeBytes(of: packetIndex.bigEndian) {
-                        Array($0) + self.nonce[2..<12]
-                    }
-                    
-                    var packet: Data = .init()
-                    
-                    if configuration.algorithm == .aes128gcm {
-                        let sealedBox = try AES.GCM.seal(message, using: .init(data: symmetricKey), nonce: .init(data: nonce))
-                        packet = sealedBox.ciphertext + sealedBox.tag
-                    } else {
-                        let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
-                        let sealedBox = try ChaChaPoly.seal(message, using: symmetricKey, nonce: .init(data: nonce))
-                        packet = sealedBox.ciphertext + sealedBox.tag
-                    }
-
-                    guard packetLengthSize + packet.count + padding <= 2048 else {
-                        throw CodingError.payloadTooLarge
-                    }
-                    
-                    let packetLengthData = try preparePacketLengthData(
-                        packetLength: packet.count + padding,
-                        nonce: nonce
-                    )
-                    byteBuffer.writeBytes(packetLengthData)
-                    byteBuffer.writeBytes(packet)
-                    byteBuffer.writeBytes(Array<UInt8>(capacity: padding))
-                    
-                    packetIndex += 1
-                }
-                
-                return byteBuffer.withUnsafeReadableBytes {
-                    Data($0)
-                }
-            default:
-                fatalError("Unsupported security")
-        }
-    }
-    
-    /// Prepare packet length data with specified packetLength, nonce and shake128.
-    ///
-    /// If request options contains `.authenticatedLength` then packet length data encrypt using AEAD,
-    /// else if request options contains `.chunkMasking` then packet length data encrypt using SHAKE128,
-    /// otherwise just return plain size data.
-    /// - Parameters:
-    ///   - packetLength: Data length.
-    ///   - nonce: Nonce used to create AEAD nonce.
-    ///   - shake128: SHAKE128 object to calculate mask.
-    /// - Returns: The encrypted packet length data.
-    private func preparePacketLengthData(packetLength: Int, nonce: [UInt8]) throws -> Data {
-        if configuration.options.contains(.authenticatedLength) {
-            return try withUnsafeBytes(of: UInt16(packetLength - configuration.algorithm.overhead).bigEndian) {
-                var symmetricKey = KDF16.deriveKey(inputKeyMaterial: .init(data: symmetricKey), info: ["auth_len".data(using: .utf8)!])
-                
-                if configuration.algorithm == .aes128gcm {
-                    let sealedBox = try AES.GCM.seal($0, using: symmetricKey, nonce: .init(data: nonce))
-                    return sealedBox.ciphertext + sealedBox.tag
-                } else {
-                    symmetricKey = symmetricKey.withUnsafeBytes {
-                        generateChaChaPolySymmetricKey(inputKeyMaterial: $0)
-                    }
-                    let sealedBox = try ChaChaPoly.seal($0, using: symmetricKey, nonce: .init(data: nonce))
-                    return sealedBox.ciphertext + sealedBox.tag
-                }
-            }
-        } else if configuration.options.contains(.masking) {
-            assert(shake128 != nil)
-            return shake128!.read(digestSize: 2).withUnsafeBytes {
-                let mask = $0.load(as: UInt16.self).bigEndian
-                return withUnsafeBytes(of: (mask ^ UInt16(packetLength)).bigEndian) {
-                    Data($0)
-                }
-            }
-        } else {
-            return withUnsafeBytes(of: UInt16(packetLength).bigEndian) {
-                Data($0)
-            }
-        }
-    }
-    
-    /// Prepare END part data.
-    ///
-    /// If request should trunk stream then return encrypted empty buffer as END part data else just return empty data.
-    /// - Returns: Encrypted END part data.
-    private func prepareEndPart() throws -> Data {
-        guard configuration.options.contains(.chunked) else {
-            return .init()
-        }
-
-        return try prepareBodyPart(data: .init())
     }
 }
