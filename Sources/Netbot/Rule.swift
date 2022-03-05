@@ -86,8 +86,13 @@ extension Rule {
 
 public protocol RuleCollection: Rule {
     
+    /// All rules contains in this collection.
     var standardRules: [StandardRule] { get }
     
+    /// A boolean value determinse whether rule collection should perform downloading external resources.
+    /// default is true.
+    var shouldPerformDownloading: Bool { get }
+
     /// Reload rule data from file store in `dstURL`.
     func reloadData()
 }
@@ -117,12 +122,22 @@ extension RuleCollection {
         return dstURL
     }
     
+    public var shouldPerformDownloading: Bool {
+        true
+    }
+    
     /// Load external resources from url resolved with pattern and a completion will invoke whenever success or failed.
     ///
     /// If pattern is file url or is not a valid url string thist will finished with `.invalidExteranlResources` error.
     /// else start downloading resources from that url and save downloaded file to `dstURL`,
     /// after that `reloadData()` will be call and completed with resolved standard rules.
     public func performLoadingExternalResources(completion: @escaping (Result<[StandardRule], Error>) -> Void) {
+        guard shouldPerformDownloading else {
+            self.reloadData()
+            completion(.success(self.standardRules))
+            return
+        }
+        
         guard let url = URL(string: pattern), !url.isFileURL else {
             completion(.failure(ConfigurationSerializationError.invalidRule(reason: .invalidExternalResources)))
             return
@@ -348,6 +363,10 @@ public struct RuleSet: Codable, RuleCollection {
     @Protected var _standardRules: [StandardRule] = []
     public var standardRules: [StandardRule] {
         _standardRules
+    }
+    
+    public var shouldPerformDownloading: Bool {
+        return pattern != "SYSTEM" && pattern != "LAN"
     }
     
     public init() {
