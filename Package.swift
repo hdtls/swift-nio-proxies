@@ -52,7 +52,8 @@ let package = Package(
         .target(name: "NetbotCore",
                dependencies: [
                     .product(name: "Logging", package: "swift-log"),
-                    .product(name: "NIOCore", package: "swift-nio")
+                    .product(name: "NIOCore", package: "swift-nio"),
+                    .product(name: "NIOPosix", package: "swift-nio")
                ]),
         .target(name: "NetbotHTTP",
                 dependencies: [
@@ -122,7 +123,9 @@ let package = Package(
                         .product(name: "NIOSSL", package: "swift-nio-ssl"),
                         .product(name: "NIOExtras", package: "swift-nio-extras"),
                         .product(name: "NIOTransportServices", package: "swift-nio-transport-services")
-                    ]),
+                    ],
+                    exclude: [ "RuleTests.swift.gyb" ]
+                   ),
         .testTarget(name: "SHAKE128Tests",
                     dependencies: [ "SHAKE128" ]),
         .testTarget(name: "NetbotSOCKSTests",

@@ -18,11 +18,6 @@ import XCTest
 import FoundationNetworking
 #endif
 
-fileprivate let domainsetString = """
-apple.com
-.apple.com
-"""
-
 private class MockURLProtocol: URLProtocol {
     
     static var stubs: [URL : Data] = [:]
@@ -58,35 +53,6 @@ private class MockURLProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
-extension Rule {
-    public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.type == rhs.type
-        && lhs.pattern == rhs.pattern
-        && lhs.policy == rhs.policy
-        && lhs.comment == rhs.comment
-    }
-}
-
-extension StandardRule: Equatable {}
-
-extension GeoIPRule: Equatable {}
-
-extension FinalRule: Equatable {}
-
-extension RuleCollection {
-    public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.type == rhs.type
-        && lhs.pattern == rhs.pattern
-        && lhs.policy == rhs.policy
-        && lhs.comment == rhs.comment
-        && lhs.standardRules == rhs.standardRules
-    }
-}
-
-extension RuleSet: Equatable {}
-
-extension DomainSet: Equatable {}
-
 final class RuleTests: XCTestCase {
     
     override class func setUp() {
@@ -94,174 +60,641 @@ final class RuleTests: XCTestCase {
         URLSession.shared.configuration.protocolClasses?.insert(MockURLProtocol.self, at: 0)
     }
     
-    func testParsingStandardRule() throws {
-        var stringLiteral = "DOMAIN,apple.com,DIRECT"
-        var standardRule = try StandardRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.type, .domain)
-        XCTAssertEqual(standardRule.pattern, "apple.com")
-        XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertNil(standardRule.comment)
-        XCTAssertEqual(standardRule, try JSONDecoder().decode(StandardRule.self, from: try JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
+    func assertRuleCodingSuccess<R>(_ type: R.Type, expect: String) where R: Codable {
+        var data: Data!
         
-        stringLiteral = "DOMAIN-SUFFIX,apple.com,DIRECT // rule for apple."
-        standardRule = try StandardRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.type, .domainSuffix)
-        XCTAssertEqual(standardRule.pattern, "apple.com")
-        XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertEqual(standardRule.comment, "rule for apple.")
-        XCTAssertEqual(standardRule, try JSONDecoder().decode(StandardRule.self, from: try JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
+        XCTAssertNoThrow(data = try JSONSerialization.data(withJSONObject: expect, options: .fragmentsAllowed))
+        XCTAssertNotNil(data)
         
-        stringLiteral = "DOMAIN-SUFFIX,   apple.com, DIRECT//rule for apple."
-        standardRule = try StandardRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.type, .domainSuffix)
-        XCTAssertEqual(standardRule.pattern, "apple.com")
-        XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertEqual(standardRule.comment, "rule for apple.")
-        XCTAssertEqual(standardRule, try JSONDecoder().decode(StandardRule.self, from: try JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
+        var standardRule: R!
+        XCTAssertNoThrow(standardRule = try JSONDecoder().decode(R.self, from: data))
+        XCTAssertNotNil(standardRule)
         
-        stringLiteral = "DOMAIN-KEYWORD,apple,DIRECT"
-        standardRule = try StandardRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.type, .domainKeyword)
-        XCTAssertEqual(standardRule.pattern, "apple")
-        XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertNil(standardRule.comment)
-        XCTAssertEqual(standardRule, try JSONDecoder().decode(StandardRule.self, from: try JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
+        var stringLiteral: String!
+        XCTAssertNoThrow(stringLiteral = try JSONSerialization.jsonObject(with: JSONEncoder().encode(standardRule), options: .fragmentsAllowed) as? String)
+        XCTAssertNotNil(stringLiteral)
         
-        stringLiteral = "DOMAIN-KEYWORD,apple,DIRECT"
-        standardRule = try StandardRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.type, .domainKeyword)
-        XCTAssertEqual(standardRule.pattern, "apple")
-        XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertNil(standardRule.comment)
-        XCTAssertEqual(standardRule, try JSONDecoder().decode(StandardRule.self, from: try JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
-        
-        stringLiteral = "DOMAIN-KEYWORD,apple,DIRECT,will be ignored"
-        standardRule = try StandardRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.type, .domainKeyword)
-        XCTAssertEqual(standardRule.pattern, "apple")
-        XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertNil(standardRule.comment)
-        XCTAssertEqual(standardRule, try JSONDecoder().decode(StandardRule.self, from: try JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
+        XCTAssertEqual(stringLiteral, expect)
     }
     
-    func testParsingInvalidStandardRule() throws {
-        let invalidRuleStringLiterals = [
-            "apple,DIRECT",
-            "DOMAIN,apple",
-            "DOMAIN,apple // balabala",
-            "DOMAIN,DIRECT",
-            "DOMAIN,DIRECT//balabala"
-        ]
-        
-        let decoder = JSONDecoder()
-        
-        try invalidRuleStringLiterals.forEach { invalidRuleStringLiteral in
-            XCTAssertThrowsError(try StandardRule.init(stringLiteral: invalidRuleStringLiteral))
-            let data = try JSONSerialization.data(withJSONObject: invalidRuleStringLiteral, options: .fragmentsAllowed)
-            XCTAssertThrowsError(try decoder.decode(StandardRule.self, from: data))
+    func testParsingDomainRule() throws {
+        let stringLiteral = "DOMAIN,swift.org,DIRECT"
+        let standardRule = try DomainRule.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertNil(standardRule.comment)
+    }
+    
+    func testParsingDomainRuleWithComment() throws {
+        let stringLiteral = "DOMAIN,swift.org,DIRECT // This is rule comment."
+        let standardRule = try DomainRule.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+    }
+    
+    func testAppropriateErrorWhenParsingDomainRuleWithInvalidSchema() {
+        let stringLiteral = "invalidSchema,swift.org,DIRECT // This is rule comment."
+
+        XCTAssertThrowsError(try DomainRule.init(stringLiteral: stringLiteral)) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
         }
     }
     
-    func testStandardRuleEncoding() throws {
-        let stringLiterals = [
-            "DOMAIN,apple.com,DIRECT",
-            "DOMAIN-SUFFIX,apple.com,DIRECT // rule for apple.",
-            "DOMAIN-KEYWORD,apple,DIRECT"
-        ]
+    func testAppropriateErrorWhenParsingDomainRuleWithUnmatchedSchema() {
         
-        let encoder = JSONEncoder()
-        
-        try stringLiterals.forEach {
-            let standardRule = try StandardRule.init(stringLiteral: $0)
-            let standardRuleStringLiteral = try JSONSerialization.jsonObject(with: try encoder.encode(standardRule), options: .fragmentsAllowed) as! String
-            XCTAssertEqual(standardRuleStringLiteral, $0)
+        XCTAssertThrowsError(try DomainRule.init(stringLiteral: "DOMAIN-SUFFIX,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainRule.self, butCanBeParsedAs: DomainSuffixRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
         }
         
-        var standardRule = try StandardRule.init(stringLiteral: "DOMAIN-SUFFIX,   apple.com, DIRECT//rule for apple.")
-        var stringLiteral = try JSONSerialization.jsonObject(with: try encoder.encode(standardRule), options: .fragmentsAllowed) as! String
-        XCTAssertEqual(stringLiteral, "DOMAIN-SUFFIX,apple.com,DIRECT // rule for apple.")
+        XCTAssertThrowsError(try DomainRule.init(stringLiteral: "DOMAIN-KEYWORD,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainRule.self, butCanBeParsedAs: DomainKeywordRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
         
-        standardRule = try StandardRule.init(stringLiteral: "DOMAIN-KEYWORD,apple,DIRECT,will be ignored")
-        stringLiteral = try JSONSerialization.jsonObject(with: try encoder.encode(standardRule), options: .fragmentsAllowed) as! String
-        XCTAssertEqual(stringLiteral, "DOMAIN-KEYWORD,apple,DIRECT")
+        XCTAssertThrowsError(try DomainRule.init(stringLiteral: "DOMAIN-SET,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainRule.self, butCanBeParsedAs: DomainSet.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainRule.init(stringLiteral: "GEOIP,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainRule.self, butCanBeParsedAs: GeoIPRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainRule.init(stringLiteral: "FINAL,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainRule.self, butCanBeParsedAs: FinalRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainRule.init(stringLiteral: "RULE-SET,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainRule.self, butCanBeParsedAs: RuleSet.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
     }
     
-    func testParsingGeoIPRule() throws {
-        var stringLiteral = "GEOIP,CN,DIRECT"
-        var geoIpRule = try GeoIPRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(geoIpRule.type, .geoip)
-        XCTAssertEqual(geoIpRule.pattern, "CN")
-        XCTAssertEqual(geoIpRule.policy, "DIRECT")
-        XCTAssertNil(geoIpRule.comment)
-        XCTAssertEqual(geoIpRule, try JSONDecoder().decode(GeoIPRule.self, from: try JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
-        
-        stringLiteral = "GEOIP,CN,DIRECT // balabala"
-        geoIpRule = try GeoIPRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(geoIpRule.type, .geoip)
-        XCTAssertEqual(geoIpRule.pattern, "CN")
-        XCTAssertEqual(geoIpRule.policy, "DIRECT")
-        XCTAssertEqual(geoIpRule.comment, "balabala")
-        XCTAssertEqual(geoIpRule, try JSONDecoder().decode(GeoIPRule.self, from: try JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
+    func testAppropriateErrorWhenParsingDomainRuleWithMissingFieldRuleString() {
+        XCTAssertThrowsError(try DomainRule.init(stringLiteral: "DOMAIN,swift.org")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
     }
     
-    func testParsingInvalidGeoIPRule() {
-        let stringLiteral = "GEOIP,CN"
-        XCTAssertThrowsError(try GeoIPRule.init(stringLiteral: stringLiteral))
-        XCTAssertThrowsError(try JSONDecoder().decode(GeoIPRule.self, from: JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
+    func testDomainRuleCoding() throws {
+        assertRuleCodingSuccess(DomainRule.self, expect: "DOMAIN,swift.org,DIRECT")
+        assertRuleCodingSuccess(DomainRule.self, expect: "DOMAIN,swift.org,DIRECT // This is rule comment.")
     }
     
-    func testParsingFinalRule() throws {
-        var stringLiteral = "FINAL,DIRECT"
-        var finalRule = try FinalRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(finalRule.type, .final)
-        XCTAssertEqual(finalRule.pattern, "")
-        XCTAssertEqual(finalRule.policy, "DIRECT")
-        XCTAssertNil(finalRule.comment)
-        XCTAssertEqual(finalRule, try JSONDecoder().decode(FinalRule.self, from: try JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
-        
-        stringLiteral = "FINAL,DIRECT // balabala"
-        finalRule = try FinalRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(finalRule.type, .final)
-        XCTAssertEqual(finalRule.pattern, "")
-        XCTAssertEqual(finalRule.policy, "DIRECT")
-        XCTAssertEqual(finalRule.comment, "balabala")
-        XCTAssertEqual(finalRule, try JSONDecoder().decode(FinalRule.self, from: try JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
-        
-        stringLiteral = "FINAL,DIRECT,dns-failed"
-        finalRule = try FinalRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(finalRule.type, .final)
-        XCTAssertEqual(finalRule.pattern, "dns-failed")
-        XCTAssertEqual(finalRule.policy, "DIRECT")
-        XCTAssertNil(finalRule.comment)
-        XCTAssertEqual(finalRule, try JSONDecoder().decode(FinalRule.self, from: try JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
+    func testParsingDomainSuffixRule() throws {
+        let stringLiteral = "DOMAIN-SUFFIX,swift.org,DIRECT"
+        let standardRule = try DomainSuffixRule.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertNil(standardRule.comment)
     }
     
-    func testParsingInvalidFinalRule() {
-        let stringLiterals = [
-            "FINAL",
-            "FINA"
-        ]
-        
-        XCTAssertNoThrow(try stringLiterals.forEach { stringLiteral in
-            XCTAssertThrowsError(try FinalRule.init(stringLiteral: stringLiteral))
-            XCTAssertThrowsError(try JSONDecoder().decode(FinalRule.self, from: JSONSerialization.data(withJSONObject: stringLiteral, options: .fragmentsAllowed)))
-        })
+    func testParsingDomainSuffixRuleWithComment() throws {
+        let stringLiteral = "DOMAIN-SUFFIX,swift.org,DIRECT // This is rule comment."
+        let standardRule = try DomainSuffixRule.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertEqual(standardRule.comment, "This is rule comment.")
     }
     
-    func testFinalRuleEncoding() throws {
-        var expected = "FINAL,DIRECT"
-        var finalRule = try FinalRule.init(stringLiteral: expected)
-        var stringLiteral = try JSONSerialization.jsonObject(with: JSONEncoder().encode(finalRule), options: .fragmentsAllowed) as! String
-        XCTAssertEqual(stringLiteral, expected)
+    func testAppropriateErrorWhenParsingDomainSuffixRuleWithInvalidSchema() {
+        let stringLiteral = "invalidSchema,swift.org,DIRECT // This is rule comment."
+
+        XCTAssertThrowsError(try DomainSuffixRule.init(stringLiteral: stringLiteral)) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testAppropriateErrorWhenParsingDomainSuffixRuleWithUnmatchedSchema() {
         
-        expected = "FINAL,DIRECT,dns-failed"
-        finalRule = try FinalRule.init(stringLiteral: expected)
-        stringLiteral = try JSONSerialization.jsonObject(with: JSONEncoder().encode(finalRule), options: .fragmentsAllowed) as! String
-        XCTAssertEqual(stringLiteral, expected)
+        XCTAssertThrowsError(try DomainSuffixRule.init(stringLiteral: "DOMAIN,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainSuffixRule.self, butCanBeParsedAs: DomainRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainSuffixRule.init(stringLiteral: "DOMAIN-KEYWORD,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainSuffixRule.self, butCanBeParsedAs: DomainKeywordRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainSuffixRule.init(stringLiteral: "DOMAIN-SET,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainSuffixRule.self, butCanBeParsedAs: DomainSet.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainSuffixRule.init(stringLiteral: "GEOIP,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainSuffixRule.self, butCanBeParsedAs: GeoIPRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainSuffixRule.init(stringLiteral: "FINAL,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainSuffixRule.self, butCanBeParsedAs: FinalRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainSuffixRule.init(stringLiteral: "RULE-SET,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainSuffixRule.self, butCanBeParsedAs: RuleSet.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testAppropriateErrorWhenParsingDomainSuffixRuleWithMissingFieldRuleString() {
+        XCTAssertThrowsError(try DomainSuffixRule.init(stringLiteral: "DOMAIN-SUFFIX,swift.org")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testDomainSuffixRuleCoding() throws {
+        assertRuleCodingSuccess(DomainSuffixRule.self, expect: "DOMAIN-SUFFIX,swift.org,DIRECT")
+        assertRuleCodingSuccess(DomainSuffixRule.self, expect: "DOMAIN-SUFFIX,swift.org,DIRECT // This is rule comment.")
+    }
+    
+    func testParsingDomainKeywordRule() throws {
+        let stringLiteral = "DOMAIN-KEYWORD,swift.org,DIRECT"
+        let standardRule = try DomainKeywordRule.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertNil(standardRule.comment)
+    }
+    
+    func testParsingDomainKeywordRuleWithComment() throws {
+        let stringLiteral = "DOMAIN-KEYWORD,swift.org,DIRECT // This is rule comment."
+        let standardRule = try DomainKeywordRule.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+    }
+    
+    func testAppropriateErrorWhenParsingDomainKeywordRuleWithInvalidSchema() {
+        let stringLiteral = "invalidSchema,swift.org,DIRECT // This is rule comment."
+
+        XCTAssertThrowsError(try DomainKeywordRule.init(stringLiteral: stringLiteral)) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testAppropriateErrorWhenParsingDomainKeywordRuleWithUnmatchedSchema() {
+        
+        XCTAssertThrowsError(try DomainKeywordRule.init(stringLiteral: "DOMAIN,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainKeywordRule.self, butCanBeParsedAs: DomainRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainKeywordRule.init(stringLiteral: "DOMAIN-SUFFIX,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainKeywordRule.self, butCanBeParsedAs: DomainSuffixRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainKeywordRule.init(stringLiteral: "DOMAIN-SET,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainKeywordRule.self, butCanBeParsedAs: DomainSet.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainKeywordRule.init(stringLiteral: "GEOIP,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainKeywordRule.self, butCanBeParsedAs: GeoIPRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainKeywordRule.init(stringLiteral: "FINAL,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainKeywordRule.self, butCanBeParsedAs: FinalRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainKeywordRule.init(stringLiteral: "RULE-SET,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainKeywordRule.self, butCanBeParsedAs: RuleSet.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testAppropriateErrorWhenParsingDomainKeywordRuleWithMissingFieldRuleString() {
+        XCTAssertThrowsError(try DomainKeywordRule.init(stringLiteral: "DOMAIN-KEYWORD,swift.org")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testDomainKeywordRuleCoding() throws {
+        assertRuleCodingSuccess(DomainKeywordRule.self, expect: "DOMAIN-KEYWORD,swift.org,DIRECT")
+        assertRuleCodingSuccess(DomainKeywordRule.self, expect: "DOMAIN-KEYWORD,swift.org,DIRECT // This is rule comment.")
+    }
+    
+    func testParsingDomainSet() throws {
+        let stringLiteral = "DOMAIN-SET,http://domainset.com,DIRECT"
+        let standardRule = try DomainSet.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "http://domainset.com")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertNil(standardRule.comment)
+    }
+    
+    func testParsingDomainSetWithComment() throws {
+        let stringLiteral = "DOMAIN-SET,http://domainset.com,DIRECT // This is rule comment."
+        let standardRule = try DomainSet.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "http://domainset.com")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+    }
+    
+    func testAppropriateErrorWhenParsingDomainSetWithInvalidSchema() {
+        let stringLiteral = "invalidSchema,http://domainset.com,DIRECT // This is rule comment."
+
+        XCTAssertThrowsError(try DomainSet.init(stringLiteral: stringLiteral)) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testAppropriateErrorWhenParsingDomainSetWithUnmatchedSchema() {
+        
+        XCTAssertThrowsError(try DomainSet.init(stringLiteral: "DOMAIN,http://domainset.com,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainSet.self, butCanBeParsedAs: DomainRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainSet.init(stringLiteral: "DOMAIN-SUFFIX,http://domainset.com,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainSet.self, butCanBeParsedAs: DomainSuffixRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainSet.init(stringLiteral: "DOMAIN-KEYWORD,http://domainset.com,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainSet.self, butCanBeParsedAs: DomainKeywordRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainSet.init(stringLiteral: "GEOIP,http://domainset.com,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainSet.self, butCanBeParsedAs: GeoIPRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainSet.init(stringLiteral: "FINAL,http://domainset.com,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainSet.self, butCanBeParsedAs: FinalRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try DomainSet.init(stringLiteral: "RULE-SET,http://domainset.com,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(DomainSet.self, butCanBeParsedAs: RuleSet.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testAppropriateErrorWhenParsingDomainSetWithMissingFieldRuleString() {
+        XCTAssertThrowsError(try DomainSet.init(stringLiteral: "DOMAIN-SET,http://domainset.com")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
     }
     
     #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
-    func testRuleSetCncoding() throws {
+    func testDomainSetCoding() throws {
+        let text = """
+swift.org
+.apple.com
+"""
+        
+        let expectation = self.expectation(description: "DOMAIN-SET")
+        MockURLProtocol.stub(url: .init(string: "http://domainset.com")!, response: text.data(using: .utf8)!)
+        let stringLiteral = "DOMAIN-SET,http://domainset.com,DIRECT"
+        let domainset = try DomainSet(stringLiteral: stringLiteral)
+        domainset.performLoadingExternalResources { _ in
+            expectation.fulfill()
+        }
+        waitForExpectations(timeout: 5, handler: nil)
+        
+        XCTAssertEqual(domainset.pattern, "http://domainset.com")
+        XCTAssertEqual(domainset.policy, "DIRECT")
+        XCTAssertNil(domainset.comment)
+        XCTAssertEqual(domainset.standardRules.count, try text.components(separatedBy: "\n").map { try AnyRule(stringLiteral: "DOMAIN-SUFFIX,\($0),DIRECT") }.count)
+        XCTAssertEqual(try JSONSerialization.jsonObject(with: try JSONEncoder().encode(domainset), options: .fragmentsAllowed) as? String, stringLiteral)
+    }
+    #endif
+    
+    func testParsingGeoIPRule() throws {
+        let stringLiteral = "GEOIP,swift.org,DIRECT"
+        let standardRule = try GeoIPRule.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertNil(standardRule.comment)
+    }
+    
+    func testParsingGeoIPRuleWithComment() throws {
+        let stringLiteral = "GEOIP,swift.org,DIRECT // This is rule comment."
+        let standardRule = try GeoIPRule.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+    }
+    
+    func testAppropriateErrorWhenParsingGeoIPRuleWithInvalidSchema() {
+        let stringLiteral = "invalidSchema,swift.org,DIRECT // This is rule comment."
+
+        XCTAssertThrowsError(try GeoIPRule.init(stringLiteral: stringLiteral)) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testAppropriateErrorWhenParsingGeoIPRuleWithUnmatchedSchema() {
+        
+        XCTAssertThrowsError(try GeoIPRule.init(stringLiteral: "DOMAIN,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(GeoIPRule.self, butCanBeParsedAs: DomainRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try GeoIPRule.init(stringLiteral: "DOMAIN-SUFFIX,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(GeoIPRule.self, butCanBeParsedAs: DomainSuffixRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try GeoIPRule.init(stringLiteral: "DOMAIN-KEYWORD,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(GeoIPRule.self, butCanBeParsedAs: DomainKeywordRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try GeoIPRule.init(stringLiteral: "DOMAIN-SET,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(GeoIPRule.self, butCanBeParsedAs: DomainSet.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try GeoIPRule.init(stringLiteral: "FINAL,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(GeoIPRule.self, butCanBeParsedAs: FinalRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try GeoIPRule.init(stringLiteral: "RULE-SET,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(GeoIPRule.self, butCanBeParsedAs: RuleSet.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testAppropriateErrorWhenParsingGeoIPRuleWithMissingFieldRuleString() {
+        XCTAssertThrowsError(try GeoIPRule.init(stringLiteral: "GEOIP,swift.org")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testGeoIPRuleCoding() throws {
+        assertRuleCodingSuccess(GeoIPRule.self, expect: "GEOIP,swift.org,DIRECT")
+        assertRuleCodingSuccess(GeoIPRule.self, expect: "GEOIP,swift.org,DIRECT // This is rule comment.")
+    }
+    
+    func testParsingFinalRule() throws {
+        let stringLiteral = "FINAL,swift.org,DIRECT"
+        let standardRule = try FinalRule.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertNil(standardRule.comment)
+    }
+    
+    func testParsingFinalRuleWithComment() throws {
+        let stringLiteral = "FINAL,swift.org,DIRECT // This is rule comment."
+        let standardRule = try FinalRule.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+    }
+    
+    func testAppropriateErrorWhenParsingFinalRuleWithInvalidSchema() {
+        let stringLiteral = "invalidSchema,swift.org,DIRECT // This is rule comment."
+
+        XCTAssertThrowsError(try FinalRule.init(stringLiteral: stringLiteral)) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testAppropriateErrorWhenParsingFinalRuleWithUnmatchedSchema() {
+        
+        XCTAssertThrowsError(try FinalRule.init(stringLiteral: "DOMAIN,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(FinalRule.self, butCanBeParsedAs: DomainRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try FinalRule.init(stringLiteral: "DOMAIN-SUFFIX,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(FinalRule.self, butCanBeParsedAs: DomainSuffixRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try FinalRule.init(stringLiteral: "DOMAIN-KEYWORD,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(FinalRule.self, butCanBeParsedAs: DomainKeywordRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try FinalRule.init(stringLiteral: "DOMAIN-SET,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(FinalRule.self, butCanBeParsedAs: DomainSet.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try FinalRule.init(stringLiteral: "GEOIP,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(FinalRule.self, butCanBeParsedAs: GeoIPRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try FinalRule.init(stringLiteral: "RULE-SET,swift.org,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(FinalRule.self, butCanBeParsedAs: RuleSet.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testAppropriateErrorWhenParsingFinalRuleWithMissingFieldRuleString() {
+        XCTAssertThrowsError(try FinalRule.init(stringLiteral: "FINAL,swift.org")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testFinalRuleCoding() throws {
+        assertRuleCodingSuccess(FinalRule.self, expect: "FINAL,swift.org,DIRECT")
+        assertRuleCodingSuccess(FinalRule.self, expect: "FINAL,swift.org,DIRECT // This is rule comment.")
+    }
+    
+    func testParsingRuleSet() throws {
+        let stringLiteral = "RULE-SET,http://ruleset.com,DIRECT"
+        let standardRule = try RuleSet.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "http://ruleset.com")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertNil(standardRule.comment)
+    }
+    
+    func testParsingRuleSetWithComment() throws {
+        let stringLiteral = "RULE-SET,http://ruleset.com,DIRECT // This is rule comment."
+        let standardRule = try RuleSet.init(stringLiteral: stringLiteral)
+        XCTAssertEqual(standardRule.pattern, "http://ruleset.com")
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+    }
+    
+    func testAppropriateErrorWhenParsingRuleSetWithInvalidSchema() {
+        let stringLiteral = "invalidSchema,http://ruleset.com,DIRECT // This is rule comment."
+
+        XCTAssertThrowsError(try RuleSet.init(stringLiteral: stringLiteral)) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testAppropriateErrorWhenParsingRuleSetWithUnmatchedSchema() {
+        
+        XCTAssertThrowsError(try RuleSet.init(stringLiteral: "DOMAIN,http://ruleset.com,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(RuleSet.self, butCanBeParsedAs: DomainRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try RuleSet.init(stringLiteral: "DOMAIN-SUFFIX,http://ruleset.com,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(RuleSet.self, butCanBeParsedAs: DomainSuffixRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try RuleSet.init(stringLiteral: "DOMAIN-KEYWORD,http://ruleset.com,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(RuleSet.self, butCanBeParsedAs: DomainKeywordRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try RuleSet.init(stringLiteral: "DOMAIN-SET,http://ruleset.com,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(RuleSet.self, butCanBeParsedAs: DomainSet.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try RuleSet.init(stringLiteral: "GEOIP,http://ruleset.com,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(RuleSet.self, butCanBeParsedAs: GeoIPRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+        
+        XCTAssertThrowsError(try RuleSet.init(stringLiteral: "FINAL,http://ruleset.com,DIRECT")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(RuleSet.self, butCanBeParsedAs: FinalRule.self)))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    func testAppropriateErrorWhenParsingRuleSetWithMissingFieldRuleString() {
+        XCTAssertThrowsError(try RuleSet.init(stringLiteral: "RULE-SET,http://ruleset.com")) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField))
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+    }
+    
+    #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
+    func testRuleSetCoding() throws {
         let text = """
 DOMAIN,apple.com
 DOMAIN-SUFFIX,apple.com
@@ -269,71 +702,36 @@ DOMAIN-KEYWORD,apple
 """
         
         let expectation = self.expectation(description: "RULE-SET")
-        MockURLProtocol.stub(url: .init(string: "https://ruleset")!, response: text.data(using: .utf8)!)
-        let stringLiteral = "RULE-SET,https://ruleset,DIRECT"
-        let ruleset = try RuleSet.init(stringLiteral: stringLiteral)
+        MockURLProtocol.stub(url: .init(string: "http://ruleset.com")!, response: text.data(using: .utf8)!)
+        let stringLiteral = "RULE-SET,http://ruleset.com,DIRECT"
+        let ruleset = try RuleSet(stringLiteral: stringLiteral)
         ruleset.performLoadingExternalResources { _ in
             expectation.fulfill()
         }
         waitForExpectations(timeout: 5, handler: nil)
-
-        XCTAssertEqual(ruleset.type, .ruleSet)
-        XCTAssertEqual(ruleset.pattern, "https://ruleset")
+        
+        XCTAssertEqual(ruleset.pattern, "http://ruleset.com")
         XCTAssertEqual(ruleset.policy, "DIRECT")
         XCTAssertNil(ruleset.comment)
-        XCTAssertEqual(ruleset.standardRules, try text.components(separatedBy: "\n").map { try StandardRule.init(stringLiteral: $0 + ",DIRECT") })
-    
+        XCTAssertEqual(ruleset.standardRules.count, try text.components(separatedBy: "\n").map { try AnyRule(stringLiteral: $0 + ",DIRECT") }.count)
         XCTAssertEqual(try JSONSerialization.jsonObject(with: try JSONEncoder().encode(ruleset), options: .fragmentsAllowed) as? String, stringLiteral)
-    }
-    
-    func testDomainSetCoding() throws {
-        let text = """
-test.com
-.apple.com
-"""
-        let expectation = self.expectation(description: "DOMAIN-SET")
-        MockURLProtocol.stub(url: .init(string: "https://domainset")!, response: text.data(using: .utf8)!)
-        let stringLiteral = "DOMAIN-SET,https://domainset,DIRECT"
-        let domainset = try DomainSet.init(stringLiteral: stringLiteral)
-        print(domainset.dstURL)
-        domainset.performLoadingExternalResources {
-            switch $0 {
-                case .success(let r):
-                    print(r)
-                case .failure(let e):
-                    print(e)
-            }
-            expectation.fulfill()
-        }
-        waitForExpectations(timeout: 5, handler: nil)
-
-        XCTAssertEqual(domainset.type, .domainSet)
-        XCTAssertEqual(domainset.pattern, "https://domainset")
-        XCTAssertEqual(domainset.policy, "DIRECT")
-        XCTAssertNil(domainset.comment)
-        XCTAssertEqual(domainset.standardRules, try text.components(separatedBy: "\n").map { try StandardRule.init(stringLiteral: "DOMAIN-SUFFIX,\($0),DIRECT") })
-        
-        XCTAssertEqual(try JSONSerialization.jsonObject(with: try JSONEncoder().encode(domainset), options: .fragmentsAllowed) as? String, stringLiteral)
     }
     #endif
     
     func testParsingAnyRule() throws {
         func assertUnderliyingRule<T: Rule & Equatable>(_ stringLiteral: String, _ type: T.Type) throws {
             let expected = try AnyRule.init(stringLiteral: stringLiteral)
-            if let rule = expected.underlying as? T {
-                XCTAssertEqual(rule, try T.init(stringLiteral: stringLiteral))
-            } else {
-                XCTFail()
-            }
+            XCTAssertTrue(expected.underlying is T)
+            XCTAssertEqual(expected.underlying as! T, try T.init(stringLiteral: stringLiteral))
         }
         
-        try assertUnderliyingRule("DOMAIN,apple.com,DIRECT", StandardRule.self)
-        try assertUnderliyingRule("DOMAIN-SUFFIX,apple.com,DIRECT", StandardRule.self)
-        try assertUnderliyingRule("DOMAIN-KEYWORD,apple.com,DIRECT", StandardRule.self)
-        try assertUnderliyingRule("FINAL,DIRECT", FinalRule.self)
+        try assertUnderliyingRule("DOMAIN,apple.com,DIRECT", DomainRule.self)
+        try assertUnderliyingRule("DOMAIN-SUFFIX,apple.com,DIRECT", DomainSuffixRule.self)
+        try assertUnderliyingRule("DOMAIN-KEYWORD,apple.com,DIRECT", DomainKeywordRule.self)
+        try assertUnderliyingRule("FINAL,dns-failed,DIRECT", FinalRule.self)
         try assertUnderliyingRule("GEOIP,CN,DIRECT", GeoIPRule.self)
         
-        #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
+#if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
         let expected = try RuleSet.init(stringLiteral: "RULE-SET,https://ruleset,DIRECT")
         let actual = try AnyRule.init(stringLiteral: "RULE-SET,https://ruleset,DIRECT")
         
@@ -347,17 +745,11 @@ test.com
         }
         waitForExpectations(timeout: 5, handler: nil)
         
-        if let rule = actual.underlying as? RuleSet {
-            XCTAssertEqual(rule, expected)
-        } else {
-            XCTFail()
-        }
+        XCTAssertTrue(actual.underlying is RuleSet)
+        XCTAssertEqual(actual.underlying as! RuleSet, expected)
         
-        if let rule = actual1.underlying as? DomainSet {
-            XCTAssertEqual(rule, expected1)
-        } else {
-            XCTFail()
-        }
-        #endif
+        XCTAssertTrue(actual1.underlying is DomainSet)
+        XCTAssertEqual(actual1.underlying as! DomainSet, expected1)
+#endif
     }
 }
