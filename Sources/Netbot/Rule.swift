@@ -72,7 +72,7 @@ extension Rule {
 extension Rule {
     
     public var description: String {
-        "\(Self.schema) \(self.pattern), \(self.policy)"
+        "\(Self.schema) \(self.pattern) \(self.policy)"
     }
 }
 
@@ -193,6 +193,7 @@ extension RuleCollection {
                 self.reloadData()
                 completion(.success(self.standardRules))
             } catch {
+                self.reloadData()
                 completion(.failure(error))
                 assertionFailure(error.localizedDescription)
             }
@@ -242,6 +243,8 @@ extension RuleCollectionPrivate {
         
         guard components.count >= 2 else {
             policy = components[0].trimmingCharacters(in: .whitespaces)
+            
+            performLoadingExternalResources { _ in }
             return
         }
         policy = components.first!.trimmingCharacters(in: .whitespaces)
@@ -342,17 +345,14 @@ public struct DomainSet: Codable, Equatable, RuleCollectionPrivate {
             return
         }
         
-        var rules: [AnyRule] = []
-        file.split(separator: "\n")
-            .forEach {
+        self._standardRules = file.split(separator: "\n")
+            .compactMap {
                 let literal = $0.trimmingCharacters(in: .whitespaces)
                 guard !literal.isEmpty else {
-                    return
+                    return nil
                 }
-                rules.append(try! AnyRule.init(stringLiteral: "\(DomainSuffixRule.schema),\(literal),\(policy)"))
+                return try? DomainSuffixRule(stringLiteral: "\(DomainSuffixRule.schema),\(literal),\(policy)")
             }
-        
-        self._standardRules = rules
     }
 }
 
@@ -437,23 +437,14 @@ public struct RuleSet: Codable, Equatable, RuleCollectionPrivate {
             return
         }
         
-        var rules: [AnyRule] = []
-        file.split(separator: "\n")
-            .forEach {
-                var literal = $0.trimmingCharacters(in: .whitespaces)
+        self._standardRules = file.split(separator: "\n")
+            .compactMap {
+                let literal = $0.trimmingCharacters(in: .whitespaces)
                 guard !literal.isEmpty else {
-                    return
+                    return nil
                 }
-                literal.append(",\(policy)")
-                
-                guard let standardRule = try? AnyRule.init(stringLiteral: literal) else {
-                    // .dataCorrupted
-                    return
-                }
-                rules.append(standardRule)
+                return try? AnyRule(stringLiteral: literal + ",\(policy)")
             }
-        
-        self._standardRules = rules
     }
 }
 
