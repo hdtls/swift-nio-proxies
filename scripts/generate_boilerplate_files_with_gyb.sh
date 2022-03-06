@@ -1,0 +1,20 @@
+#!/bin/bash
+##===----------------------------------------------------------------------===##
+##
+## This source file is part of the Netbot open source project
+##
+## Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+## Licensed under Apache License v2.0
+##
+## See LICENSE for license information
+## See CONTRIBUTORS.txt for the list of Netbot project authors
+##
+## SPDX-License-Identifier: Apache-2.0
+##
+##===----------------------------------------------------------------------===##
+
+set -eu
+find . -not -path '*/.*' -name '*.gyb' |                             \
+    while read file; do                                              \
+        ./scripts/gyb --line-directive '' -o "${file%.gyb}" "$file"; \
+    done
