@@ -23,45 +23,84 @@ import Foundation
 import FoundationNetworking
 #endif
 
-public enum RuleType: String, Codable, CaseIterable {
-    case domain = "DOMAIN"
-    case domainSuffix = "DOMAIN-SUFFIX"
-    case domainKeyword = "DOMAIN-KEYWORD"
-    case domainSet = "DOMAIN-SET"
-    case userAgent = "USER-AGENT"
-    case final = "FINAL"
-    case geoip = "GEOIP"
-    case ipcidr = "IP-CIDR"
-    case processName = "PROCESS-NAME"
-    case ruleSet = "RULE-SET"
-}
+private let supportedRules: [Rule.Type] = [
+    DomainRule.self,
+    DomainSuffixRule.self,
+    DomainKeywordRule.self,
+    DomainSet.self,
+    RuleSet.self,
+    GeoIPRule.self,
+    FinalRule.self
+]
 
-public protocol Rule {
-    var type: RuleType { get set }
+/// `Rule` protocol define basic rule object protocol.
+public protocol Rule: Codable {
+    
+    /// The rule schema, this should be unique for each type of rule.
+    static var schema: String { get }
+    
+    /// The rule pattern or external resources url string.
     var pattern: String { get set }
+    
+    /// The policy pointed to by the rule.
     var policy: String { get set }
+    
+    /// The comment for this rule.
     var comment: String? { get set }
+    
+    /// Rule evaluating function to determinse whether this rule match the given pattern.
+    /// - Returns: True if match else false.
     func match(_ pattern: String) -> Bool
     
-    init()
+    /// Initialize an instance of `Rule` with specified string.
     init(stringLiteral: String) throws
 }
 
 extension Rule {
     
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        try self.init(stringLiteral: container.decode(String.self))
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode("\(Self.schema),\(pattern),\(policy)\(comment != nil ? " // \(comment!)" : "")")
+    }
+}
+
+extension Rule {
+    
+    public var description: String {
+        "\(Self.schema) \(self.pattern), \(self.policy)"
+    }
+}
+
+private protocol RulePrivate: Rule {
+    
+    /// Empty initlization.
+    init()
+}
+
+extension RulePrivate {
+    
     public init(stringLiteral: String) throws {
         var components = stringLiteral.components(separatedBy: ",")
         guard components.count >= 3 else {
-            throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
+            throw ConfigurationSerializationError.failedToParseRule(reason: .missingField)
         }
         
-        guard let t = RuleType(rawValue: components.removeFirst().trimmingCharacters(in: .whitespaces)) else {
-            throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
+        let schema = components.removeFirst().trimmingCharacters(in: .whitespaces)
+        guard Self.schema == schema else {
+            guard let canBeParsedAs = (supportedRules.first { $0.schema == schema }) else {
+                throw ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
+            }
+            throw ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(Self.self, butCanBeParsedAs: canBeParsedAs))
         }
         
+        assert(supportedRules.contains(where: { $0.schema == schema }))
         self.init()
         
-        type = t
         pattern = components.removeFirst().trimmingCharacters(in: .whitespaces)
         components = components[0].components(separatedBy: "//")
         
@@ -72,22 +111,13 @@ extension Rule {
         policy = components.first!.trimmingCharacters(in: .whitespaces)
         comment = components[1].trimmingCharacters(in: .whitespaces)
     }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        try self.init(stringLiteral: container.decode(String.self))
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode("\(type.rawValue),\(pattern),\(policy)\(comment != nil ? " // \(comment!)" : "")")
-    }
 }
 
+/// `RuleCollection` is a special rule that it's pattern is an URL of which external resources hosted.
 public protocol RuleCollection: Rule {
     
     /// All rules contains in this collection.
-    var standardRules: [StandardRule] { get }
+    var standardRules: [Rule] { get }
     
     /// A boolean value determinse whether rule collection should perform downloading external resources.
     /// default is true.
@@ -110,7 +140,7 @@ extension RuleCollection {
             .joined()
         
         var dstURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-
+        
         dstURL.appendPathComponent("io.tenbits.Netbot")
         dstURL.appendPathComponent("External Resources")
         do {
@@ -131,7 +161,7 @@ extension RuleCollection {
     /// If pattern is file url or is not a valid url string thist will finished with `.invalidExteranlResources` error.
     /// else start downloading resources from that url and save downloaded file to `dstURL`,
     /// after that `reloadData()` will be call and completed with resolved standard rules.
-    public func performLoadingExternalResources(completion: @escaping (Result<[StandardRule], Error>) -> Void) {
+    public func performLoadingExternalResources(completion: @escaping (Result<[Rule], Error>) -> Void) {
         guard shouldPerformDownloading else {
             self.reloadData()
             completion(.success(self.standardRules))
@@ -139,7 +169,7 @@ extension RuleCollection {
         }
         
         guard let url = URL(string: pattern), !url.isFileURL else {
-            completion(.failure(ConfigurationSerializationError.invalidRule(reason: .invalidExternalResources)))
+            completion(.failure(ConfigurationSerializationError.failedToParseRule(reason: .invalidExternalResources)))
             return
         }
         
@@ -148,7 +178,7 @@ extension RuleCollection {
                 completion(.failure(error!))
                 return
             }
-
+            
             guard let srcURL = srcURL else {
                 completion(.success([]))
                 return
@@ -176,54 +206,171 @@ extension RuleCollection {
     }
 }
 
-public struct StandardRule: Codable, Rule {
-    
-    public var type: RuleType
-    public var pattern: String
-    public var policy: String
-    public var comment: String?
-    
-    public init() {
-        type = .domain
-        pattern = ""
-        policy = "direct"
-    }
-    
-    public func match(_ pattern: String) -> Bool {
-        switch type {
-            case .domain, .processName:
-                return self.pattern == pattern
-            case .domainSuffix:
-                // e.g. apple.com should match *.apple.com and apple.com
-                // should not match *apple.com.
-                return self.pattern == pattern || ".\(pattern)".hasSuffix(self.pattern)
-            case .domainKeyword:
-                return pattern.contains(self.pattern)
-            case .userAgent:
-                // TODO: USER-AGENT match support.
-                return false
-            case .ipcidr:
-                return false
-            default:
-                assertionFailure()
-                return false
-        }
+extension Equatable where Self: RuleCollection {
+
+    public static func ==(lhs: Self, rhs: Self) -> Bool {
+        lhs.pattern == rhs.pattern
+        && lhs.policy == rhs.policy
+        && lhs.comment == rhs.comment
     }
 }
 
-/// GEOIP,CN,DIRECT
-public struct GeoIPRule: Codable, Rule {
+private protocol RuleCollectionPrivate: RuleCollection, RulePrivate {}
+
+extension RuleCollectionPrivate {
+    
+    public init(stringLiteral: String) throws {
+        var components = stringLiteral.components(separatedBy: ",")
+        guard components.count >= 3 else {
+            throw ConfigurationSerializationError.failedToParseRule(reason: .missingField)
+        }
+        
+        let schema = components.removeFirst().trimmingCharacters(in: .whitespaces)
+        guard Self.schema == schema else {
+            guard let canBeParsedAs = (supportedRules.first { $0.schema == schema }) else {
+                throw ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
+            }
+            throw ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(Self.self, butCanBeParsedAs: canBeParsedAs))
+        }
+        
+        assert(supportedRules.contains(where: { $0.schema == schema }))
+
+        self.init()
+        
+        pattern = components.removeFirst().trimmingCharacters(in: .whitespaces)
+        components = components[0].components(separatedBy: "//")
+        
+        guard components.count >= 2 else {
+            policy = components[0].trimmingCharacters(in: .whitespaces)
+            return
+        }
+        policy = components.first!.trimmingCharacters(in: .whitespaces)
+        comment = components[1].trimmingCharacters(in: .whitespaces)
+        
+        performLoadingExternalResources { _ in }
+    }
+}
+
+/// `DomainRule` use domain as pattern and matches the full domain name when evaluating.
+public struct DomainRule: Codable, Equatable, RulePrivate {
+    
+    public static let schema: String = "DOMAIN"
+    
+    public var pattern: String
+    
+    public var policy: String
+    
+    public var comment: String?
+    
+    fileprivate init() {
+        self.pattern = "*"
+        self.policy = "direct"
+    }
+    
+    public func match(_ pattern: String) -> Bool {
+        self.pattern == pattern
+    }
+}
+
+/// `DomainSuffixRule` use domain suffix as pattern and matches the full domain name or suffix when evaluating.
+public struct DomainSuffixRule: Codable, Equatable, RulePrivate {
+    
+    public static let schema: String = "DOMAIN-SUFFIX"
+    
+    public var pattern: String
+    
+    public var policy: String
+    
+    public var comment: String?
+    
+    fileprivate init() {
+        self.pattern = "*"
+        self.policy = "direct"
+    }
+    
+    public func match(_ pattern: String) -> Bool {
+        // e.g. apple.com should match *.apple.com and apple.com
+        // should not match *apple.com.
+        self.pattern == pattern || ".\(pattern)".hasSuffix(self.pattern)
+    }
+}
+
+/// `DomainKeywordRule` use domain keyword as pattern and matches whether domain contains pattern when evaluating.
+public struct DomainKeywordRule: Codable, Equatable, RulePrivate {
+    
+    public static let schema: String = "DOMAIN-KEYWORD"
+    
+    public var pattern: String
+    
+    public var policy: String
+    
+    public var comment: String?
+    
+    fileprivate init() {
+        self.pattern = "*"
+        self.policy = "direct"
+    }
+    
+    public func match(_ pattern: String) -> Bool {
+        pattern.contains(self.pattern)
+    }
+}
+
+/// `DomainSet` rules contains a lot of `DomainSuffixRule` as it's external resources.
+public struct DomainSet: Codable, Equatable, RuleCollectionPrivate {
+    
+    public static let schema: String = "DOMAIN-SET"
+    
+    public var pattern: String
+    
+    public var policy: String
+    
+    public var comment: String?
+    
+    @Protected private var _standardRules: [Rule] = []
+    public var standardRules: [Rule] {
+        _standardRules
+    }
+    
+    fileprivate init() {
+        pattern = "*"
+        policy = "direct"
+    }
+    
+    public func reloadData() {
+        guard let data = try? Data(contentsOf: dstURL), let file = String(data: data, encoding: .utf8) else {
+            return
+        }
+        
+        var rules: [AnyRule] = []
+        file.split(separator: "\n")
+            .forEach {
+                let literal = $0.trimmingCharacters(in: .whitespaces)
+                guard !literal.isEmpty else {
+                    return
+                }
+                rules.append(try! AnyRule.init(stringLiteral: "\(DomainSuffixRule.schema),\(literal),\(policy)"))
+            }
+        
+        self._standardRules = rules
+    }
+}
+
+/// `GeoIPRule` use ip string as pattern and matches country ISO code search from `GeoLite2` when evaluating.
+public struct GeoIPRule: Codable, Equatable, RulePrivate {
+    
+    public static let schema: String = "GEOIP"
     
     @Protected static var geo: GeoLite2?
     
-    public var type: RuleType
     public var pattern: String
+    
     public var policy: String
+    
     public var comment: String?
     
-    public init() {
-        type = .geoip
-        pattern = ""
+    fileprivate init() {
+        pattern = "*"
         policy = "direct"
     }
     
@@ -237,54 +384,19 @@ public struct GeoIPRule: Codable, Rule {
     }
 }
 
-/// FINAL,PROXY,dns-failed
-public struct FinalRule: Codable, Rule {
+public struct FinalRule: Codable, Equatable, RulePrivate {
     
-    public var type: RuleType
+    public static let schema: String = "FINAL"
+    
     public var pattern: String
+    
     public var policy: String
+    
     public var comment: String?
     
-    public init() {
-        type = .final
-        pattern = ""
+    fileprivate init() {
+        pattern = "dns-failed"
         policy = "direct"
-    }
-    
-    public init(stringLiteral: String) throws {
-        var components = stringLiteral.components(separatedBy: ",")
-        guard components.count >= 2 else {
-            throw ConfigurationSerializationError.invalidRule(reason: .missingField)
-        }
-        
-        guard let t = RuleType(rawValue: components.removeFirst().trimmingCharacters(in: .whitespaces)) else {
-            throw ConfigurationSerializationError.invalidRule(reason: .unsupported)
-        }
-        
-        assert(t == .final, "assert illegal rule type.")
-        self.init()
-        
-        type = t
-        
-        if components.count == 1 {
-            components = components[0].components(separatedBy: "//")
-            policy = components[0].trimmingCharacters(in: .whitespaces)
-            if components.count >= 2 {
-                comment = components[1].trimmingCharacters(in: .whitespaces)
-            }
-        } else {
-            policy = components[0].trimmingCharacters(in: .whitespaces)
-            components = components[1].components(separatedBy: "//")
-            pattern = components[0].trimmingCharacters(in: .whitespaces)
-            if components.count >= 2 {
-                comment = components[1].trimmingCharacters(in: .whitespaces)
-            }
-        }
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode("\(type.rawValue),\(policy)\(pattern.isEmpty ? "" : "," + pattern)\(comment != nil ? " // \(comment!)" : "")")
     }
     
     public func match(_ pattern: String) -> Bool {
@@ -292,76 +404,18 @@ public struct FinalRule: Codable, Rule {
     }
 }
 
-public struct DomainSet: Codable, RuleCollection {
+public struct RuleSet: Codable, Equatable, RuleCollectionPrivate {
     
-    public var type: RuleType
+    public static let schema: String = "RULE-SET"
+    
     public var pattern: String
+    
     public var policy: String
+    
     public var comment: String?
     
-    @Protected var _standardRules: [StandardRule] = []
-    public var standardRules: [StandardRule] {
-        _standardRules
-    }
-    
-    public init() {
-        type = .domainSet
-        pattern = ""
-        policy = "direct"
-    }
-    
-    public init(stringLiteral: String) throws {
-        let parts = stringLiteral.split(separator: ",").map(String.init)
-        guard parts.count >= 3 else {
-            throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
-        }
-        
-        guard let t = RuleType(rawValue: parts.first!.trimmingCharacters(in: .whitespaces)) else {
-            throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
-        }
-        assert(t == .domainSet, "assert illegal rule type.")
-        
-        type = t
-        pattern = parts[1].trimmingCharacters(in: .whitespaces)
-        if parts[2].contains("//") {
-            let components = parts[2].components(separatedBy: "//")
-            policy = components.first!.trimmingCharacters(in: .whitespaces)
-            comment = components.last!.trimmingCharacters(in: .whitespaces)
-        } else {
-            policy = parts[2].trimmingCharacters(in: .whitespaces)
-        }
-        
-        performLoadingExternalResources { _ in }
-    }
-    
-    public func reloadData() {
-        guard let data = try? Data(contentsOf: dstURL), let file = String(data: data, encoding: .utf8) else {
-            return
-        }
-
-        var rules: [StandardRule] = []
-        file.split(separator: "\n")
-            .forEach {
-                let literal = $0.trimmingCharacters(in: .whitespaces)
-                guard !literal.isEmpty else {
-                    return
-                }
-                rules.append(try! .init(stringLiteral: "\(RuleType.domainSuffix.rawValue),\(literal),\(policy)"))
-            }
-
-        self._standardRules = rules
-    }
-}
-
-public struct RuleSet: Codable, RuleCollection {
-    
-    public var type: RuleType
-    public var pattern: String
-    public var policy: String
-    public var comment: String?
-    
-    @Protected var _standardRules: [StandardRule] = []
-    public var standardRules: [StandardRule] {
+    @Protected private var _standardRules: [Rule] = []
+    public var standardRules: [Rule] {
         _standardRules
     }
     
@@ -369,35 +423,9 @@ public struct RuleSet: Codable, RuleCollection {
         return pattern != "SYSTEM" && pattern != "LAN"
     }
     
-    public init() {
-        type = .ruleSet
-        pattern = ""
+    fileprivate init() {
+        pattern = "*"
         policy = "direct"
-    }
-    
-    public init(stringLiteral: String) throws {
-        let parts = stringLiteral.split(separator: ",")
-        guard parts.count >= 3 else {
-            throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
-        }
-        
-        guard let t = RuleType(rawValue: parts.first!.trimmingCharacters(in: .whitespaces)) else {
-            throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
-        }
-        
-        assert(t == .ruleSet, "assert illegal rule type.")
-        
-        type = t
-        pattern = parts[1].trimmingCharacters(in: .whitespaces)
-        if parts[2].contains("//") {
-            let components = parts[2].components(separatedBy: "//")
-            policy = components.first!.trimmingCharacters(in: .whitespaces)
-            comment = components.last!.trimmingCharacters(in: .whitespaces)
-        } else {
-            policy = parts[2].trimmingCharacters(in: .whitespaces)
-        }
-        
-        performLoadingExternalResources { _ in }
     }
     
     public func reloadData() {
@@ -409,7 +437,7 @@ public struct RuleSet: Codable, RuleCollection {
             return
         }
         
-        var rules: [StandardRule] = []
+        var rules: [AnyRule] = []
         file.split(separator: "\n")
             .forEach {
                 var literal = $0.trimmingCharacters(in: .whitespaces)
@@ -418,7 +446,7 @@ public struct RuleSet: Codable, RuleCollection {
                 }
                 literal.append(",\(policy)")
                 
-                guard let standardRule = try? StandardRule.init(stringLiteral: literal) else {
+                guard let standardRule = try? AnyRule.init(stringLiteral: literal) else {
                     // .dataCorrupted
                     return
                 }
@@ -432,10 +460,7 @@ public struct RuleSet: Codable, RuleCollection {
 /// A type-erased rule.
 public struct AnyRule: Codable, Rule {
     
-    public var type: RuleType {
-        set { underlying.type = newValue }
-        get { underlying.type }
-    }
+    public static let schema: String = "*"
     
     public var pattern: String {
         set { underlying.pattern = newValue }
@@ -458,27 +483,24 @@ public struct AnyRule: Codable, Rule {
         self.underlying = underlying
     }
     
-    public init() {
-        self.init(underlying: FinalRule.init())
-    }
-    
     public init(stringLiteral: String) throws {
-        guard let type = RuleType.init(rawValue: stringLiteral.components(separatedBy: ",").first!) else {
-            throw ConfigurationSerializationError.dataCorrupted
-        }
-        switch type {
-            case .domain, .domainSuffix, .domainKeyword, .processName, .userAgent:
-                self = .init(underlying: try StandardRule.init(stringLiteral: stringLiteral))
-            case .domainSet:
-                self = .init(underlying: try DomainSet.init(stringLiteral: stringLiteral))
-            case .final:
-                self = .init(underlying: try FinalRule.init(stringLiteral: stringLiteral))
-            case .geoip:
-                self = .init(underlying: try GeoIPRule.init(stringLiteral: stringLiteral))
-            case .ipcidr:
-                self = .init(underlying: try StandardRule.init(stringLiteral: stringLiteral))
-            case .ruleSet:
-                self = .init(underlying: try RuleSet.init(stringLiteral: stringLiteral))
+        switch stringLiteral.components(separatedBy: ",").first!.trimmingCharacters(in: .whitespaces) {
+            case DomainRule.schema:
+                self = .init(underlying: try DomainRule(stringLiteral: stringLiteral))
+            case DomainSuffixRule.schema:
+                self = .init(underlying: try DomainSuffixRule(stringLiteral: stringLiteral))
+            case DomainKeywordRule.schema:
+                self = .init(underlying: try DomainKeywordRule(stringLiteral: stringLiteral))
+            case DomainSet.schema:
+                self = .init(underlying: try DomainSet(stringLiteral: stringLiteral))
+            case FinalRule.schema:
+                self = .init(underlying: try FinalRule(stringLiteral: stringLiteral))
+            case GeoIPRule.schema:
+                self = .init(underlying: try GeoIPRule(stringLiteral: stringLiteral))
+            case RuleSet.schema:
+                self = .init(underlying: try RuleSet(stringLiteral: stringLiteral))
+            default:
+                throw ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
         }
     }
     
@@ -491,35 +513,18 @@ public struct AnyRule: Codable, Rule {
     }
 }
 
-final public class RuleMatcher {
+extension AnyRule: CustomStringConvertible {
     
-    /// The rule list.
-    public let rules: [Rule]
-    
-    public init(rules: [Rule]) {
-        self.rules = rules
+    public var description: String {
+        underlying.description
     }
+}
+
+extension AnyRule: Equatable {
     
-    /// Returns the first matched element of the `rules` sequence that satisfies the given
-    /// pattern.
-    ///
-    /// - Parameter pattern: Pattern used to evaluate match.
-    /// - Returns: The first matched element of the sequence that satisfies `pattern`,
-    ///   or `nil` if there is no element that satisfies `pattern`.
-    public func firstMatch(_ pattern: String) -> Rule? {
-        var match: Rule?
-        var dnsFailedRule: Rule?
-        
-        for rule in rules {
-            if rule.match(pattern) {
-                match = rule
-                break
-            }
-            
-            if rule.type == .final {
-                dnsFailedRule = rule
-            }
-        }
-        return match ?? dnsFailedRule
+    public static func == (lhs: AnyRule, rhs: AnyRule) -> Bool {
+        lhs.pattern == rhs.pattern
+        && lhs.policy == rhs.policy
+        && lhs.comment == rhs.comment
     }
 }

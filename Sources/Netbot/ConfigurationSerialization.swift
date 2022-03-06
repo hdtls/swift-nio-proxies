@@ -43,7 +43,7 @@ public enum ConfigurationSerializationError: Error {
     }
     
     /// Error reason for invalid rule.
-    public enum InvalidRuleErrorReason: CustomStringConvertible {
+    public enum RuleParsingErrorReason: CustomStringConvertible {
         
         /// Rule missing field.
         case missingField
@@ -54,6 +54,9 @@ public enum ConfigurationSerializationError: Error {
         /// Exteranl resources url is invalid.
         case invalidExternalResources
         
+        /// Error that failed to parse rule to specified type.
+        case failedToParseAs(Rule.Type, butCanBeParsedAs: Rule.Type)
+        
         public var description: String {
             switch self {
                 case .missingField:
@@ -62,6 +65,8 @@ public enum ConfigurationSerializationError: Error {
                     return "unsupported rule type."
                 case .invalidExternalResources:
                     return "invalid external resources."
+                case .failedToParseAs(let expected, butCanBeParsedAs: let actual):
+                    return "failed to parse as \(expected), but can be parsed as \(actual)."
             }
         }
     }
@@ -69,11 +74,8 @@ public enum ConfigurationSerializationError: Error {
     /// Error with invalid file error reason `InvalidFileErrorReason`.
     case invalidFile(reason: InvalidFileErrorReason)
     
-    /// Error with invalid rule error reason `InvalidRuleErrorReason`.
-    case invalidRule(reason: InvalidRuleErrorReason)
-    
-    /// Error that failed to parse rule to specified type.
-    case failedToParseAs(Rule.Type, butCanBeParsedAs: Rule.Type)
+    /// Failed to parse rule with specified error reason `RuleParsingErrorReason`.
+    case failedToParseRule(reason: RuleParsingErrorReason)
     
     /// Error that data corrupted.
     case dataCorrupted
@@ -238,11 +240,9 @@ final public class ConfigurationSerialization {
         var ruleLineMap: [Int : Line] = [:]
         var policyGroupMap: [Int : Line] = [:]
         var proxyMap: [Int : Line] = [:]
-        let builtin: [Line] = [
-            .init(key: "DIRECT", value: ""),
-            .init(key: "REJECT", value: ""),
-            .init(key: "REJECT-TINYGIF", value: ""),
-        ]
+        let builtin: [Line] = Builtin.policies.map {
+            Line(key: $0.name, value: "")
+        }
         
         var lines: [Line] = []
         while let next = self.parseNext() {

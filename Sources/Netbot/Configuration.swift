@@ -210,7 +210,7 @@ public struct SelectablePolicyGroup: Equatable {
     public var policies: [String]
     
     /// Current selected policy.
-    public var selected: String
+    public var selected: String?
     
     /// Initialize an instance of `SelectablePolicyGroup` with specified name and policies.
     public init(name: String, policies: [String]) {
@@ -218,6 +218,5 @@ public struct SelectablePolicyGroup: Equatable {
         
         self.name = name
         self.policies = policies
-        self.selected = policies.first!
     }
 }
