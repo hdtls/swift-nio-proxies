@@ -112,7 +112,7 @@ public class Netbot {
                             // This results will be used for rule matching.
                             let dnsLookupPromise = eventLoop.makePromise(of: [NetAddress].self)
                             
-                            let dnsLookupStartTimeInterval = Date.timeIntervalSinceReferenceDate
+                            let dnsLookupStartTimeInterval = DispatchTime.now().uptimeNanoseconds
                             
                             switch taskAddress {
                                 case .domainPort(let domain, let port):
@@ -137,7 +137,7 @@ public class Netbot {
                             
                             return dnsLookupPromise.futureResult
                                 .map { addresses -> [String] in
-                                    self.logger.info("DNS Lookup end with \((Date.timeIntervalSinceReferenceDate - dnsLookupStartTimeInterval) * 1000)ms.", metadata: ["Request" : "\(taskAddress)"])
+                                    self.logger.info("DNS Lookup end with \((DispatchTime.now().uptimeNanoseconds - dnsLookupStartTimeInterval) / 1000)ms.", metadata: ["Request" : "\(taskAddress)"])
                                     return addresses.map {
                                         // Map domainPort address to domain
                                         // and socketAddress to pathname if is unixDomainSocket else ipAddress.
@@ -149,15 +149,15 @@ public class Netbot {
                                         }
                                     }
                                 }
-                                .map { patterns -> AnyRule? in
+                                .map { patterns -> AnyRule in
                                     // Rule evaluating.
                                     var savedFinalRule: AnyRule?
                                     
-                                    let startTimeInterval = Date.timeIntervalSinceReferenceDate
+                                    let startTime = DispatchTime.now().uptimeNanoseconds
                                     
                                     defer {
-                                        self.logger.info("Rule evaluating \(savedFinalRule != nil ? "- \(savedFinalRule!)" : "failed.")", metadata: ["Request" : "\(taskAddress)"])
-                                        self.logger.info("Rule evaluating end with \((Date.timeIntervalSinceReferenceDate - startTimeInterval) * 1000)ms.", metadata: ["Request" : "\(taskAddress)"])
+                                        self.logger.info("Rule evaluating - \(savedFinalRule!)", metadata: ["Request" : "\(taskAddress)"])
+                                        self.logger.info("Rule evaluating end with \((DispatchTime.now().uptimeNanoseconds - startTime) / 1000)ms.", metadata: ["Request" : "\(taskAddress)"])
                                     }
                                     
                                     for rule in self.configuration.rules {
@@ -171,16 +171,15 @@ public class Netbot {
                                         }
                                     }
                                     
+                                    guard let savedFinalRule = savedFinalRule else {
+                                        fatalError("This should never happen, rules defined in configuration MUST contain one FinalRule.")
+                                    }
+                                    
                                     return savedFinalRule
                                 }
                                 .map { rule -> ProxyPolicy in
                                     // Policy evaluating.
                                     let fallback = ProxyPolicy.direct(.init())
-                                    
-                                    guard let rule = rule else {
-                                        // If rule not exists, fallback to default.
-                                        return fallback
-                                    }
                                     
                                     var preferred: String?
                                     

@@ -19,11 +19,15 @@ import NetbotCore
 public struct __Never: Codable, Hashable {}
 
 public protocol Policy: Codable, ConnectionPoolSource {
+    
     associatedtype Configuration: Codable
     
-    static var type: String { get }
+    static var schema: String { get }
+    
     var configuration: Configuration { get set }
+    
     var name: String { get set }
+    
     var taskAddress: NetAddress? { get set }
     
     init()
@@ -33,33 +37,33 @@ extension Policy {
     
     public init(stringLiteral: String) throws {
         var components = stringLiteral.components(separatedBy: ",")
-
+        
         self.init()
         
         let l = components.removeFirst().trimmingCharacters(in: .whitespaces).components(separatedBy: "=")
         // l must be NAME = TYPE pair.
-        guard l.count == 2, Self.type == l.last?.trimmingCharacters(in: .whitespaces) else {
+        guard l.count == 2, Self.schema == l.last?.trimmingCharacters(in: .whitespaces) else {
             throw ConfigurationSerializationError.dataCorrupted
         }
         name = l.first!.trimmingCharacters(in: .whitespaces)
         
         let json = try components.reduce(into: [:], { result, substring in
-                let sequence = substring.split(separator: "=")
-                guard sequence.count == 2 else {
-                    throw ConfigurationSerializationError.dataCorrupted
-                }
-                let stringLiteral = sequence[1].trimmingCharacters(in: .whitespaces)
-                var value: Any
-                switch stringLiteral {
-                    case "true":
-                        value = true
-                    case "false":
-                        value = false
-                    default:
-                        value = Int(stringLiteral) ?? stringLiteral
-                }
-                result.updateValue(value, forKey: sequence[0].trimmingCharacters(in: .whitespaces))
-            })
+            let sequence = substring.split(separator: "=")
+            guard sequence.count == 2 else {
+                throw ConfigurationSerializationError.dataCorrupted
+            }
+            let stringLiteral = sequence[1].trimmingCharacters(in: .whitespaces)
+            var value: Any
+            switch stringLiteral {
+                case "true":
+                    value = true
+                case "false":
+                    value = false
+                default:
+                    value = Int(stringLiteral) ?? stringLiteral
+            }
+            result.updateValue(value, forKey: sequence[0].trimmingCharacters(in: .whitespaces))
+        })
         
         let data = try JSONSerialization.data(withJSONObject: json, options: .fragmentsAllowed)
         configuration = try JSONDecoder().decode(Configuration.self, from: data)
@@ -74,7 +78,7 @@ extension Policy {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         
-        var stringLiteral = name + " = \(Self.type)"
+        var stringLiteral = name + " = \(Self.schema)"
         
         let data = try JSONEncoder().encode(configuration)
         let json = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? [String : Any]
@@ -90,6 +94,8 @@ extension Policy {
         try container.encode(stringLiteral)
     }
 }
+
+typealias ProxyProvider = ConnectionPoolSource
 
 public enum ProxyPolicy: Codable {
     
@@ -269,6 +275,18 @@ public enum ProxyPolicy: Codable {
     }
 }
 
+public struct NetworkPolicy<C> {
+    
+    /// The protocol used by the policy.
+    public let `protocol`: String
+    
+    /// A string containing the policy name.
+    public let name: String
+    
+    /// An object containing the configuration for this policy.
+    public var configuration: C
+}
+
 public struct DirectPolicy: Codable, Hashable, Policy {
     
     public typealias Configuration = __Never
@@ -276,7 +294,7 @@ public struct DirectPolicy: Codable, Hashable, Policy {
     public var configuration: Configuration = .init()
     public var name: String = "DIRECT"
     public var taskAddress: NetAddress?
-    public static var type: String {
+    public static var schema: String {
         "direct"
     }
     
@@ -291,12 +309,13 @@ public struct RejectPolicy: Codable, Hashable, Policy {
     
     public typealias Configuration = __Never
     
+    public static var schema: String = "reject"
+
     public var configuration: Configuration = .init()
+
     public var name: String = "REJECT"
+
     public var taskAddress: NetAddress?
-    public static var type: String {
-        "reject"
-    }
     
     public init() {}
     
@@ -309,12 +328,13 @@ public struct RejectTinyGifPolicy: Codable, Hashable, Policy {
     
     public typealias Configuration = __Never
     
+    public static var schema: String = "reject-tinygif"
+
     public var configuration: Configuration = .init()
+
     public var name: String = "REJECT-TINYGIF"
+
     public var taskAddress: NetAddress?
-    public static var type: String {
-        "reject-tinygif"
-    }
     
     public init() {}
     
@@ -353,12 +373,13 @@ public struct ShadowsocksPolicy: Codable, Hashable, Policy {
         }
     }
     
+    public static var schema: String = "ss"
+
     public var configuration: Configuration = .init()
+
     public var name: String = "ss"
+
     public var taskAddress: NetAddress?
-    public static var type: String {
-        "ss"
-    }
     
     public init() {}
     
@@ -387,12 +408,13 @@ public struct SOCKS5Policy: Codable, Hashable, Policy {
         }
     }
     
+    public static var schema: String = "socks5"
+
     public var configuration: Configuration = .init()
+
     public var name: String = "socks5"
+
     public var taskAddress: NetAddress?
-    public static var type: String {
-        "socks5"
-    }
     
     public init() {}
     
@@ -433,12 +455,13 @@ public struct SOCKS5OverTLSPolicy: Codable, Hashable, Policy {
         init() {}
     }
     
+    public static var schema: String = "socks5-tls"
+
     public var name: String = "socks5-tls"
+
     public var configuration: Configuration = .init()
+
     public var taskAddress: NetAddress?
-    public static var type: String {
-        "socks5-tls"
-    }
     
     public init() {}
     
@@ -477,7 +500,7 @@ public struct HTTPProxyPolicy: Codable, Hashable, Policy {
     public var name: String = "http"
     public var configuration: Configuration = .init()
     public var taskAddress: NetAddress?
-    public static var type: String {
+    public static var schema: String {
         "http"
     }
     
@@ -518,22 +541,19 @@ public struct HTTPSProxyPolicy: Codable, Hashable, Policy {
         }
     }
     
+    public static var schema: String = "https"
+    
     /// Name for proxy.
     public var name: String = "https"
     public var configuration: Configuration = .init()
     public var taskAddress: NetAddress?
-    public static var type: String {
-        "https"
-    }
     
     public init() {}
 }
 
 public struct VMESSPolicy: Codable, Hashable, Policy {
-
-    public static var type: String {
-        "vmess"
-    }
+    
+    public static var schema: String = "vmess"
     
     public var configuration: Configuration = .init()
     
