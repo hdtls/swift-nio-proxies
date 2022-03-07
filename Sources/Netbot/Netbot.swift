@@ -23,24 +23,30 @@ import Foundation
 @_exported import NIOExtras
 @_exported import NIOHTTP1
 @_exported import NIOPosix
+@_exported import ConnectionPool
 
 public class Netbot {
     
-    public var logger: Logger
+    public let logger: Logger
+    
     public var configuration: Configuration
+    
     public var outboundMode: OutboundMode
+    
     public var isHTTPCaptureEnabled: Bool = false
+    
     public var isMitmEnabled: Bool = false
+    
     public var geoLite2: GeoLite2 {
         set { GeoIPRule.geo = newValue }
         get { GeoIPRule.geo! }
     }
-    public var ruleMatcher: RuleMatcher {
-        .init(rules: configuration.rules)
-    }
+    
     private var eventLoopGroup: EventLoopGroup!
+    
     private var quiesce: ServerQuiescingHelper!
-    private lazy var threadPool: NIOThreadPool = {
+    
+    public lazy var threadPool: NIOThreadPool = {
         NIOThreadPool.init(numberOfThreads: System.coreCount)
     }()
     
@@ -55,7 +61,7 @@ public class Netbot {
             handler.logLevel = configuration.general.logLevel
             return handler
         }
-
+        
         self.logger = .init(label: "io.tenbits.Netbot")
         self.configuration = configuration
         self.outboundMode = outboundMode
@@ -95,30 +101,118 @@ public class Netbot {
                         ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)),
                         HTTP1ProxyServerHandler(logger: self.logger, authorization: nil, enableHTTPCapture: self.isHTTPCaptureEnabled, enableMitM: self.isMitmEnabled, mitmConfig: self.configuration.mitm) { taskAddress in
                             
-                            guard case .domainPort(let domain, _) = taskAddress else {
-                                return channel.eventLoop.makeFailedFuture(SocketAddressError.unsupported)
-                            }
-                            
                             let eventLoop = channel.eventLoop.next()
                             
-                            guard self.outboundMode != .direct, let rule = self.ruleMatcher.firstMatch(domain) else {
-                                return DirectPolicy.init(taskAddress: taskAddress)
+                            guard self.outboundMode != .direct else {
+                                return DirectPolicy(taskAddress: taskAddress)
                                     .makeConnection(logger: self.logger, on: eventLoop)
                             }
                             
-                            let selectablePolicyGroup = self.configuration.selectablePolicyGroups.first {
-                                $0.name == rule.policy
+                            // DNS lookup for taskAddress.
+                            // This results will be used for rule matching.
+                            let dnsLookupPromise = eventLoop.makePromise(of: [NetAddress].self)
+                            
+                            let dnsLookupStartTimeInterval = Date.timeIntervalSinceReferenceDate
+                            
+                            switch taskAddress {
+                                case .domainPort(let domain, let port):
+                                    let resolver = GetaddrinfoResolver(eventLoop: eventLoop)
+                                    let dnsLookup = EventLoopFuture.whenAllSucceed([
+                                        resolver.initiateAQuery(host: domain, port: port)
+                                            .flatMapErrorThrowing { _ in Array<SocketAddress>() },
+                                        resolver.initiateAAAAQuery(host: domain, port: port)
+                                            .flatMapErrorThrowing { _ in Array<SocketAddress>() }
+                                    ], on: eventLoop)
+                                    
+                                    dnsLookup
+                                        .map {
+                                            $0.joined().map {
+                                                NetAddress.socketAddress($0)
+                                            } + [taskAddress]
+                                        }
+                                        .cascade(to: dnsLookupPromise)
+                                case .socketAddress:
+                                    dnsLookupPromise.succeed([taskAddress])
                             }
                             
-                            guard var policy = (self.configuration.policies.first {
-                                $0.name == selectablePolicyGroup?.selected || $0.name == rule.policy
-                            }) else {
-                                // Unknown policy found.
-                                return eventLoop.makeFailedFuture(ConfigurationSerializationError.dataCorrupted)
-                            }
-                            
-                            policy.taskAddress = taskAddress
-                            return policy.makeConnection(logger: self.logger, on: eventLoop)
+                            return dnsLookupPromise.futureResult
+                                .map { addresses -> [String] in
+                                    self.logger.info("DNS Lookup end with \((Date.timeIntervalSinceReferenceDate - dnsLookupStartTimeInterval) * 1000)ms.", metadata: ["Request" : "\(taskAddress)"])
+                                    return addresses.map {
+                                        // Map domainPort address to domain
+                                        // and socketAddress to pathname if is unixDomainSocket else ipAddress.
+                                        switch $0 {
+                                            case .domainPort(let domain, _):
+                                                return domain
+                                            case .socketAddress(let addrinfo):
+                                                return addrinfo.ipAddress ?? addrinfo.pathname!
+                                        }
+                                    }
+                                }
+                                .map { patterns -> AnyRule? in
+                                    // Rule evaluating.
+                                    var savedFinalRule: AnyRule?
+                                    
+                                    let startTimeInterval = Date.timeIntervalSinceReferenceDate
+                                    
+                                    defer {
+                                        self.logger.info("Rule evaluating \(savedFinalRule != nil ? "- \(savedFinalRule!)" : "failed.")", metadata: ["Request" : "\(taskAddress)"])
+                                        self.logger.info("Rule evaluating end with \((Date.timeIntervalSinceReferenceDate - startTimeInterval) * 1000)ms.", metadata: ["Request" : "\(taskAddress)"])
+                                    }
+                                    
+                                    for rule in self.configuration.rules {
+                                        guard patterns.first(where: rule.match) == nil else {
+                                            savedFinalRule = rule
+                                            break
+                                        }
+                                        
+                                        if rule.underlying is FinalRule {
+                                            savedFinalRule = rule
+                                        }
+                                    }
+                                    
+                                    return savedFinalRule
+                                }
+                                .map { rule -> ProxyPolicy in
+                                    // Policy evaluating.
+                                    let fallback = ProxyPolicy.direct(.init())
+                                    
+                                    guard let rule = rule else {
+                                        // If rule not exists, fallback to default.
+                                        return fallback
+                                    }
+                                    
+                                    var preferred: String?
+                                    
+                                    // Check whether there is a `SelectablePolicyGroup`
+                                    // with then same name as the rule's policy in
+                                    // `selectablePolicyGroups`, if group exists use group's
+                                    // `selected` as policy ID else use rule's policy as ID.
+                                    if let policyGroup = (self.configuration.selectablePolicyGroups.first { $0.name == rule.policy }) {
+                                        preferred = policyGroup.selected
+                                    } else {
+                                        preferred = rule.policy
+                                    }
+                                    
+                                    // The user may not have preferred policy, so if not
+                                    // we should fallback.
+                                    guard let preferred = preferred else {
+                                        return fallback
+                                    }
+                                    
+                                    let policy = (self.configuration.policies + Builtin.policies).first {
+                                        $0.name == preferred
+                                    }
+                                    
+                                    assert(policy != nil, "Illegal selectable policy groups, all policies group should be one of the policies in same configuration.")
+                                    return policy!
+                                }
+                                .flatMap {
+                                    self.logger.info("Policy evaluating - \($0.name)", metadata: ["Request" : "\(taskAddress)"])
+                                    var policy = $0
+                                    policy.taskAddress = taskAddress
+                                    return policy.makeConnection(logger: self.logger, on: eventLoop)
+                                }
                         }
                     ])
                 }

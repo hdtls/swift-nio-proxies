@@ -14,6 +14,7 @@
 
 import ConnectionPool
 import Foundation
+import NetbotCore
 
 public struct __Never: Codable, Hashable {}
 
@@ -97,7 +98,7 @@ public enum ProxyPolicy: Codable {
     case rejectTinyGif(RejectTinyGifPolicy)
     case shadowsocks(ShadowsocksPolicy)
     case socks5(SOCKS5Policy)
-    case socks5TLS(SOCKS5TLSPolicy)
+    case socks5TLS(SOCKS5OverTLSPolicy)
     case http(HTTPProxyPolicy)
     case https(HTTPSProxyPolicy)
     case vmess(VMESSPolicy)
@@ -207,7 +208,7 @@ public enum ProxyPolicy: Codable {
             case .some("SOCKS5"):
                 self = .socks5(try SOCKS5Policy.init(stringLiteral: stringLiteral))
             case .some("SOCKS5-TLS"):
-                self = .socks5TLS(try SOCKS5TLSPolicy.init(stringLiteral: stringLiteral))
+                self = .socks5TLS(try SOCKS5OverTLSPolicy.init(stringLiteral: stringLiteral))
             case .some("VMESS"):
                 self = .vmess(try VMESSPolicy.init(stringLiteral: stringLiteral))
             default:
@@ -328,18 +329,18 @@ public struct ShadowsocksPolicy: Codable, Hashable, Policy {
     public struct Configuration: Codable, Hashable {
         
         public var algorithm: String = ""
-        private var _allowUDPRelay: Bool?
+        private var codableAllowUDPRelay: Bool?
         public var allowUDPRelay: Bool {
-            set { _allowUDPRelay = newValue }
-            get { _allowUDPRelay ?? false }
+            set { codableAllowUDPRelay = newValue }
+            get { codableAllowUDPRelay ?? false }
         }
         public var password: String = ""
         public var serverHostname: String = ""
         public var serverPort: Int = 0
-        private var _tfo: Bool?
-        public var tfo: Bool {
-            set { _tfo = newValue }
-            get { _tfo ?? false }
+        private var codableIsTFOEnabled: Bool?
+        public var isTFOEnabled: Bool {
+            set { codableIsTFOEnabled = newValue }
+            get { codableIsTFOEnabled ?? false }
         }
         
         private enum CodingKeys: String, CodingKey {
@@ -347,8 +348,8 @@ public struct ShadowsocksPolicy: Codable, Hashable, Policy {
             case serverPort = "server-port"
             case password
             case algorithm
-            case _allowUDPRelay = "allow-udp-relay"
-            case _tfo = "tfo"
+            case codableAllowUDPRelay = "allow-udp-relay"
+            case codableIsTFOEnabled = "tfo"
         }
     }
     
@@ -403,7 +404,7 @@ public struct SOCKS5Policy: Codable, Hashable, Policy {
 }
 
 /// SOCKS TLS = socks5-tls, password=password, server-port=443, server-hostname=socks5-tls.com, username=username
-public struct SOCKS5TLSPolicy: Codable, Hashable, Policy {
+public struct SOCKS5OverTLSPolicy: Codable, Hashable, Policy {
     
     public struct Configuration: Codable, Hashable {
         
@@ -414,10 +415,10 @@ public struct SOCKS5TLSPolicy: Codable, Hashable, Policy {
         public var username: String?
         public var serverHostname: String = ""
         public var serverPort: Int = 0
-        private var _skipCertificateVerification: Bool?
+        private var codableSkipCertificateVerification: Bool?
         public var skipCertificateVerification: Bool {
-            set { _skipCertificateVerification = newValue }
-            get { _skipCertificateVerification ?? false }
+            set { codableSkipCertificateVerification = newValue }
+            get { codableSkipCertificateVerification ?? false }
         }
         
         private enum CodingKeys: String, CodingKey {
@@ -426,7 +427,7 @@ public struct SOCKS5TLSPolicy: Codable, Hashable, Policy {
             case username
             case serverHostname = "server-hostname"
             case serverPort = "server-port"
-            case _skipCertificateVerification = "skip-certificate-verification"
+            case codableSkipCertificateVerification = "skip-certificate-verification"
         }
         
         init() {}
@@ -457,10 +458,10 @@ public struct HTTPProxyPolicy: Codable, Hashable, Policy {
         public var username: String?
         public var serverHostname: String = ""
         public var serverPort: Int = 0
-        private var _alwaysUseConnect: Bool?
-        public var alwaysUseConnect: Bool {
-            set { _alwaysUseConnect = newValue }
-            get { _alwaysUseConnect ?? false }
+        private var codablePerformHTTPTunneling: Bool?
+        public var performHTTPTunneling: Bool {
+            set { codablePerformHTTPTunneling = newValue }
+            get { codablePerformHTTPTunneling ?? false }
         }
         
         private enum CodingKeys: String, CodingKey {
@@ -468,7 +469,7 @@ public struct HTTPProxyPolicy: Codable, Hashable, Policy {
             case username
             case serverHostname = "server-hostname"
             case serverPort = "server-port"
-            case _alwaysUseConnect = "always-use-connect"
+            case codablePerformHTTPTunneling = "always-use-connect"
         }
     }
     
@@ -495,15 +496,15 @@ public struct HTTPSProxyPolicy: Codable, Hashable, Policy {
         public var username: String?
         public var serverHostname: String = ""
         public var serverPort: Int = 0
-        private var _alwaysUseConnectTunnel: Bool?
+        private var codablePerformHTTPTunneling: Bool?
         public var alwaysUseConnectTunnel: Bool {
-            set { _alwaysUseConnectTunnel = newValue }
-            get { _alwaysUseConnectTunnel ?? false }
+            set { codablePerformHTTPTunneling = newValue }
+            get { codablePerformHTTPTunneling ?? false }
         }
-        private var _skipCertificateVerification: Bool?
+        private var codableSkipCertificateVerification: Bool?
         public var skipCertificateVerification: Bool {
-            set { _skipCertificateVerification = newValue }
-            get { _skipCertificateVerification ?? false }
+            set { codableSkipCertificateVerification = newValue }
+            get { codableSkipCertificateVerification ?? false }
         }
         
         private enum CodingKeys: String, CodingKey {
@@ -512,8 +513,8 @@ public struct HTTPSProxyPolicy: Codable, Hashable, Policy {
             case username
             case serverHostname = "server-hostname"
             case serverPort = "server-port"
-            case _alwaysUseConnectTunnel = "always-use-connect"
-            case _skipCertificateVerification = "skip-certificate-verification"
+            case codablePerformHTTPTunneling = "always-use-connect"
+            case codableSkipCertificateVerification = "skip-certificate-verification"
         }
     }
     
@@ -560,4 +561,12 @@ public struct VMESSPolicy: Codable, Hashable, Policy {
         self.configuration = configuration
         self.taskAddress = taskAddress
     }
+}
+
+// Just a namespacing
+enum Builtin {}
+
+extension Builtin {
+    
+    static var policies: [ProxyPolicy] = [.direct(.init()), .reject(.init()), .rejectTinyGif(.init())]
 }

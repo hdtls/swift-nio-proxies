@@ -133,7 +133,6 @@ extension SelectablePolicyGroup: Codable {
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { $0 != "select" }
-        selected = policies.first!
     }
     
     public func encode(to encoder: Encoder) throws {

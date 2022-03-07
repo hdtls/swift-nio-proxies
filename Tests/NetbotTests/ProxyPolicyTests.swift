@@ -76,7 +76,7 @@ final class ProxyPolicyTests: XCTestCase {
         XCTAssertEqual(policy.configuration.password, "password")
         XCTAssertEqual(policy.configuration.algorithm, "chacha20-ietf-poly1305")
         XCTAssertEqual(policy.configuration.allowUDPRelay, true)
-        XCTAssertEqual(policy.configuration.tfo, true)
+        XCTAssertEqual(policy.configuration.isTFOEnabled, true)
         
         let policies = try JSONDecoder().decode([ShadowsocksPolicy].self, from: JSONSerialization.data(withJSONObject: [stringLiteral], options: .fragmentsAllowed))
         XCTAssertNotNil(policies.first)
@@ -87,7 +87,7 @@ final class ProxyPolicyTests: XCTestCase {
         XCTAssertEqual(policy.configuration.password, policy1.configuration.password)
         XCTAssertEqual(policy.configuration.algorithm, policy1.configuration.algorithm)
         XCTAssertEqual(policy.configuration.allowUDPRelay, policy1.configuration.allowUDPRelay)
-        XCTAssertEqual(policy.configuration.tfo, policy1.configuration.tfo)
+        XCTAssertEqual(policy.configuration.isTFOEnabled, policy1.configuration.isTFOEnabled)
     }
     
     func testParsingShadowsocksPolicyWithStringThatMissingBoolValueField() throws {
@@ -101,7 +101,7 @@ final class ProxyPolicyTests: XCTestCase {
         XCTAssertEqual(policy.configuration.password, "password")
         XCTAssertEqual(policy.configuration.algorithm, "chacha20-ietf-poly1305")
         XCTAssertEqual(policy.configuration.allowUDPRelay, false)
-        XCTAssertEqual(policy.configuration.tfo, false)
+        XCTAssertEqual(policy.configuration.isTFOEnabled, false)
     }
     
     func testParsingShadowsocksPolicyFieldRequires() {
@@ -169,17 +169,17 @@ final class ProxyPolicyTests: XCTestCase {
         XCTAssertEqual(stringLiteral, expected)
     }
  
-    func testParsingSOCKS5TLSPolicy() throws {
+    func testParsingSOCKS5OverTLSPolicy() throws {
         let stringLiteral = "SOCKS TLS = socks5-tls, password=password, server-port=8385, server-hostname=socks5-tls.com, username=username"
         
-        let policy = try SOCKS5TLSPolicy.init(stringLiteral: stringLiteral)
+        let policy = try SOCKS5OverTLSPolicy.init(stringLiteral: stringLiteral)
         
         XCTAssertEqual(policy.name, "SOCKS TLS")
         XCTAssertEqual(policy.configuration.serverPort, 8385)
         XCTAssertEqual(policy.configuration.serverHostname, "socks5-tls.com")
         XCTAssertEqual(policy.configuration.password, "password")
         
-        let policies = try JSONDecoder().decode([SOCKS5TLSPolicy].self, from: JSONSerialization.data(withJSONObject: [stringLiteral], options: .fragmentsAllowed))
+        let policies = try JSONDecoder().decode([SOCKS5OverTLSPolicy].self, from: JSONSerialization.data(withJSONObject: [stringLiteral], options: .fragmentsAllowed))
         XCTAssertNotNil(policies.first)
         let policy1 = policies.first!
         XCTAssertEqual(policy.name, policy1.name)
@@ -188,20 +188,20 @@ final class ProxyPolicyTests: XCTestCase {
         XCTAssertEqual(policy.configuration.password, policy1.configuration.password)
     }
     
-    func testParsingSOCKS5TLSPolicyFieldRequires() {
+    func testParsingSOCKS5OverTLSPolicyFieldRequires() {
         var stringLiteral = "SOCKS TLS = socks5-tls"
-        XCTAssertThrowsError(try SOCKS5TLSPolicy.init(stringLiteral: stringLiteral))
+        XCTAssertThrowsError(try SOCKS5OverTLSPolicy.init(stringLiteral: stringLiteral))
         
         stringLiteral = "SOCKS TLS = socks5-tls, server-hostname=socks5-tls.com"
-        XCTAssertThrowsError(try SOCKS5TLSPolicy.init(stringLiteral: stringLiteral))
+        XCTAssertThrowsError(try SOCKS5OverTLSPolicy.init(stringLiteral: stringLiteral))
         
         stringLiteral = "SOCKS TLS = socks5-tls, server-hostname=socks5-tls.com, server-port=8389"
-        XCTAssertNoThrow(try SOCKS5TLSPolicy.init(stringLiteral: stringLiteral))
+        XCTAssertNoThrow(try SOCKS5OverTLSPolicy.init(stringLiteral: stringLiteral))
     }
     
-    func testSOCKS5TLSPolicyEncoding() throws {
+    func testSOCKS5OverTLSPolicyEncoding() throws {
         let expected = "SOCKS TLS = socks5-tls, password=password, server-hostname=socks5-tls.com, server-port=8385, username=username"
-        let policy = try SOCKS5TLSPolicy.init(stringLiteral: expected)
+        let policy = try SOCKS5OverTLSPolicy.init(stringLiteral: expected)
         
         let data = try JSONEncoder().encode(policy)
         let stringLiteral = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? String
@@ -330,7 +330,7 @@ final class ProxyPolicyTests: XCTestCase {
             XCTFail()
             return
         }
-        XCTAssertEqual(policy, try SOCKS5TLSPolicy.init(stringLiteral: socks5TLS))
+        XCTAssertEqual(policy, try SOCKS5OverTLSPolicy.init(stringLiteral: socks5TLS))
 
         guard case .http(let policy) = try ProxyPolicy.init(stringLiteral: http) else {
             XCTFail()

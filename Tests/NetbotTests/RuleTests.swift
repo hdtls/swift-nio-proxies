@@ -708,7 +708,7 @@ DOMAIN-KEYWORD,apple
         ruleset.performLoadingExternalResources { _ in
             expectation.fulfill()
         }
-        waitForExpectations(timeout: 5, handler: nil)
+        waitForExpectations(timeout: 30, handler: nil)
         
         XCTAssertEqual(ruleset.pattern, "http://ruleset.com")
         XCTAssertEqual(ruleset.policy, "DIRECT")

@@ -106,7 +106,7 @@ extension SOCKS5Policy: ConnectionPoolSource {
     }
 }
 
-extension SOCKS5TLSPolicy: ConnectionPoolSource {
+extension SOCKS5OverTLSPolicy: ConnectionPoolSource {
     
     public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
         do {

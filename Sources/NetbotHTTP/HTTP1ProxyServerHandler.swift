@@ -14,6 +14,7 @@
 
 import Foundation
 import Logging
+import NetbotCore
 import NIOCore
 import NIOHTTP1
 import NIOSSL
@@ -204,7 +205,12 @@ extension HTTP1ProxyServerHandler {
             throw HTTPProxyError.invalidURL(url: head.uri)
         }
         
-        let taskAddress: NetAddress = .domainPort(serverHostname, head.port)
+        let taskAddress: NetAddress
+        if serverHostname.isIPAddress() {
+            taskAddress = .socketAddress(try SocketAddress(ipAddress: serverHostname, port: head.port))
+        } else {
+            taskAddress = .domainPort(serverHostname, head.port)
+        }
         
         let client = completion(taskAddress)
         
