@@ -310,11 +310,11 @@ public struct RejectPolicy: Codable, Hashable, Policy {
     public typealias Configuration = __Never
     
     public static var schema: String = "reject"
-
+    
     public var configuration: Configuration = .init()
-
+    
     public var name: String = "REJECT"
-
+    
     public var taskAddress: NetAddress?
     
     public init() {}
@@ -329,11 +329,11 @@ public struct RejectTinyGifPolicy: Codable, Hashable, Policy {
     public typealias Configuration = __Never
     
     public static var schema: String = "reject-tinygif"
-
+    
     public var configuration: Configuration = .init()
-
+    
     public var name: String = "REJECT-TINYGIF"
-
+    
     public var taskAddress: NetAddress?
     
     public init() {}
@@ -374,11 +374,11 @@ public struct ShadowsocksPolicy: Codable, Hashable, Policy {
     }
     
     public static var schema: String = "ss"
-
+    
     public var configuration: Configuration = .init()
-
+    
     public var name: String = "ss"
-
+    
     public var taskAddress: NetAddress?
     
     public init() {}
@@ -409,11 +409,11 @@ public struct SOCKS5Policy: Codable, Hashable, Policy {
     }
     
     public static var schema: String = "socks5"
-
+    
     public var configuration: Configuration = .init()
-
+    
     public var name: String = "socks5"
-
+    
     public var taskAddress: NetAddress?
     
     public init() {}
@@ -456,11 +456,11 @@ public struct SOCKS5OverTLSPolicy: Codable, Hashable, Policy {
     }
     
     public static var schema: String = "socks5-tls"
-
+    
     public var name: String = "socks5-tls"
-
+    
     public var configuration: Configuration = .init()
-
+    
     public var taskAddress: NetAddress?
     
     public init() {}
@@ -520,7 +520,7 @@ public struct HTTPSProxyPolicy: Codable, Hashable, Policy {
         public var serverHostname: String = ""
         public var serverPort: Int = 0
         private var codablePerformHTTPTunneling: Bool?
-        public var alwaysUseConnectTunnel: Bool {
+        public var performHTTPTunneling: Bool {
             set { codablePerformHTTPTunneling = newValue }
             get { codablePerformHTTPTunneling ?? false }
         }

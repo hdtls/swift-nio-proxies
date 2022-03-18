@@ -20,7 +20,7 @@ public enum ConfigurationSerializationError: Error {
     
     /// Error reason for invalid file
     public enum InvalidFileErrorReason: CustomStringConvertible {
-
+        
         /// Line is invalid at cursor line
         case invalidLine(cursor: Int, description: String)
         
@@ -87,18 +87,61 @@ public enum ConfigurationSerializationError: Error {
 /// objects to JSON.
 /// To convert a json object to data the object must is a NSDIctionary with String keys.
 final public class ConfigurationSerialization {
-
-    private enum Cursor: String {
-        case mdlLine = "cursor.__MODULE_LINE"
-        case commentLine = "cursor.__COMMENT_LINE"
-        case newLine = "cursor.__NEW_LINE"
-        case markableLine = "cursor.__MARKABLE_LINE"
+    
+    struct JSONKey: Equatable, RawRepresentable {
+        
+        static let general: JSONKey = .init(rawValue: "general")!
+        static let replica: JSONKey = .init(rawValue: "replica")!
+        static let policies: JSONKey = .init(rawValue: "policies")!
+        static let policyGroups: JSONKey = .init(rawValue: "policy_groups")!
+        static let rules: JSONKey = .init(rawValue: "rules")!
+        static let mitm: JSONKey = .init(rawValue: "mitm")!
+        
+        typealias RawValue = String
+        
+        var rawValue: RawValue
+        
+        init?(rawValue: RawValue) {
+            switch rawValue {
+                case "[General]":
+                    self.rawValue = "general"
+                case "[Replica]":
+                    self.rawValue = "replica"
+                case "[Proxy Policy]":
+                    self.rawValue = "policies"
+                case "[Policy Group]":
+                    self.rawValue = "policy_groups"
+                case "[Rule]":
+                    self.rawValue = "rules"
+                case "[MitM]":
+                    self.rawValue = "mitm"
+                default:
+                    // Convert kebab case to snake case
+                    self.rawValue = rawValue.replacingOccurrences(of: "-", with: "_")
+            }
+        }
     }
     
     /// Represents a `KEY=VALUE` pair in a dotenv file.
     struct Line: Equatable {
+        
+        struct Key: Equatable, RawRepresentable {
+            fileprivate static let mdlLine: Key = .init(rawValue: "cursor.__MODULE_LINE")!
+            fileprivate static let commentLine: Key = .init(rawValue: "cursor.__COMMENT_LINE")!
+            fileprivate static let newLine: Key = .init(rawValue: "cursor.__NEW_LINE")!
+            fileprivate static let elementLine: Key = .init(rawValue: "cursor.__MARKABLE_LINE")!
+            
+            typealias RawValue = String
+            
+            var rawValue: RawValue
+            
+            init?(rawValue: RawValue) {
+                self.rawValue = rawValue
+            }
+        }
+        
         /// The key.
-        let key: String
+        let key: Key
         
         /// The value.
         let value: String
@@ -106,12 +149,7 @@ final public class ConfigurationSerialization {
     
     private var source: ByteBuffer
     
-    private var currentGroup: String = ""
-    
     private var previous: UInt8?
-    
-    /// Line number being parsed.
-    private var cursor: Int = 0
     
     /// A boolean value that determines whether to convert string to bool if possible.
     public static var converStringToBoolIfPossible: Bool = true
@@ -127,61 +165,87 @@ final public class ConfigurationSerialization {
         var json: [String : Any] = [:]
         let parser = ConfigurationSerialization.init(source: data)
         
+        var currentGroup: JSONKey!
+        
         try parser.parse().forEach { next in
             // Comment and empty line will be ignored.
-            guard next.key != Cursor.commentLine.rawValue, next.key != Cursor.newLine.rawValue else {
+            guard next.key != .commentLine, next.key != .newLine else {
                 return
             }
             
-            guard next.key != Cursor.mdlLine.rawValue else {
-                parser.currentGroup = next.value.trimmingCharacters(in: .whitespaces)
+            guard next.key != .mdlLine else {
+                switch next.value {
+                    case "[General]":
+                        currentGroup = .general
+                    case "[Replica]":
+                        currentGroup = .replica
+                    case "[Proxy Policy]":
+                        currentGroup = .policies
+                    case "[Policy Group]":
+                        currentGroup = .policyGroups
+                    case "[Rule]":
+                        currentGroup = .rules
+                    case "[MitM]":
+                        currentGroup = .mitm
+                    default:
+                        currentGroup = .init(rawValue: next.value)
+                }
                 return
             }
+            
+            assert(currentGroup != nil)
             
             var actual: Any
-            let value = next.value.trimmingCharacters(in: .whitespaces)
+            
             // Convert String to Bool if possible.
             if Self.converStringToBoolIfPossible {
-                switch value {
+                switch next.value {
                     case "true":
                         actual = true
                     case "false":
                         actual = false
                     default:
-                        actual = value
+                        actual = next.value
                 }
             } else {
-                actual = value
+                actual = next.value
             }
             
             // Rebuild policy group as json array.
-            guard parser.currentGroup != Configuration.CodingKeys.selectablePolicyGroups.rawValue else {
-                var array: [Any] = (json[parser.currentGroup] as? [Any]) ?? []
-                let _json = [
-                    SelectablePolicyGroup.CodingKeys.name.rawValue : next.key.trimmingCharacters(in: .whitespaces),
-                    SelectablePolicyGroup.CodingKeys.policies.rawValue : actual
+            guard currentGroup != .policyGroups else {
+                var array: [Any] = (json[currentGroup.rawValue] as? [Any]) ?? []
+                // TODO: Hard Code
+                let _json: [String : Any] = [
+                    "name" : next.key.rawValue,
+                    JSONKey.policies.rawValue : next.value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                 ]
                 array.append(_json)
-                json[parser.currentGroup] = array
+                json[currentGroup.rawValue] = array
                 return
             }
             
             // Rebuild policies as json array.
-            guard parser.currentGroup != Configuration.CodingKeys.policies.rawValue else {
-                var array: [Any] = (json[parser.currentGroup] as? [Any]) ?? []
-                array.append("\(next.key)=\(next.value)")
-                json[parser.currentGroup] = array
+            guard currentGroup != .policies else {
+                var array: [Any] = (json[currentGroup.rawValue] as? [Any]) ?? []
+                array.append("\(JSONKey(rawValue: next.key.rawValue)!.rawValue)=\(next.value)")
+                json[currentGroup.rawValue] = array
                 return
             }
             
-            if next.key == Cursor.markableLine.rawValue {
-                var array: [Any] = (json[parser.currentGroup] as? [Any]) ?? []
+            if next.key == .elementLine {
+                var array: [Any] = (json[currentGroup.rawValue] as? [Any]) ?? []
                 array.append(actual)
-                json[parser.currentGroup] = array
+                json[currentGroup.rawValue] = array
             } else {
-                var _json = (json[parser.currentGroup] as? [String : Any]) ?? [:]
-                _json[next.key.trimmingCharacters(in: .whitespaces)] = actual
-                json[parser.currentGroup] = _json
+                var _json = (json[currentGroup.rawValue] as? [String : Any]) ?? [:]
+                let key = JSONKey(rawValue: next.key.rawValue)!.rawValue
+                // TODO: Hard Code
+                if key == "dns_servers" || key == "exceptions" || key == "hostnames" {
+                    _json[key] = next.value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                } else {
+                    _json[key] = key.hasSuffix("_port") ? Int(next.value) as Any : actual
+                }
+                json[currentGroup.rawValue] = _json
             }
         }
         
@@ -212,22 +276,52 @@ final public class ConfigurationSerialization {
             if !stringLiteral.isEmpty {
                 stringLiteral.append("\n")
             }
-            stringLiteral.append("\(key)\n")
             
-            if key == Configuration.CodingKeys.selectablePolicyGroups.rawValue {
-                if let selectablePolicyGroups = value as? [[String : Any]] {
-                    selectablePolicyGroups.forEach {
-                        stringLiteral.append("\($0[SelectablePolicyGroup.CodingKeys.name.rawValue]!) = \($0[SelectablePolicyGroup.CodingKeys.policies.rawValue]!)\n")
+            switch key {
+                case JSONKey.general.rawValue:
+                    stringLiteral.append("[General]\n")
+                case JSONKey.replica.rawValue:
+                    stringLiteral.append("[Replica]\n")
+                case JSONKey.policies.rawValue:
+                    stringLiteral.append("[Proxy Policy]\n")
+                case JSONKey.policyGroups.rawValue:
+                    stringLiteral.append("[Policy Group]\n")
+                case JSONKey.rules.rawValue:
+                    stringLiteral.append("[Rule]\n")
+                case JSONKey.mitm.rawValue:
+                    stringLiteral.append("[MitM]\n")
+                default:
+                    stringLiteral.append("\(key)\n")
+            }
+            
+            guard key != JSONKey.policyGroups.rawValue else {
+                guard let selectablePolicyGroups = value as? [[String : Any]] else {
+                    return
+                }
+                selectablePolicyGroups.forEach {
+                    let policies = ($0[JSONKey.policies.rawValue] as? [String]) ?? []
+                    stringLiteral.append("\($0["name"]!) = \(policies.joined(separator: ","))\n")
+                }
+                return
+            }
+            
+            if let array = value as? [Any?] {
+                array.forEach {
+                    if let v = $0 {
+                        stringLiteral.append("\(v)\n")
                     }
                 }
-            } else {
-                if let array = value as? [Any] {
-                    array.forEach {
-                        stringLiteral.append("\($0)\n")
-                    }
-                } else if let dictionary = value as? [String : Any] {
-                    dictionary.keys.sorted().forEach {
-                        stringLiteral.append("\($0) = \(String(describing: dictionary[$0]))\n")
+            } else if let dictionary = value as? Dictionary<String, Any> {
+                dictionary.keys.sorted().forEach {
+                    let k = $0.replacingOccurrences(of: "_", with: "-")
+                    
+                    if $0 == "exceptions" || $0 == "dns_servers" || $0 == "hostnames" {
+                        let l = dictionary[$0] as? [String] ?? []
+                        stringLiteral.append("\(k) = \(l.joined(separator: ","))\n")
+                    } else {
+                        if let v = dictionary[$0] {
+                            stringLiteral.append("\(k) = \(v)\n")
+                        }
                     }
                 }
             }
@@ -236,13 +330,24 @@ final public class ConfigurationSerialization {
         return stringLiteral.data(using: .utf8) ?? .init()
     }
     
+    static func write(_ json: Any?, dst: inout String) {
+        if let v = json {
+            dst.append("\(v)")
+        }
+    }
+    
     func parse() throws -> [Line] {
         var ruleLineMap: [Int : Line] = [:]
         var policyGroupMap: [Int : Line] = [:]
         var proxyMap: [Int : Line] = [:]
         let builtin: [Line] = Builtin.policies.map {
-            Line(key: $0.name, value: "")
+            Line(key: .init(rawValue: $0.name)!, value: "")
         }
+        
+        var currentGroup: JSONKey?
+        
+        /// Line number being parsed.
+        var cursor: Int = 0
         
         var lines: [Line] = []
         while let next = self.parseNext() {
@@ -250,63 +355,60 @@ final public class ConfigurationSerialization {
             
             lines.append(next)
             
-            guard next.key != Cursor.commentLine.rawValue, next.key != Cursor.newLine.rawValue else {
+            guard next.key != .commentLine, next.key != .newLine else {
+                // Ignore comment and new lines.
                 continue
             }
             
-            guard next.key != Cursor.mdlLine.rawValue else {
-                currentGroup = next.value.trimmingCharacters(in: .whitespaces)
+            guard next.key != .mdlLine else {
+                currentGroup = JSONKey(rawValue: next.value)
                 continue
+            }
+            
+            guard let currentGroup = currentGroup else {
+                throw ConfigurationSerializationError.dataCorrupted
             }
             
             switch currentGroup {
-                case Configuration.CodingKeys.selectablePolicyGroups.rawValue:
-                    policyGroupMap[cursor] = next
-                case Configuration.CodingKeys.rules.rawValue:
-                    ruleLineMap[cursor] = next
-                case Configuration.CodingKeys.policies.rawValue:
+                case .policies:
                     proxyMap[cursor] = next
+                case .policyGroups:
+                    policyGroupMap[cursor] = next
+                case .rules:
+                    ruleLineMap[cursor] = next
                 default:
                     break
             }
         }
         
-        // All proxy used in policy group must declare in [Proxy].
+        // File validating.
+        // All proxy used in policy group must declare in [Proxy Policy].
         try policyGroupMap.forEach { (cursor, line) in
             try line.value
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .forEach { name in
-                    let contains = proxyMap.values.contains { l in
-                        l.key.trimmingCharacters(in: .whitespaces) == name
-                    } || builtin.contains { l in
-                        l.key.trimmingCharacters(in: .whitespaces) == name
-                    }
-                    guard name == "select" || contains else {
+                    let all = Array(proxyMap.values) + builtin
+                    
+                    guard name == "select" || all.contains(where: { $0.key.rawValue == name }) else {
                         throw ConfigurationSerializationError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: name))
                     }
                 }
         }
         
+        // All proxy label defined in rule should
         try ruleLineMap.forEach { (cursor, line) in
             guard let rule = try? AnyRule.init(stringLiteral: line.value) else {
                 throw ConfigurationSerializationError.invalidFile(reason: .invalidLine(cursor: cursor, description: line.value))
             }
             // Validate rule policy.
-            let contains = proxyMap.values.contains {
-                $0.key.trimmingCharacters(in: .whitespaces) == rule.policy
-            } || policyGroupMap.values.contains {
-                $0.key.trimmingCharacters(in: .whitespaces) == rule.policy
-            } || builtin.contains {
-                $0.key.trimmingCharacters(in: .whitespaces) == rule.policy
-            }
-            guard contains else {
+            let all = Array(proxyMap.values) + Array(policyGroupMap.values) + builtin
+            
+            guard all.contains(where: { $0.key.rawValue == rule.policy }) else {
                 throw ConfigurationSerializationError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: rule.policy))
             }
         }
         
-        // Reset `currentGroup` to initial value.
-        currentGroup = ""
         return lines
     }
     
@@ -320,14 +422,14 @@ final public class ConfigurationSerialization {
         switch (peek, previous) {
             case (.octothorpe, _), (.semicolon, _):
                 self.previous = peek
-                return Line(key: Cursor.commentLine.rawValue, value: self.parseLineValue())
+                return Line(key: .commentLine, value: self.parseLineValue())
             case (0x5b, _):
                 self.previous = peek
-                return Line(key: Cursor.mdlLine.rawValue, value: self.parseLineValue())
+                return Line(key: .mdlLine, value: self.parseLineValue())
             case (.newLine, .some(.newLine)):
                 self.pop()
                 self.previous = peek
-                return Line(key: Cursor.newLine.rawValue, value: "\n")
+                return Line(key: .newLine, value: "\n")
             case (.newLine, _):
                 // empty line, skip
                 self.pop()
@@ -355,16 +457,15 @@ final public class ConfigurationSerialization {
         let maxLength = self.source.countDistance(to: .newLine) ?? self.source.readableBytes
         
         // Ensure that have equal mark and the equal is in current line.
-        // FIXME: Think about `.equal` is the end of line.
         guard let distance = distance, distance <= maxLength else {
-            return Line(key: Cursor.markableLine.rawValue, value: self.parseLineValue())
+            return Line(key: .elementLine, value: self.parseLineValue())
         }
         
-        let key = self.source.readString(length: distance)!
+        let key = self.source.readString(length: distance)!.trimmingCharacters(in: .whitespaces)
         
         self.pop() // =
         
-        return Line(key: key, value: self.parseLineValue())
+        return Line(key: .init(rawValue: key)!, value: self.parseLineValue())
     }
     
     private func parseLineValue() -> String {
@@ -378,7 +479,7 @@ final public class ConfigurationSerialization {
         let value = self.source.readString(length: valueLength)!
         
         guard let first = value.first, let last = value.last else {
-            return value
+            return value.trimmingCharacters(in: .whitespaces)
         }
         // check for quoted strings
         switch (first, last) {
@@ -386,10 +487,11 @@ final public class ConfigurationSerialization {
                 // double quoted strings support escaped \n
                 return value.dropFirst().dropLast()
                     .replacingOccurrences(of: "\\n", with: "\n")
+                    .trimmingCharacters(in: .whitespaces)
             case ("'", "'"):
                 // single quoted strings just need quotes removed
-                return value.dropFirst().dropLast() + ""
-            default: return value
+                return (value.dropFirst().dropLast() + "").trimmingCharacters(in: .whitespaces)
+            default: return value.trimmingCharacters(in: .whitespaces)
         }
     }
     

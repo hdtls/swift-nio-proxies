@@ -75,16 +75,22 @@ public struct MitMConfiguration: Codable {
     internal var pool: [String : NIOSSLPKCS12Bundle] = [:]
     
     enum CodingKeys: String, CodingKey {
-        case skipServerCertificateVerification = "skip-server-cert-verification"
-        case hostnames = "hostname"
-        case passphrase = "ca-passphrase"
-        case base64EncodedP12String = "ca-p12"
+        case skipServerCertificateVerification
+        case hostnames
+        case passphrase
+        case base64EncodedP12String
     }
     
-    public init(skipServerCertificateVerification: Bool = false,
-                hostnames: [String] = [],
-                base64EncodedP12String: String? = nil,
-                passphrase: String? = nil) {
+    /// Initialize an instance of `MitMConfiguration` with specified skipServerCertificateVerification, hostnames, base64EncodedP12String, passphrase.
+    /// - Parameters:
+    ///   - skipServerCertificateVerification: A boolean value determinse whether client should skip server certificate verification.
+    ///   - hostnames: Hostnames use when decript.
+    ///   - base64EncodedP12String: The base64 encoded p12 certificate bundle string.
+    ///   - passphrase: Passphrase for p12 bundle.
+    public init(skipServerCertificateVerification: Bool,
+                hostnames: [String],
+                base64EncodedP12String: String?,
+                passphrase: String?) {
         self.skipServerCertificateVerification = skipServerCertificateVerification
         // Filter hostname if host contains in a wildcard host. e.g. apple.com and *.apple.com
         self.passphrase = passphrase
@@ -93,25 +99,22 @@ public struct MitMConfiguration: Codable {
         ({ self.hostnames = hostnames })()
     }
     
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        
-        skipServerCertificateVerification = try container.decode(Bool.self, forKey: .skipServerCertificateVerification)
-        let stringLiternal = try container.decode(String.self, forKey: .hostnames)
-        let hostnames = stringLiternal.split(separator: ",").map {
-            $0.trimmingCharacters(in: .whitespaces)
-        }
-        base64EncodedP12String = try container.decode(String.self, forKey: .base64EncodedP12String)
-        passphrase = try container.decode(String.self, forKey: .passphrase)
-        ({ self.hostnames = hostnames })()
+    /// Initialize an instance of `MitMConfiguration`.
+    ///
+    /// Calling this method is equivalent to calling
+    /// `init(skipServerCertificateVerification:hostnames:base64EncodedP12String:passphrase:)`
+    /// with a default skipServerCertificateVerification, hostnames, base64EncodedP12String and passphrase values.
+    public init() {
+        self.init(skipServerCertificateVerification: false, hostnames: [], base64EncodedP12String: nil, passphrase: nil)
     }
+}
+
+extension MitMConfiguration: Equatable {
     
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        
-        try container.encode(skipServerCertificateVerification, forKey: .skipServerCertificateVerification)
-        try container.encode(hostnames.joined(separator: ", "), forKey: .hostnames)
-        try container.encode(base64EncodedP12String, forKey: .base64EncodedP12String)
-        try container.encode(passphrase, forKey: .passphrase)
+    public static func == (lhs: MitMConfiguration, rhs: MitMConfiguration) -> Bool {
+        lhs.skipServerCertificateVerification == rhs.skipServerCertificateVerification
+        && lhs.hostnames == rhs.hostnames
+        && lhs.base64EncodedP12String == rhs.base64EncodedP12String
+        && lhs.passphrase == rhs.passphrase
     }
 }

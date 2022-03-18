@@ -126,9 +126,9 @@ public struct NetbotCommand: ParsableCommand {
             proxyctl.append("--exclude-simple-hostnames")
         }
         
-        if let exceptions = configuration.general.exceptions {
+        if !configuration.general.exceptions.isEmpty {
             proxyctl.append("--exceptions")
-            proxyctl.append(exceptions.joined(separator: ","))
+            proxyctl.append(configuration.general.exceptions.joined(separator: ","))
         }
         
         if !proxyctl.isEmpty {

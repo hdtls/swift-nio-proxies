@@ -14,77 +14,79 @@
 
 import Foundation
 import Logging
+import EraseNilDecoding
+import NetbotHTTP
 
 /// A configuration object that defines behavior and policies for a Netbot process.
-public struct Configuration {
+public struct Configuration: Codable {
     
     /// The rules contains in this configuration.
-    public var rules: [AnyRule]
+    @EraseNilToEmpty public var rules: [AnyRule]
     
     /// A configuration object that provides HTTP MitM configuration for this process.
-    public var mitm: MitMConfiguration
+    @EraseNilToEmpty public var mitm: MitMConfiguration
     
     /// A configuration object that provides general configuration for this process.
-    public var general: BasicConfiguration
+    @EraseNilToEmpty public var general: BasicConfiguration
     
     /// A configuration object that provides replica configuration for this process
-    public var replica: ReplicaConfiguration
+    @EraseNilToEmpty public var replica: ReplicaConfiguration
     
     /// All proxy policy object contains in this configuration object.
-    public var policies: [ProxyPolicy]
+    @EraseNilToEmpty public var policies: [ProxyPolicy]
     
     /// All selectable policy groups contains in this configuration object.
-    public var selectablePolicyGroups: [SelectablePolicyGroup]
+    @EraseNilToEmpty public var policyGroups: [SelectablePolicyGroup]
     
     /// Initialize an instance of `Configuration` with the specified general, replicat, rules, mitm,
-    /// polcies and selectablePolicyGroups.
+    /// polcies and policyGroups.
     /// - Parameters:
     ///   - general: A general configuration object that will be included in this configuration.
     ///   - replica: A replica configuration object that will be included in this configuration.
     ///   - rules: Rules that will be included in this configuration.
     ///   - mitm: A MitM configuration object that will be included in this configuration.
     ///   - policies: Policies that will be included in this configuration.
-    ///   - selectablePolicyGroups: SelectablePolicyGroups that will be included in this configuration.
+    ///   - policyGroups: SelectablePolicyGroups that will be included in this configuration.
     public init(general: BasicConfiguration,
                 replica: ReplicaConfiguration,
                 rules: [AnyRule],
                 mitm: MitMConfiguration,
                 policies: [ProxyPolicy],
-                selectablePolicyGroups: [SelectablePolicyGroup]) {
+                policyGroups: [SelectablePolicyGroup]) {
         self.general = general
         self.replica = replica
         self.rules = rules
         self.mitm = mitm
         self.policies = policies
-        self.selectablePolicyGroups = selectablePolicyGroups
+        self.policyGroups = policyGroups
     }
     
     /// Initialize an `Configuration`.
     ///
     /// Calling this method is equivalent to calling
-    /// `init(general:replica:rules:mitm:policies:selectablePolicyGroups:)`
-    /// with a default general, replica rules, mitm, policies and selectablePolicyGroups object.
+    /// `init(general:replica:rules:mitm:policies:policyGroups:)`
+    /// with a default general, replica rules, mitm, policies and policyGroups object.
     public init() {
         self.init(general: .init(),
                   replica: .init(),
                   rules: .init(),
                   mitm: .init(),
                   policies: .init(),
-                  selectablePolicyGroups: .init())
+                  policyGroups: .init())
     }
 }
 
 /// Basic configuration object that defines behavior and polices for logging and proxy settings.
-public struct BasicConfiguration: Equatable {
+public struct BasicConfiguration: Codable, Equatable, EmptyInitializable {
     
     /// Log level use for `Logging.Logger`.`
     public var logLevel: Logger.Level
 
     /// DNS servers use for system proxy.
-    public var dnsServers: [String]
+    @EraseNilToEmpty public var dnsServers: [String]
     
     /// Exceptions use for system proxy.
-    public var exceptions: [String]?
+    @EraseNilToEmpty public var exceptions: [String]
     
     /// Http listen address use for system http proxy.
     public var httpListenAddress: String?
@@ -99,7 +101,7 @@ public struct BasicConfiguration: Equatable {
     public var socksListenPort: Int?
     
     /// A boolean value that determines whether system proxy should exclude simple hostnames.
-    public var excludeSimpleHostnames: Bool
+    @EraseNilToTrue public var excludeSimpleHostnames: Bool
     
     /// Initialize an instance of `BasicConfiguration` with specified logLevel, dnsServers exceptions,
     /// httpListenAddress, httpListenPort, socksListenAddress, socksListenPort and excludeSimpleHostnames.
@@ -114,7 +116,7 @@ public struct BasicConfiguration: Equatable {
     ///   - excludeSimpleHostnames: see `excludeSimpleHostnames` for `BasicConfiguration`.
     public init(logLevel: Logger.Level,
                 dnsServers: [String],
-                exceptions: [String]?,
+                exceptions: [String],
                 httpListenAddress: String?,
                 httpListenPort: Int?,
                 socksListenAddress: String?,
@@ -138,7 +140,7 @@ public struct BasicConfiguration: Equatable {
     public init() {
         self.init(logLevel: .info,
                   dnsServers: ["system"],
-                  exceptions: nil,
+                  exceptions: [],
                   httpListenAddress: nil,
                   httpListenPort: nil,
                   socksListenAddress: nil,
@@ -148,19 +150,19 @@ public struct BasicConfiguration: Equatable {
 }
 
 /// Replica configuration object that defines behavior and filters.
-public struct ReplicaConfiguration: Equatable {
+public struct ReplicaConfiguration: Codable, Equatable, EmptyInitializable {
     
     /// A boolean value that determines whether to hide requests came from Apple.
-    public var hideAppleRequests: Bool
+    @EraseNilToTrue public var hideAppleRequests: Bool
     
     /// A boolean value that determines whether to hide requests came from Crashlytics.
-    public var hideCrashlyticsRequests: Bool
+    @EraseNilToTrue public var hideCrashlyticsRequests: Bool
     
     /// A boolean value that determines whether to hide requests came from CrashReporter.
-    public var hideCrashReporterRequests: Bool
+    @EraseNilToTrue public var hideCrashReporterRequests: Bool
     
     /// A boolean value that determines whether to hide UDP requests.
-    public var hideUDP: Bool
+    @EraseNilToFalse public var hideUdp: Bool
     
     /// The request message filter type.
     public var reqMsgFilterType: String?
@@ -173,13 +175,13 @@ public struct ReplicaConfiguration: Equatable {
     public init(hideAppleRequests: Bool,
                 hideCrashlyticsRequests: Bool,
                 hideCrashReporterRequests: Bool,
-                hideUDP: Bool,
+                hideUdp: Bool,
                 reqMsgFilterType: String?,
                 reqMsgFilter: String?) {
         self.hideAppleRequests = hideAppleRequests
         self.hideCrashlyticsRequests = hideCrashlyticsRequests
         self.hideCrashReporterRequests = hideCrashReporterRequests
-        self.hideUDP = hideUDP
+        self.hideUdp = hideUdp
         self.reqMsgFilterType = reqMsgFilterType
         self.reqMsgFilter = reqMsgFilter
     }
@@ -188,20 +190,20 @@ public struct ReplicaConfiguration: Equatable {
     ///
     /// Calling this method is equivalent to calling
     /// `init(hideAppleRequests:hideCrashlyticsRequests:hideCrashReporterRequests:hideUDP:reqMsgFilterType:reqMsgFilter:)`
-    /// with `false` hideAppleRequests, hideCrashlyticsRequests. hideCrashReporterRequests, hideUDP
+    /// with `true` hideAppleRequests, hideCrashlyticsRequests. hideCrashReporterRequests, `false` hideUdp
     /// and `nil` reqMsgFilterType, reqMsgFilter.
     public init() {
-        self.init(hideAppleRequests: false,
-                  hideCrashlyticsRequests: false,
-                  hideCrashReporterRequests: false,
-                  hideUDP: false,
+        self.init(hideAppleRequests: true,
+                  hideCrashlyticsRequests: true,
+                  hideCrashReporterRequests: true,
+                  hideUdp: false,
                   reqMsgFilterType: nil,
                   reqMsgFilter: nil)
     }
 }
 
 /// Selectable policy group object that defines policy group and current selected policy.
-public struct SelectablePolicyGroup: Equatable {
+public struct SelectablePolicyGroup: Codable, Equatable {
     
     /// The name for this PolicyGroup.
     public var name: String
@@ -212,6 +214,11 @@ public struct SelectablePolicyGroup: Equatable {
     /// Current selected policy.
     public var selected: String?
     
+    enum CodingKeys: String, CodingKey {
+        case name
+        case policies
+    }
+
     /// Initialize an instance of `SelectablePolicyGroup` with specified name and policies.
     public init(name: String, policies: [String]) {
         precondition(!policies.isEmpty, "You must provide at least one policy.")
@@ -220,3 +227,5 @@ public struct SelectablePolicyGroup: Equatable {
         self.policies = policies
     }
 }
+
+extension MitMConfiguration: EmptyInitializable {}

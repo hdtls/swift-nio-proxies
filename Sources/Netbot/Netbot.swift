@@ -185,9 +185,9 @@ public class Netbot {
                                     
                                     // Check whether there is a `SelectablePolicyGroup`
                                     // with then same name as the rule's policy in
-                                    // `selectablePolicyGroups`, if group exists use group's
+                                    // `policyGroups`, if group exists use group's
                                     // `selected` as policy ID else use rule's policy as ID.
-                                    if let policyGroup = (self.configuration.selectablePolicyGroups.first { $0.name == rule.policy }) {
+                                    if let policyGroup = (self.configuration.policyGroups.first { $0.name == rule.policy }) {
                                         preferred = policyGroup.selected
                                     } else {
                                         preferred = rule.policy
