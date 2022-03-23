@@ -43,7 +43,7 @@ let package = Package(
                     "CSHAKE128",
                     .product(name: "Crypto", package: "swift-crypto")
                 ]),
-        .target(name: "CMMDB",
+        .target(name: "CMaxMindDB",
                 cSettings: [.define("HAVE_CONFIG_H")]),
         .target(name: "ConnectionPool",
                 dependencies: [
@@ -51,6 +51,8 @@ let package = Package(
                     .product(name: "NIOCore", package: "swift-nio"),
                     .product(name: "NIOPosix", package: "swift-nio")
                 ]),
+        .target(name: "MaxMindDB",
+               dependencies: [ "CMaxMindDB" ]),
         .target(name: "NetbotCore",
                dependencies: [
                     .product(name: "Logging", package: "swift-log"),
@@ -89,7 +91,7 @@ let package = Package(
                 ]),
         .target(name: "Netbot",
                 dependencies: [
-                    "CMMDB",
+                    "MaxMindDB",
                     "NetbotCore",
                     "NetbotHTTP",
                     "NetbotSOCKS",
