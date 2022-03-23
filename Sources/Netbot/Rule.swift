@@ -12,16 +12,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#if compiler(>=5.1)
-@_implementationOnly import CMMDB
-#else
-import CMMDB
-#endif
 import Crypto
 import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+import MaxMindDB
 
 private let supportedRules: [Rule.Type] = [
     DomainRule.self,
@@ -361,7 +357,7 @@ public struct GeoIPRule: Codable, Equatable, RulePrivate {
     
     public static let schema: String = "GEOIP"
     
-    @Protected static var geo: GeoLite2?
+    @Protected static var geo: MaxMindDB?
     
     public var pattern: String
     

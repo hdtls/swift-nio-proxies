@@ -14,6 +14,7 @@
 
 import Foundation
 @_exported import Logging
+@_exported import MaxMindDB
 @_exported import NetbotCore
 @_exported import NetbotHTTP
 @_exported import NetbotSOCKS
@@ -37,7 +38,7 @@ public class Netbot {
     
     public var isMitmEnabled: Bool = false
     
-    public var geoLite2: GeoLite2 {
+    public var geoLite2: MaxMindDB {
         set { GeoIPRule.geo = newValue }
         get { GeoIPRule.geo! }
     }
@@ -54,7 +55,7 @@ public class Netbot {
                 outboundMode: OutboundMode = .direct,
                 enableHTTPCapture: Bool = false,
                 enableMitm: Bool = false,
-                geoLite2: GeoLite2) {
+                geoLite2: MaxMindDB) {
         
         LoggingSystem.bootstrap { label in
             var handler = StreamLogHandler.standardOutput(label: label)
