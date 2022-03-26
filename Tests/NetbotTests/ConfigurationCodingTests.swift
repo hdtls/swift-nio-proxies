@@ -137,6 +137,22 @@ HTTP = IKEv2, server-hostname=127.0.0.1, server-port=8310
         XCTAssertEqual(result.last, .init(name: "BLOCK", policies: ["DIRECT", "REJECT", "REJECT-TINYGIF"]))
     }
     
+    func testDecodingPolicyGroupsWhichContainsPoliciesNoDefinedInPolicies() {
+        XCTAssertThrowsError(try ConfigurationSerialization.jsonObject(with: policyGroupsString.data(using: .utf8)!)) { error in
+            XCTAssertTrue(error is ConfigurationSerializationError)
+            
+            let err = error as! ConfigurationSerializationError
+            
+            guard case .invalidFile(let reason) = err, case .unknownPolicy(cursor: let cursor, policy: let policy) = reason else {
+                XCTFail()
+                return
+            }
+            
+            XCTAssertEqual(cursor, 2)
+            XCTAssertEqual(policy, "HTTP")
+        }
+    }
+    
     func testRuleDecoding() throws {
         let ruleString = [self.policiesString, self.policyGroupsString, self.ruleString].joined(separator: "\n")
         let jsonObject = try ConfigurationSerialization.jsonObject(with: ruleString.data(using: .utf8)!)

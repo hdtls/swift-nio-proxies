@@ -122,94 +122,44 @@ final public class ConfigurationSerialization {
         }
     }
     
-    /// Represents a `KEY=VALUE` pair in a dotenv file.
-    struct Line: Equatable {
-        
-        struct Key: Equatable, RawRepresentable {
-            fileprivate static let mdlLine: Key = .init(rawValue: "cursor.__MODULE_LINE")!
-            fileprivate static let commentLine: Key = .init(rawValue: "cursor.__COMMENT_LINE")!
-            fileprivate static let newLine: Key = .init(rawValue: "cursor.__NEW_LINE")!
-            fileprivate static let elementLine: Key = .init(rawValue: "cursor.__MARKABLE_LINE")!
-            
-            typealias RawValue = String
-            
-            var rawValue: RawValue
-            
-            init?(rawValue: RawValue) {
-                self.rawValue = rawValue
-            }
-        }
-        
-        /// The key.
-        let key: Key
-        
-        /// The value.
-        let value: String
-    }
-    
-    private var source: ByteBuffer
-    
-    private var previous: UInt8?
-    
-    /// A boolean value that determines whether to convert string to bool if possible.
-    public static var converStringToBoolIfPossible: Bool = true
-    
-    private init(source: ByteBuffer) {
-        self.source = source
-    }
-    
     /// Create a Foundation object from configuration file data.
     /// - Parameter data: The configuration file byte buffer.
     /// - Returns: Foundation NSDictionary object.
     public static func jsonObject(with data: ByteBuffer) throws -> Any {
-        var json: [String : Any] = [:]
-        let parser = ConfigurationSerialization.init(source: data)
+        var ruleLineMap: [Int : DocumentParser.Line] = [:]
+        var policyGroupMap: [Int : DocumentParser.Line] = [:]
+        var proxyMap: [Int : DocumentParser.Line] = [:]
+        let builtin: [DocumentParser.Line] = Builtin.policies.map {
+            DocumentParser.Line(key: .init(rawValue: $0.name)!, value: "")
+        }
+                
+        /// Line number being parsed.
+        var cursor: Int = 0
         
-        var currentGroup: JSONKey!
+        
+        var json: [String : Any] = [:]
+        var parser = DocumentParser.init(byteBuffer: data)
+        
+        var currentGroup: JSONKey?
         
         try parser.parse().forEach { next in
+            cursor += 1
+            
             // Comment and empty line will be ignored.
             guard next.key != .commentLine, next.key != .newLine else {
                 return
             }
             
             guard next.key != .mdlLine else {
-                switch next.value {
-                    case "[General]":
-                        currentGroup = .general
-                    case "[Replica]":
-                        currentGroup = .replica
-                    case "[Proxy Policy]":
-                        currentGroup = .policies
-                    case "[Policy Group]":
-                        currentGroup = .policyGroups
-                    case "[Rule]":
-                        currentGroup = .rules
-                    case "[MitM]":
-                        currentGroup = .mitm
-                    default:
-                        currentGroup = .init(rawValue: next.value)
-                }
+                currentGroup = .init(rawValue: next.value)
                 return
             }
             
-            assert(currentGroup != nil)
-            
-            var actual: Any
-            
-            // Convert String to Bool if possible.
-            if Self.converStringToBoolIfPossible {
-                switch next.value {
-                    case "true":
-                        actual = true
-                    case "false":
-                        actual = false
-                    default:
-                        actual = next.value
-                }
-            } else {
-                actual = next.value
+            guard let currentGroup = currentGroup else {
+                throw ConfigurationSerializationError.dataCorrupted
             }
+            
+            let actual = tryAsBool(next.value)
             
             // Rebuild policy group as json array.
             guard currentGroup != .policyGroups else {
@@ -221,6 +171,8 @@ final public class ConfigurationSerialization {
                 ]
                 array.append(_json)
                 json[currentGroup.rawValue] = array
+
+                policyGroupMap[cursor] = next
                 return
             }
             
@@ -229,7 +181,13 @@ final public class ConfigurationSerialization {
                 var array: [Any] = (json[currentGroup.rawValue] as? [Any]) ?? []
                 array.append("\(JSONKey(rawValue: next.key.rawValue)!.rawValue)=\(next.value)")
                 json[currentGroup.rawValue] = array
+                
+                proxyMap[cursor] = next
                 return
+            }
+            
+            if currentGroup == .rules {
+                ruleLineMap[cursor] = next
             }
             
             if next.key == .elementLine {
@@ -249,7 +207,47 @@ final public class ConfigurationSerialization {
             }
         }
         
+        
+        // File validating.
+        // All proxy used in policy group must declare in [Proxy Policy].
+        try policyGroupMap.forEach { (cursor, line) in
+            try line.value
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .forEach { name in
+                    let all = Array(proxyMap.values) + builtin
+                    
+                    guard name == "select" || all.contains(where: { $0.key.rawValue == name }) else {
+                        throw ConfigurationSerializationError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: name))
+                    }
+                }
+        }
+        
+        // All proxy label defined in rule should
+        try ruleLineMap.forEach { (cursor, line) in
+            guard let rule = try? AnyRule.init(stringLiteral: line.value) else {
+                throw ConfigurationSerializationError.invalidFile(reason: .invalidLine(cursor: cursor, description: line.value))
+            }
+            // Validate rule policy.
+            let all = Array(proxyMap.values) + Array(policyGroupMap.values) + builtin
+            
+            guard all.contains(where: { $0.key.rawValue == rule.policy }) else {
+                throw ConfigurationSerializationError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: rule.policy))
+            }
+        }
+        
         return json
+    }
+    
+    private static func tryAsBool(_ value: String) -> Any {
+        switch value {
+            case "true":
+                return true
+            case "false":
+                return false
+            default:
+                return value
+        }
     }
     
     /// Create a Foundation object from configuration file data.
@@ -334,216 +332,5 @@ final public class ConfigurationSerialization {
         if let v = json {
             dst.append("\(v)")
         }
-    }
-    
-    func parse() throws -> [Line] {
-        var ruleLineMap: [Int : Line] = [:]
-        var policyGroupMap: [Int : Line] = [:]
-        var proxyMap: [Int : Line] = [:]
-        let builtin: [Line] = Builtin.policies.map {
-            Line(key: .init(rawValue: $0.name)!, value: "")
-        }
-        
-        var currentGroup: JSONKey?
-        
-        /// Line number being parsed.
-        var cursor: Int = 0
-        
-        var lines: [Line] = []
-        while let next = self.parseNext() {
-            cursor += 1
-            
-            lines.append(next)
-            
-            guard next.key != .commentLine, next.key != .newLine else {
-                // Ignore comment and new lines.
-                continue
-            }
-            
-            guard next.key != .mdlLine else {
-                currentGroup = JSONKey(rawValue: next.value)
-                continue
-            }
-            
-            guard let currentGroup = currentGroup else {
-                throw ConfigurationSerializationError.dataCorrupted
-            }
-            
-            switch currentGroup {
-                case .policies:
-                    proxyMap[cursor] = next
-                case .policyGroups:
-                    policyGroupMap[cursor] = next
-                case .rules:
-                    ruleLineMap[cursor] = next
-                default:
-                    break
-            }
-        }
-        
-        // File validating.
-        // All proxy used in policy group must declare in [Proxy Policy].
-        try policyGroupMap.forEach { (cursor, line) in
-            try line.value
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .forEach { name in
-                    let all = Array(proxyMap.values) + builtin
-                    
-                    guard name == "select" || all.contains(where: { $0.key.rawValue == name }) else {
-                        throw ConfigurationSerializationError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: name))
-                    }
-                }
-        }
-        
-        // All proxy label defined in rule should
-        try ruleLineMap.forEach { (cursor, line) in
-            guard let rule = try? AnyRule.init(stringLiteral: line.value) else {
-                throw ConfigurationSerializationError.invalidFile(reason: .invalidLine(cursor: cursor, description: line.value))
-            }
-            // Validate rule policy.
-            let all = Array(proxyMap.values) + Array(policyGroupMap.values) + builtin
-            
-            guard all.contains(where: { $0.key.rawValue == rule.policy }) else {
-                throw ConfigurationSerializationError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: rule.policy))
-            }
-        }
-        
-        return lines
-    }
-    
-    private func parseNext() -> Line? {
-        self.skipSpaces()
-        
-        guard let peek = self.peek() else {
-            return nil
-        }
-        
-        switch (peek, previous) {
-            case (.octothorpe, _), (.semicolon, _):
-                self.previous = peek
-                return Line(key: .commentLine, value: self.parseLineValue())
-            case (0x5b, _):
-                self.previous = peek
-                return Line(key: .mdlLine, value: self.parseLineValue())
-            case (.newLine, .some(.newLine)):
-                self.pop()
-                self.previous = peek
-                return Line(key: .newLine, value: "\n")
-            case (.newLine, _):
-                // empty line, skip
-                self.pop()
-                // then parse next
-                self.previous = peek
-                return self.parseNext()
-            default:
-                self.previous = peek
-                // this is a valid line, parse it
-                return self.parseLine()
-        }
-    }
-    
-    private func skipSpaces() {
-        while let next = self.peek() {
-            guard case .space = next else {
-                break
-            }
-            self.pop()
-        }
-    }
-    
-    private func parseLine() -> Line {
-        let distance = self.source.countDistance(to: .equal)
-        let maxLength = self.source.countDistance(to: .newLine) ?? self.source.readableBytes
-        
-        // Ensure that have equal mark and the equal is in current line.
-        guard let distance = distance, distance <= maxLength else {
-            return Line(key: .elementLine, value: self.parseLineValue())
-        }
-        
-        let key = self.source.readString(length: distance)!.trimmingCharacters(in: .whitespaces)
-        
-        self.pop() // =
-        
-        return Line(key: .init(rawValue: key)!, value: self.parseLineValue())
-    }
-    
-    private func parseLineValue() -> String {
-        let valueLength: Int
-        if let toNewLine = self.source.countDistance(to: .newLine) {
-            valueLength = toNewLine
-        } else {
-            valueLength = self.source.readableBytes
-        }
-        
-        let value = self.source.readString(length: valueLength)!
-        
-        guard let first = value.first, let last = value.last else {
-            return value.trimmingCharacters(in: .whitespaces)
-        }
-        // check for quoted strings
-        switch (first, last) {
-            case ("\"", "\""):
-                // double quoted strings support escaped \n
-                return value.dropFirst().dropLast()
-                    .replacingOccurrences(of: "\\n", with: "\n")
-                    .trimmingCharacters(in: .whitespaces)
-            case ("'", "'"):
-                // single quoted strings just need quotes removed
-                return (value.dropFirst().dropLast() + "").trimmingCharacters(in: .whitespaces)
-            default: return value.trimmingCharacters(in: .whitespaces)
-        }
-    }
-    
-    private func peek() -> UInt8? {
-        return self.source.getInteger(at: self.source.readerIndex)
-    }
-    
-    private func pop() {
-        self.source.moveReaderIndex(forwardBy: 1)
-    }
-}
-
-extension ByteBuffer {
-    
-    fileprivate func countDistance(to byte: UInt8) -> Int? {
-        var copy = self
-        var found = false
-        while let next = copy.readInteger(as: UInt8.self) {
-            if next == byte {
-                found = true
-                break
-            }
-        }
-        guard found else {
-            return nil
-        }
-        let distance = copy.readerIndex - self.readerIndex
-        guard distance != 0 else {
-            return nil
-        }
-        return distance - 1
-    }
-}
-
-extension UInt8 {
-    fileprivate static var newLine: UInt8 {
-        return 0xA
-    }
-    
-    fileprivate static var space: UInt8 {
-        return 0x20
-    }
-    
-    fileprivate static var octothorpe: UInt8 {
-        return 0x23
-    }
-    
-    fileprivate static var semicolon: UInt8 {
-        return 0x3b
-    }
-    
-    fileprivate static var equal: UInt8 {
-        return 0x3D
     }
 }
