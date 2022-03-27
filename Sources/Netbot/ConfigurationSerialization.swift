@@ -122,22 +122,54 @@ final public class ConfigurationSerialization {
         }
     }
     
+    enum JSONValue: Equatable {
+        case string(String)
+        case number(String)
+        case bool(Bool)
+        case null
+        
+        case array([JSONValue])
+        case object([String: JSONValue])
+        
+        static func convertFromString(_ string: String) -> JSONValue {
+            switch string {
+                case "true":
+                    return .bool(true)
+                case "false":
+                    return .bool(false)
+                default:
+                    return .string(string)
+            }
+        }
+        
+        static func convertFromString(_ string: String, forKey key: String) -> JSONValue {
+            switch key {
+                case "dns_servers", "exceptions", "hostnames":
+                    return .array(
+                        string.split(separator: ",")
+                            .map { .convertFromString($0.trimmingCharacters(in: .whitespaces)) }
+                    )
+                case _ where key.hasSuffix("_port"):
+                    return .number(string)
+                default:
+                    return .convertFromString(string)
+            }
+        }
+    }
+    
     /// Create a Foundation object from configuration file data.
     /// - Parameter data: The configuration file byte buffer.
     /// - Returns: Foundation NSDictionary object.
     public static func jsonObject(with data: ByteBuffer) throws -> Any {
-        var ruleLineMap: [Int : DocumentParser.Line] = [:]
-        var policyGroupMap: [Int : DocumentParser.Line] = [:]
-        var proxyMap: [Int : DocumentParser.Line] = [:]
-        let builtin: [DocumentParser.Line] = Builtin.policies.map {
-            DocumentParser.Line(key: .init(rawValue: $0.name)!, value: "")
-        }
-                
+        var __rulesKeyedByLine: [Int : String] = [:]
+        var __groupKeyedByLine: [Int : [String : [String]]] = [:]
+        var __policies: [String] = Builtin.policies.map { $0.name }
+        
         /// Line number being parsed.
         var cursor: Int = 0
         
         
-        var json: [String : Any] = [:]
+        var json: JSONValue = .object([:])
         var parser = DocumentParser.init(byteBuffer: data)
         
         var currentGroup: JSONKey?
@@ -145,109 +177,130 @@ final public class ConfigurationSerialization {
         try parser.parse().forEach { next in
             cursor += 1
             
-            // Comment and empty line will be ignored.
-            guard next.key != .commentLine, next.key != .newLine else {
-                return
+            guard case .object(var _json) = json else {
+                preconditionFailure()
             }
             
-            guard next.key != .mdlLine else {
-                currentGroup = .init(rawValue: next.value)
-                return
-            }
-            
-            guard let currentGroup = currentGroup else {
-                throw ConfigurationSerializationError.dataCorrupted
-            }
-            
-            let actual = tryAsBool(next.value)
-            
-            // Rebuild policy group as json array.
-            guard currentGroup != .policyGroups else {
-                var array: [Any] = (json[currentGroup.rawValue] as? [Any]) ?? []
-                // TODO: Hard Code
-                let _json: [String : Any] = [
-                    "name" : next.key.rawValue,
-                    JSONKey.policies.rawValue : next.value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-                ]
-                array.append(_json)
-                json[currentGroup.rawValue] = array
-
-                policyGroupMap[cursor] = next
-                return
-            }
-            
-            // Rebuild policies as json array.
-            guard currentGroup != .policies else {
-                var array: [Any] = (json[currentGroup.rawValue] as? [Any]) ?? []
-                array.append("\(JSONKey(rawValue: next.key.rawValue)!.rawValue)=\(next.value)")
-                json[currentGroup.rawValue] = array
-                
-                proxyMap[cursor] = next
-                return
-            }
-            
-            if currentGroup == .rules {
-                ruleLineMap[cursor] = next
-            }
-            
-            if next.key == .elementLine {
-                var array: [Any] = (json[currentGroup.rawValue] as? [Any]) ?? []
-                array.append(actual)
-                json[currentGroup.rawValue] = array
-            } else {
-                var _json = (json[currentGroup.rawValue] as? [String : Any]) ?? [:]
-                let key = JSONKey(rawValue: next.key.rawValue)!.rawValue
-                // TODO: Hard Code
-                if key == "dns_servers" || key == "exceptions" || key == "hostnames" {
-                    _json[key] = next.value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-                } else {
-                    _json[key] = key.hasSuffix("_port") ? Int(next.value) as Any : actual
-                }
-                json[currentGroup.rawValue] = _json
+            switch (next, currentGroup) {
+                case (.comment, _), (.blank, _):
+                    return
+                    
+                case (.section(let g), _):
+                    currentGroup = .init(rawValue: g)
+                    
+                case (.string(let l), .some(.rules)):
+                    __rulesKeyedByLine[cursor] = l
+                    fallthrough
+                    
+                case (.string(let l), _):
+                    guard let currentGroup = currentGroup else {
+                        throw ConfigurationSerializationError.dataCorrupted
+                    }
+                    
+                    guard case .array(var array) = _json[currentGroup.rawValue] ?? .array([]) else {
+                        preconditionFailure()
+                    }
+                    
+                    array.append(.convertFromString(l))
+                    
+                    _json[currentGroup.rawValue] = .array(array)
+                    
+                    json = .object(_json)
+                    
+                case (.object(let o), .some(.policies)):
+                    guard let currentGroup = currentGroup else {
+                        throw ConfigurationSerializationError.dataCorrupted
+                    }
+                    
+                    guard case .array(var array) = _json[currentGroup.rawValue] ?? .array([]) else {
+                        preconditionFailure()
+                    }
+                    
+                    __policies.append(o.0)
+                    
+                    // Rebuild policies as json array.
+                    let jsonValue = JSONValue.string("\(JSONKey(rawValue: o.0)!.rawValue)=\(o.1)")
+                    
+                    array.append(jsonValue)
+                    
+                    _json[currentGroup.rawValue] = .array(array)
+                    
+                    json = .object(_json)
+                    
+                case (.object(let o), .some(.policyGroups)):
+                    guard let currentGroup = currentGroup else {
+                        throw ConfigurationSerializationError.dataCorrupted
+                    }
+                    
+                    guard case .array(var array) = _json[currentGroup.rawValue] ?? .array([]) else {
+                        preconditionFailure()
+                    }
+                    
+                    // Rebuild policy group as json array.
+                    let policies = o.1
+                        .split(separator: ",")
+                        .map { $0.trimmingCharacters(in: .whitespaces) }
+                    
+                    __groupKeyedByLine[cursor] = [o.0 : policies]
+                    
+                    let jsonValue = JSONValue.object([
+                        JSONKey(rawValue: "name")!.rawValue : .string(o.0),
+                        JSONKey.policies.rawValue : .array(policies.map(JSONValue.string))
+                    ])
+                    
+                    array.append(jsonValue)
+                    
+                    _json[currentGroup.rawValue] = .array(array)
+                    
+                    json = .object(_json)
+                    
+                case (.object(let o), _):
+                    guard let currentGroup = currentGroup else {
+                        preconditionFailure()
+                    }
+                    
+                    guard case .object(var dictionary) = _json[currentGroup.rawValue] ?? .object([:]) else {
+                        preconditionFailure()
+                    }
+                    
+                    let jsonKey = JSONKey(rawValue: o.0)!.rawValue
+                    
+                    dictionary[jsonKey] = .convertFromString(o.1, forKey: jsonKey)
+                    
+                    _json[currentGroup.rawValue] = .object(dictionary)
+                    
+                    json = .object(_json)
             }
         }
         
         
         // File validating.
         // All proxy used in policy group must declare in [Proxy Policy].
-        try policyGroupMap.forEach { (cursor, line) in
-            try line.value
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .forEach { name in
-                    let all = Array(proxyMap.values) + builtin
-                    
-                    guard name == "select" || all.contains(where: { $0.key.rawValue == name }) else {
-                        throw ConfigurationSerializationError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: name))
-                    }
+        try __groupKeyedByLine.forEach { (cursor, line) in
+            try line.values.joined().forEach { name in
+                guard __policies.contains(where: { $0 == name }) else {
+                    throw ConfigurationSerializationError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: name))
                 }
+            }
         }
         
         // All proxy label defined in rule should
-        try ruleLineMap.forEach { (cursor, line) in
-            guard let rule = try? AnyRule.init(stringLiteral: line.value) else {
-                throw ConfigurationSerializationError.invalidFile(reason: .invalidLine(cursor: cursor, description: line.value))
+        try __rulesKeyedByLine.forEach { (cursor, line) in
+            guard let rule = try? AnyRule.init(stringLiteral: line) else {
+                throw ConfigurationSerializationError.invalidFile(reason: .invalidLine(cursor: cursor, description: line))
             }
             // Validate rule policy.
-            let all = Array(proxyMap.values) + Array(policyGroupMap.values) + builtin
+            let all = __policies + Array(__groupKeyedByLine.values.reduce(into: [], { partialResult, next in
+                partialResult.append(contentsOf: next.keys)
+                partialResult.append(contentsOf: next.values.joined())
+            }))
             
-            guard all.contains(where: { $0.key.rawValue == rule.policy }) else {
+            guard all.contains(where: { $0 == rule.policy }) else {
                 throw ConfigurationSerializationError.invalidFile(reason: .unknownPolicy(cursor: cursor, policy: rule.policy))
             }
         }
         
-        return json
-    }
-    
-    private static func tryAsBool(_ value: String) -> Any {
-        switch value {
-            case "true":
-                return true
-            case "false":
-                return false
-            default:
-                return value
-        }
+        return try json.toObjcRepresentation()
     }
     
     /// Create a Foundation object from configuration file data.
@@ -266,71 +319,135 @@ final public class ConfigurationSerialization {
             throw ConfigurationSerializationError.dataCorrupted
         }
         
-        var stringLiteral = ""
+        var components: [String] = []
+        let newLine = "\n"
         
-        json.keys.sorted().forEach { key in
+        try json.keys.sorted().forEach { key in
             let value = json[key]
             
-            if !stringLiteral.isEmpty {
-                stringLiteral.append("\n")
+            defer {
+                components.append(newLine)
             }
             
             switch key {
                 case JSONKey.general.rawValue:
-                    stringLiteral.append("[General]\n")
+                    components.append("[General]")
                 case JSONKey.replica.rawValue:
-                    stringLiteral.append("[Replica]\n")
+                    components.append("[Replica]")
                 case JSONKey.policies.rawValue:
-                    stringLiteral.append("[Proxy Policy]\n")
+                    components.append("[Proxy Policy]")
                 case JSONKey.policyGroups.rawValue:
-                    stringLiteral.append("[Policy Group]\n")
+                    components.append("[Policy Group]")
                 case JSONKey.rules.rawValue:
-                    stringLiteral.append("[Rule]\n")
+                    components.append("[Rule]")
                 case JSONKey.mitm.rawValue:
-                    stringLiteral.append("[MitM]\n")
+                    components.append("[MitM]")
                 default:
-                    stringLiteral.append("\(key)\n")
+                    components.append("\(key)")
             }
-            
+
             guard key != JSONKey.policyGroups.rawValue else {
                 guard let selectablePolicyGroups = value as? [[String : Any]] else {
-                    return
+                    throw ConfigurationSerializationError.dataCorrupted
                 }
                 selectablePolicyGroups.forEach {
                     let policies = ($0[JSONKey.policies.rawValue] as? [String]) ?? []
-                    stringLiteral.append("\($0["name"]!) = \(policies.joined(separator: ","))\n")
+                    components.append("\($0["name"]!) = \(policies.joined(separator: ","))")
                 }
                 return
             }
             
-            if let array = value as? [Any?] {
+            if let array = value as? [Any] {
                 array.forEach {
-                    if let v = $0 {
-                        stringLiteral.append("\(v)\n")
+                    components.append("\($0)")
+                }
+            } else if let dictionary = value as? [String : Any] {
+                try dictionary.keys.sorted().forEach { k in
+                    let v = dictionary[k]!
+                    
+                    let k = k.replacingOccurrences(of: "_", with: "-")
+                    if k == "exceptions" || k == "dns-servers" || k == "hostnames" {
+                        guard let l = v as? [String] else {
+                            throw ConfigurationSerializationError.dataCorrupted
+                        }
+                        components.append("\(k) = \(l.joined(separator: ","))")
+                    } else {
+                        components.append("\(k) = \(v)")
                     }
                 }
-            } else if let dictionary = value as? Dictionary<String, Any> {
-                dictionary.keys.sorted().forEach {
-                    let k = $0.replacingOccurrences(of: "_", with: "-")
-                    
-                    if $0 == "exceptions" || $0 == "dns_servers" || $0 == "hostnames" {
-                        let l = dictionary[$0] as? [String] ?? []
-                        stringLiteral.append("\(k) = \(l.joined(separator: ","))\n")
-                    } else {
-                        if let v = dictionary[$0] {
-                            stringLiteral.append("\(k) = \(v)\n")
-                        }
-                    }
+            } else {
+                throw ConfigurationSerializationError.dataCorrupted
+            }
+        }
+        
+        return components.dropLast()
+            .joined(separator: newLine)
+            .replacingOccurrences(of: newLine + newLine, with: newLine)
+            .data(using: .utf8) ?? .init()
+    }
+}
+
+private extension ConfigurationSerialization.JSONValue {
+    
+    func toObjcRepresentation() throws -> Any {
+        switch self {
+            case .array(let values):
+                return try values.map { try $0.toObjcRepresentation() }
+            case .object(let object):
+                return try object.mapValues { try $0.toObjcRepresentation() }
+            case .bool(let bool):
+                return bool
+            case .number(let string):
+                return NSNumber.fromJSONNumber(string) ?? NSNumber(value: 0)
+            case .null:
+                return NSNull()
+            case .string(let string):
+                return string
+        }
+    }
+}
+
+private extension NSNumber {
+    static func fromJSONNumber(_ string: String) -> NSNumber? {
+        let decIndex = string.firstIndex(of: ".")
+        let expIndex = string.firstIndex(of: "e")
+        let isInteger = decIndex == nil && expIndex == nil
+        let isNegative = string.utf8[string.utf8.startIndex] == UInt8(ascii: "-")
+        let digitCount = string[string.startIndex..<(expIndex ?? string.endIndex)].count
+        
+        // Try Int64() or UInt64() first
+        if isInteger {
+            if isNegative {
+                if digitCount <= 19, let intValue = Int64(string) {
+                    return NSNumber(value: intValue)
+                }
+            } else {
+                if digitCount <= 20, let uintValue = UInt64(string) {
+                    return NSNumber(value: uintValue)
                 }
             }
         }
         
-        return stringLiteral.data(using: .utf8) ?? .init()
-    }
-    
-    static func write(_ json: Any?, dst: inout String) {
-        if let v = json {
-            dst.append("\(v)")
+        var exp = 0
+        
+        if let expIndex = expIndex {
+            let expStartIndex = string.index(after: expIndex)
+            if let parsed = Int(string[expStartIndex...]) {
+                exp = parsed
+            }
         }
+        
+        // Decimal holds more digits of precision but a smaller exponent than Double
+        // so try that if the exponent fits and there are more digits than Double can hold
+        if digitCount > 17, exp >= -128, exp <= 127, let decimal = Decimal(string: string), decimal.isFinite {
+            return NSDecimalNumber(decimal: decimal)
+        }
+        
+        // Fall back to Double() for everything else
+        if let doubleValue = Double(string), doubleValue.isFinite {
+            return NSNumber(value: doubleValue)
+        }
+        
+        return nil
     }
 }
