@@ -92,7 +92,9 @@ public struct NetbotCommand: ParsableCommand {
             let data = try Data(contentsOf: URL(fileURLWithPath: config))
             let jsonObject = try ConfigurationSerialization.jsonObject(with: data)
             let jsonData = try JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
-            configuration = try JSONDecoder().decode(Configuration.self, from: jsonData)
+            let jsonDecoder = JSONDecoder()
+            jsonDecoder.keyDecodingStrategy = .convertFromSnakeCase
+            configuration = try jsonDecoder.decode(Configuration.self, from: jsonData)
         }
         
 #if canImport(SystemConfiguration)
