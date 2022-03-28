@@ -372,7 +372,8 @@ public struct GeoIPRule: Codable, Equatable, RulePrivate {
     
     public func match(_ pattern: String) -> Bool {
         do {
-            let countryCode = try GeoIPRule.geo?.queryCountryISOCodeWithIPAddress(pattern)
+            let dictionary = try GeoIPRule.geo?.lookup(ipAddress: pattern) as? NSDictionary
+            let countryCode = dictionary?.value(forKeyPath: "country.iso_code") as? String
             return self.pattern == countryCode
         } catch {
             return false

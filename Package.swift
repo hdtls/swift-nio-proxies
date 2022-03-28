@@ -44,7 +44,15 @@ let package = Package(
                     .product(name: "Crypto", package: "swift-crypto")
                 ]),
         .target(name: "CMaxMindDB",
-                cSettings: [.define("HAVE_CONFIG_H")]),
+                cSettings: [
+                    .define("PACKAGE_VERSION", to: "\"1.6.0\""),
+                    // cmake CheckTypeSize
+                    .define("MMDB_UINT128_USING_MODE", to: "0"),
+                    .define("MMDB_UINT128_IS_BYTE_ARRAY", to: "0"),
+                    // cmake TestBigEndian
+                    .define("MMDB_LITTLE_ENDIAN"),
+                ]
+               ),
         .target(name: "ConnectionPool",
                 dependencies: [
                     .product(name: "Logging", package: "swift-log"),
@@ -52,13 +60,13 @@ let package = Package(
                     .product(name: "NIOPosix", package: "swift-nio")
                 ]),
         .target(name: "MaxMindDB",
-               dependencies: [ "CMaxMindDB" ]),
+                dependencies: [ "CMaxMindDB" ]),
         .target(name: "NetbotCore",
-               dependencies: [
+                dependencies: [
                     .product(name: "Logging", package: "swift-log"),
                     .product(name: "NIOCore", package: "swift-nio"),
                     .product(name: "NIOPosix", package: "swift-nio")
-               ]),
+                ]),
         .target(name: "NetbotHTTP",
                 dependencies: [
                     "NetbotCore",
