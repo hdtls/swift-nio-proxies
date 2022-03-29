@@ -96,14 +96,14 @@ extension ChannelPipeline.SynchronousOperations {
             let serverHostname = req.serverHostname
             
             let enableHTTPCapture0 = {
-                // Those handlers will be added to `self`.
+                // Those handlers will be added to `self` to enable HTTP capture for request.
                 let handlers0: [ChannelHandler] = [
                     HTTPResponseCompressor(),
                     HTTPCaptureHandler<HTTPRequestHead>(logger: logger),
                     HTTPIOTransformer<HTTPRequestHead>()
                 ]
                 
-                // Those handlers will be added to the channel which is from completion handler invoke.
+                // Those handlers will be added to the channel to enable HTTP capture for response.
                 let handlers1: [ChannelHandler] = [
                     NIOHTTPResponseDecompressor(limit: .none),
                     HTTPCaptureHandler<HTTPResponseHead>(logger: logger),
@@ -115,15 +115,17 @@ extension ChannelPipeline.SynchronousOperations {
                 try channel.pipeline.syncOperations.addHandlers(handlers1)
             }
             
+            guard req.httpMethod == .CONNECT else {
+                try enableHTTPCapture0()
+                return
+            }
+            
             guard enableMitM else {
-                guard enableHTTPCapture else {
-                    return
-                }
-                return try enableHTTPCapture0()
+                return
             }
             
             guard let mitmConfig = mitmConfig else {
-                // "In order to enable the HTTP MitM feature, you must provide the corresponding configuration."
+                // In order to enable the HTTP MitM feature, you must provide the corresponding configuration.
                 throw NIOSSLError.failedToLoadCertificate
             }
             
@@ -135,13 +137,8 @@ extension ChannelPipeline.SynchronousOperations {
                 return serverHostname.contains($0.key.dropFirst())
             }?.value
             
-            // CONNECT only.
-            guard let p12 = p12, req.httpMethod == .CONNECT else {
-                guard enableHTTPCapture else {
-                    return
-                }
-                
-                return try enableHTTPCapture0()
+            guard let p12 = p12 else {
+                return
             }
             
             let certificateChain = p12.certificateChain.map(NIOSSLCertificateSource.certificate)
