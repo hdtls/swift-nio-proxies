@@ -28,7 +28,6 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     
     /// The task request head part. this value is updated after `head` part received.
     private var headPart: HTTPRequestHead!
-    private var request: Request?
     
     private enum Event {
         case channelRead(data: NIOAny)
@@ -168,15 +167,16 @@ extension HTTPProxyServerHandler {
             }
         }
         
-        self.outEFLBuilder(self.request!)
-            .whenComplete {
-                switch $0 {
-                    case .success(let channel):
-                        self.pipe(self.request!, channel: channel, context: context)
-                    case .failure(let error):
-                        self.deliverOneError(error, context: context)
-                }
+        let req = Request.init(head: head)
+        
+        self.outEFLBuilder(req).whenComplete {
+            switch $0 {
+                case .success(let channel):
+                    self.pipe(req, channel: channel, context: context)
+                case .failure(let error):
+                    self.deliverOneError(error, context: context)
             }
+        }
     }
     
     private func pipe(_ request: Request, channel: Channel, context: ChannelHandlerContext) {
@@ -211,7 +211,7 @@ extension HTTPProxyServerHandler {
         let (localGlue, peerGlue) = GlueHandler.matchedPair()
         promise.futureResult
             .flatMapThrowing {
-                try self.completion(self.request!, channel)
+                try self.completion(request, channel)
                 try context.pipeline.syncOperations.addHandler(localGlue)
                 try channel.pipeline.syncOperations.addHandler(peerGlue)
             }
