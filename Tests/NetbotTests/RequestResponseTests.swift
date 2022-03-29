@@ -22,7 +22,7 @@ final class RequestResponseTests: XCTestCase {
         let request = Request(id: id, head: .init(version: .http1_1, method: .GET, uri: "uri", headers: .init()))
         XCTAssertEqual(request.httpMethod, .GET)
         XCTAssertEqual(request.httpVersion, .http1_1)
-        XCTAssertEqual(request.url, URL(string: "uri"))
+        XCTAssertEqual(request.uri, "uri")
         XCTAssertEqual(request.httpHeaders, .init())
         XCTAssertNil(request.httpBody)
         XCTAssertEqual(request.id, id)
@@ -61,7 +61,7 @@ final class RequestResponseTests: XCTestCase {
                 "resonPhrase": "OK"
             ],
             "id": "\(expected.id)",
-            "url": "uri",
+            "uri": "uri",
             "httpVersion": "1.1",
             "httpMethod": "GET",
             "httpHeaders": ["Accept: application/json"]

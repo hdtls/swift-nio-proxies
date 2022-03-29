@@ -97,12 +97,21 @@ public class Netbot {
                     channel.pipeline.addHandler(self.quiesce.makeServerChannelHandler(channel: channel))
                 }
                 .childChannelInitializer { channel in
-                    channel.pipeline.addHandlers([
-                        HTTPResponseEncoder(),
-                        ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)),
-                        HTTP1ProxyServerHandler(logger: self.logger, authorization: nil, enableHTTPCapture: self.isHTTPCaptureEnabled, enableMitM: self.isMitmEnabled, mitmConfig: self.configuration.mitm) { taskAddress in
-                            
+                    //                    channel.pipeline.configureHTTP1ProxyServerHandlers(
+                    channel.pipeline.configureHTTPProxyServerHandlers(
+                        logger: self.logger,
+                        credential: nil,
+                        enableHTTPCapture: self.isHTTPCaptureEnabled,
+                        enableMitM: self.isMitmEnabled,
+                        mitmConfig: self.configuration.mitm) { req in
                             let eventLoop = channel.eventLoop.next()
+                            
+                            let taskAddress: NetAddress
+                            do {
+                                taskAddress = try req.address
+                            } catch {
+                                return eventLoop.makeFailedFuture(error)
+                            }
                             
                             guard self.outboundMode != .direct else {
                                 return DirectPolicy(taskAddress: taskAddress)
@@ -172,11 +181,8 @@ public class Netbot {
                                         }
                                     }
                                     
-                                    guard let savedFinalRule = savedFinalRule else {
-                                        fatalError("This should never happen, rules defined in configuration MUST contain one FinalRule.")
-                                    }
-                                    
-                                    return savedFinalRule
+                                    precondition(savedFinalRule != nil, "Rules defined in configuration MUST contain one and only one FinalRule.")
+                                    return savedFinalRule!
                                 }
                                 .map { rule -> ProxyPolicy in
                                     // Policy evaluating.
@@ -214,7 +220,6 @@ public class Netbot {
                                     return policy.makeConnection(logger: self.logger, on: eventLoop)
                                 }
                         }
-                    ])
                 }
                 .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: SocketOptionValue(1))
                 .childChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: SocketOptionValue(1))

@@ -12,14 +12,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
 import Logging
 import NetbotCore
 import NIOCore
 import NIOHTTP1
 import NIOSSL
 
-final public class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChannelHandler {
+final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChannelHandler {
     
     public typealias InboundIn = HTTPServerRequestPart
     public typealias InboundOut = HTTPServerRequestPart
@@ -28,7 +27,8 @@ final public class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
     private var state: ConnectionState
     
     /// The task request head part. this value is updated after `head` part received.
-    private var requestHead: HTTPRequestHead!
+    private var headPart: HTTPRequestHead!
+    private var request: Request?
     
     private enum Event {
         case channelRead(data: NIOAny)
@@ -42,31 +42,20 @@ final public class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
     /// The Logger for this handler.
     public let logger: Logger
     
-    public let completion: (NetAddress) -> EventLoopFuture<Channel>
-    
-    /// Enable  to allow MitM decrypt https triffic.
-    public let isMitMEnabled: Bool
-    
-    /// Enable  to capture http body.
-    public let isHTTPCaptureEnabled: Bool
-    
-    /// Configuration for HTTP traffic with MitM attacks.
-    public let mitmConfiguration: MitMConfiguration?
+    public let completion: (Request, Channel) throws -> Void
     
     /// The credentials to authenticate a user.
     public let authorization: BasicAuthorization?
     
+    private var outEFLBuilder: (Request) -> EventLoopFuture<Channel>
+    
     public init(logger: Logger,
                 authorization: BasicAuthorization? = nil,
-                enableHTTPCapture: Bool = false,
-                enableMitM: Bool = false,
-                mitmConfig: MitMConfiguration? = nil,
-                completion: @escaping (NetAddress) -> EventLoopFuture<Channel>) {
+                outEFLBuilder: @escaping (Request) -> EventLoopFuture<Channel>,
+                completion: @escaping (Request, Channel) throws -> Void) {
         self.logger = logger
         self.authorization = authorization
-        self.isHTTPCaptureEnabled = enableHTTPCapture
-        self.isMitMEnabled = enableMitM
-        self.mitmConfiguration = mitmConfig
+        self.outEFLBuilder = outEFLBuilder
         self.completion = completion
         self.state = .idle
     }
@@ -90,42 +79,21 @@ final public class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
         do {
             switch unwrapInboundIn(data) {
                 case .head(let head) where state == .evaluating:
-                    requestHead = head
+                    headPart = head
                     guard head.method != .CONNECT else {
-                        if !isMitMEnabled {
-                            // CONNECT pipeline doesn't contains `HTTPContentCather` handler when MitM disabled.
-                            // so we need log msg in there.
-                            var msg = "\n"
-                            msg += "\n\(head.method) \(head.version) \(head.uri)"
-                            head.headers.forEach { field in
-                                msg += "\n"
-                                msg += "\(field.name) \(field.value)"
-                            }
-//                            logger.info("\(msg)")
-                        }
                         return
                     }
                     // Strip hop-by-hop header based on rfc2616.
-                    requestHead.headers = requestHead.headers.trimmingFieldsInHopByHop()
+                    headPart.headers = headPart.headers.trimmingFieldsInHopByHop()
                     
-                    eventBuffer.append(.channelRead(data: wrapInboundOut(.head(requestHead))))
+                    eventBuffer.append(.channelRead(data: wrapInboundOut(.head(headPart))))
                     try evaluateClientGreeting(context: context)
                     
-                case .body where requestHead != nil && requestHead.method != .CONNECT:
+                case .body where headPart != nil && headPart.method != .CONNECT:
                     eventBuffer.append(.channelRead(data: data))
-                    
-                case .end(let trailers) where requestHead != nil:
-                    guard requestHead.method != .CONNECT else {
+                case .end where headPart != nil:
+                    guard headPart.method != .CONNECT else {
                         try evaluateClientGreeting(context: context)
-                        if !isMitMEnabled {
-                            var msg = "\n"
-                            trailers?.forEach { field in
-                                msg += "\n"
-                                msg += "\(field.name) \(field.value)"
-                            }
-                            msg += "\n"
-//                            logger.info("\(msg)")
-                        }
                         return
                     }
                     eventBuffer.append(.channelRead(data: data))
@@ -163,7 +131,7 @@ final public class HTTP1ProxyServerHandler: ChannelInboundHandler, RemovableChan
     }
 }
 
-extension HTTP1ProxyServerHandler {
+extension HTTPProxyServerHandler {
     
     private func startHandshaking(context: ChannelHandlerContext) {
         guard context.channel.isActive, state == .idle else {
@@ -177,12 +145,12 @@ extension HTTP1ProxyServerHandler {
     }
     
     private func evaluateClientGreeting(context: ChannelHandlerContext) throws {
-        guard let head = requestHead else {
+        guard let head = headPart else {
             throw HTTPProxyError.invalidURL(url: "nil")
         }
         
         // Only CONNECT tunnel need remove default http server pipelines.
-        if requestHead.method == .CONNECT {
+        if headPart.method == .CONNECT {
             // New request is complete. We don't want any more data from now on.
             context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
                 .whenSuccess { httpDecoder in
@@ -200,31 +168,19 @@ extension HTTP1ProxyServerHandler {
             }
         }
         
-        guard let serverHostname = head.host, !serverHostname.isEmpty else {
-            // RFC 2068 (HTTP/1.1) requires URL to be absolute URL in HTTP proxy.
-            throw HTTPProxyError.invalidURL(url: head.uri)
-        }
-        
-        let taskAddress: NetAddress
-        if serverHostname.isIPAddress() {
-            taskAddress = .socketAddress(try SocketAddress(ipAddress: serverHostname, port: head.port))
-        } else {
-            taskAddress = .domainPort(serverHostname, head.port)
-        }
-        
-        let client = completion(taskAddress)
-        
-        client.whenSuccess { channel in
-            self.remoteDidConnected(serverHostname, channel: channel, context: context)
-        }
-        
-        client.whenFailure { error in
-            self.deliverOneError(error, context: context)
-        }
+        self.outEFLBuilder(self.request!)
+            .whenComplete {
+                switch $0 {
+                    case .success(let channel):
+                        self.pipe(self.request!, channel: channel, context: context)
+                    case .failure(let error):
+                        self.deliverOneError(error, context: context)
+                }
+            }
     }
     
-    private func remoteDidConnected(_ serverHostname: String, channel: Channel, context: ChannelHandlerContext) {
-        logger.info("Tunneling request to \(serverHostname):\(requestHead.port) via \(String(describing: channel.remoteAddress))")
+    private func pipe(_ request: Request, channel: Channel, context: ChannelHandlerContext) {
+        logger.info("Tunneling request to \(request.uri) via \(String(describing: channel.remoteAddress))")
         
         do {
             try state.established()
@@ -235,13 +191,13 @@ extension HTTP1ProxyServerHandler {
         let promise = context.eventLoop.makePromise(of: Void.self)
         
         // Only CONNECT tunnel need established response and remove default http server pipelines.
-        if requestHead.method == .CONNECT {
+        if headPart.method == .CONNECT {
             // Ok, upgrade has completed! We now need to begin the upgrade process.
             // First, send the 200 connection established message.
             // This content-length header is MUST NOT, but we need to workaround NIO's insistence that we set one.
             var headers = HTTPHeaders()
             headers.add(name: .contentLength, value: "0")
-            let head = HTTPResponseHead(version: .http1_1, status: .custom(code: 200, reasonPhrase: "Connection Established"), headers: headers)
+            let head = HTTPResponseHead(version: .http1_1, status: .ok, headers: headers)
             context.write(wrapOutboundOut(.head(head)), promise: nil)
             context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
             
@@ -252,52 +208,12 @@ extension HTTP1ProxyServerHandler {
             promise.succeed(())
         }
         
+        let (localGlue, peerGlue) = GlueHandler.matchedPair()
         promise.futureResult
             .flatMapThrowing {
-                let (localGlue, peerGlue) = GlueHandler.matchedPair()
-                
-                // Only support CONNECT tunnel SSL decryption.
-                let isMitMEnabled = self.isMitMEnabled && self.requestHead.method == .CONNECT
-                
-                var filtered: [String : NIOSSLPKCS12Bundle]?
-                
-                // Only filter PKCS#12 bundle when `isMitMEnabled` set to true.
-                if isMitMEnabled {
-                    filtered = self.mitmConfiguration?.pool.filter {
-                        if $0.key.hasPrefix("*") {
-                            return serverHostname.contains($0.key.dropFirst())
-                        }
-                        return $0.key == serverHostname
-                    }
-                }
-                
-                guard isMitMEnabled, let bundle = filtered?.first?.value else {
-                    if self.requestHead.method != .CONNECT {
-                        try context.pipeline.syncOperations.addHandlers([
-                            HTTPContentCatcher<HTTPRequestHead>.init(enableHTTPCapture: self.isHTTPCaptureEnabled),
-                            HTTPIOTransformer<HTTPRequestHead>()
-                        ])
-                        
-                        try channel.pipeline.syncOperations.addHTTPClientHandlers()
-                        try channel.pipeline.syncOperations.addHandlers([
-                            HTTPContentCatcher<HTTPResponseHead>.init(enableHTTPCapture: self.isHTTPCaptureEnabled),
-                            HTTPIOTransformer<HTTPResponseHead>()
-                        ])
-                    }
-                    try context.pipeline.syncOperations.addHandler(localGlue)
-                    try channel.pipeline.syncOperations.addHandler(peerGlue)
-                    return
-                }
-                
-                try context.pipeline.syncOperations.configureSSLServerHandlers(pkcs12Bundle: bundle)
-                try context.pipeline.syncOperations.configureHTTPServerPipeline(withPipeliningAssistance: false, withErrorHandling: false)
-                try context.pipeline.syncOperations.addHandler(HTTPContentCatcher<HTTPRequestHead>.init(enableHTTPCapture: self.isHTTPCaptureEnabled))
-                try context.pipeline.syncOperations.addHandlers([HTTPIOTransformer<HTTPRequestHead>(), localGlue])
-                
-                try channel.pipeline.syncOperations.addSSLClientHandlers(serverHostname: serverHostname)
-                try channel.pipeline.syncOperations.addHTTPClientHandlers()
-                try channel.pipeline.syncOperations.addHandler(HTTPContentCatcher<HTTPResponseHead>.init(enableHTTPCapture: self.isHTTPCaptureEnabled))
-                try channel.pipeline.syncOperations.addHandlers([HTTPIOTransformer<HTTPResponseHead>(), peerGlue])
+                try self.completion(self.request!, channel)
+                try context.pipeline.syncOperations.addHandler(localGlue)
+                try channel.pipeline.syncOperations.addHandler(peerGlue)
             }
             .flatMap {
                 context.pipeline.removeHandler(self)
@@ -344,7 +260,7 @@ extension HTTPHeaders {
     
     /// Returns a new HTTPHeaders made by removing from all hop-by-hop fields.
     /// - Returns: The headers without hop-by-hop fields.
-    fileprivate func trimmingFieldsInHopByHop() -> HTTPHeaders {
+    func trimmingFieldsInHopByHop() -> HTTPHeaders {
         var headers = self
         headers.remove(name: .proxyConnection)
         headers.remove(name: .proxyAuthenticate)
@@ -355,30 +271,5 @@ extension HTTPHeaders {
         headers.remove(name: .upgrade)
         headers.remove(name: .connection)
         return headers
-    }
-}
-
-extension HTTPRequestHead {
-    
-    public var host: String? {
-        return headers.first(name: .host)?.components(separatedBy: ":").first
-    }
-    
-    /// Port for request. parse from `headers` host filed or `uri` if any else 80 is returned.
-    public var port: Int {
-        var part = headers.first(name: .host)?.components(separatedBy: ":")
-        
-        // Standard host field
-        if part?.count == 2 {
-            return Int(part![1])!
-        }
-        
-        part = uri.components(separatedBy: ":")
-        
-        guard part?.count == 2 else {
-            return 80
-        }
-        
-        return Int(part![1].split(separator: "/").first!) ?? 80
     }
 }

@@ -15,6 +15,7 @@
 import Foundation
 import NIOCore
 import NIOHTTP1
+import NetbotCore
 
 /// Represents an HTTP proxy request in an application.
 public struct Request: Equatable {
@@ -23,29 +24,77 @@ public struct Request: Equatable {
     public var id: UUID
     
     /// The HTTP request method of the receiver.
-    public var httpMethod: HTTPMethod
+    public var httpMethod: HTTPMethod {
+        head.method
+    }
     
-    /// The URL of the receiver.
-    public var url: URL?
+    /// The URI of the receiver.
+    public var uri: String {
+        head.uri
+    }
+    
+    public var address: NetAddress {
+        get throws {
+            guard serverHostname.isIPAddress() else {
+                return .domainPort(serverHostname, serverPort)
+            }
+            
+            return .socketAddress(try SocketAddress(ipAddress: serverHostname, port: serverPort))
+        }
+    }
+    
+    public var serverHostname: String {
+        guard let serverHostname = head.headers.first(name: .host)?.components(separatedBy: ":").first else {
+            return head.uri.components(separatedBy: ":").first!
+        }
+        return serverHostname
+    }
+    
+    public var serverPort: Int {
+        var components: [Substring] = head.headers.first(name: .host)?.split(separator: ":", omittingEmptySubsequences: false) ?? []
+
+        var port: Int?
+        
+        if components.count >= 2 {
+            // Standard host field
+            port = Int(components[1], radix: 10)
+        }
+        
+        guard port == nil else {
+            return port!
+        }
+
+        // Port 80 if not specified
+        let defaultPort = 80
+        
+        components = head.uri.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+        
+        port = components.last.map { Int($0, radix: 10) } ?? defaultPort
+
+        return port!
+    }
     
     /// The version for this HTTP request.
-    public var httpVersion: HTTPVersion
+    public var httpVersion: HTTPVersion {
+        head.version
+    }
     
     /// The header fields of the receiver.
-    public var httpHeaders: HTTPHeaders
+    public var httpHeaders: HTTPHeaders {
+        head.headers
+    }
     
     /// This data is sent as the message body of the request, as
     /// in done in an HTTP POST request.
     public var httpBody: ByteBuffer?
     
+    internal var head: HTTPRequestHead
+    
     /// Creates and initializes a `Request` with specified id and head.
     /// - Parameter head: The HTTPRequestHead for the request.
     public init(id: UUID, head: HTTPRequestHead) {
         self.id = id
-        self.httpMethod = head.method
-        self.url = URL(string: head.uri)
-        self.httpVersion = head.version
-        self.httpHeaders = head.headers
+        self.head = head
     }
     
     /// Initialize an instance of `Request` with specified head.
@@ -61,7 +110,7 @@ extension Request: Codable {
     
     enum CodingKeys: String, CodingKey {
         case id
-        case url
+        case uri
         case httpMethod
         case httpVersion
         case httpBody
@@ -72,7 +121,7 @@ extension Request: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
         let id = try container.decode(UUID.self, forKey: .id)
-        let url = try container.decode(URL.self, forKey: .url)
+        let uri = try container.decode(String.self, forKey: .uri)
         let httpHeaders = try container.decode(HTTPHeaders.self, forKey: .httpHeaders)
         let httpVersion = try container.decode(HTTPVersion.self, forKey: .httpVersion)
         let httpMethod = try container.decode(String.self, forKey: .httpMethod)
@@ -81,7 +130,7 @@ extension Request: Codable {
         self.init(id: id, head: .init(
             version: httpVersion,
             method: .init(rawValue: httpMethod),
-            uri: url.absoluteString,
+            uri: uri,
             headers: httpHeaders
         ))
         
@@ -92,7 +141,7 @@ extension Request: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         
         try container.encode(id, forKey: .id)
-        try container.encode(url, forKey: .url)
+        try container.encode(uri, forKey: .uri)
         try container.encode(httpHeaders, forKey: .httpHeaders)
         try container.encode(httpVersion, forKey: .httpVersion)
         try container.encode(httpMethod.rawValue, forKey: .httpMethod)

@@ -13,72 +13,152 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
+import NetbotCore
 import NIOCore
+import NIOHTTP1
+import NIOSSL
+import NIOTLS
+import NIOHTTPCompression
 
 extension ChannelPipeline {
     
-    public func addHTTPProxyClientHandlers(logger: Logger = .init(label: "com.netbot.http-client-tunnel"),
-                                           credential: Credential? = nil,
-                                           position: Position = .last) -> EventLoopFuture<Void> {
+    public func addHTTPProxyClientHandlers(position: ChannelPipeline.Position = .last,
+                                           logger: Logger,
+                                           credential: Credential? = nil) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
         
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
-                try syncOperations.addHTTPProxyClientHandlers(logger: logger, credential: credential, position: position)
+                try self.syncOperations.addHTTPProxyClientHandlers(position: position, logger: logger, credential: credential)
             }
             eventLoopFuture = eventLoop.makeCompletedFuture(result)
         } else {
-            eventLoopFuture = eventLoop.submit({
-                try self.syncOperations.addHTTPProxyClientHandlers(logger: logger, credential: credential, position: position)
-            })
+            eventLoopFuture = eventLoop.submit {
+                try self.syncOperations.addHTTPProxyClientHandlers(position: position, logger: logger, credential: credential)
+            }
         }
         
         return eventLoopFuture
     }
     
-    public func configureHTTPProxyServerHandlers(logger: Logger = .init(label: "com.netbot.http-server-tunnel"),
+    public func configureHTTPProxyServerHandlers(position: ChannelPipeline.Position = .last,
+                                                 logger: Logger,
                                                  credential: Credential? = nil,
-                                                 position: ChannelPipeline.Position = .last,
-                                                 proxyProtocol: ProxyProtocol,
-                                                 completion: @escaping (String) -> EventLoopFuture<Channel>) -> EventLoopFuture<Void> {
+                                                 enableHTTPCapture: Bool = false,
+                                                 enableMitM: Bool = false,
+                                                 mitmConfig: MitMConfiguration? = nil,
+                                                 completion: @escaping (Request) -> EventLoopFuture<Channel>) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
         
+        let execution = {
+            try self.syncOperations.configureHTTPProxyServerHandlers(position: position,
+                                                                     logger: logger,
+                                                                     credential: credential,
+                                                                     enableHTTPCapture: enableHTTPCapture,
+                                                                     enableMitM: enableMitM,
+                                                                     mitmConfig: mitmConfig,
+                                                                     completion: completion)
+        }
+        
         if eventLoop.inEventLoop {
-            let result = Result<Void, Error> {
-                try syncOperations.configureHTTPProxyServerHandlers(logger: logger, credential: credential, position: position, proxyProtocol: proxyProtocol, completion: completion)
-            }
-            eventLoopFuture = eventLoop.makeCompletedFuture(result)
+            eventLoopFuture = eventLoop.makeCompletedFuture(.init(catching: execution))
         } else {
-            eventLoopFuture = eventLoop.submit({
-                try self.syncOperations.configureHTTPProxyServerHandlers(logger: logger, credential: credential, position: position, proxyProtocol: proxyProtocol, completion: completion)
-            })
+            eventLoopFuture = eventLoop.submit(execution)
         }
         
         return eventLoopFuture
     }
-}
-
-public enum ProxyProtocol {
-    case http
-    case socks
-    case shadowsocks
 }
 
 extension ChannelPipeline.SynchronousOperations {
     
-    public func addHTTPProxyClientHandlers(logger: Logger = .init(label: "com.netbot.http-client-tunnel"),
-                                           credential: Credential? = nil,
-                                           position: ChannelPipeline.Position = .last) throws {
+    public func addHTTPProxyClientHandlers(position: ChannelPipeline.Position = .last,
+                                           logger: Logger,
+                                           credential: Credential? = nil) throws {
         eventLoop.assertInEventLoop()
         let handlers: [ChannelHandler] = []
         try addHandlers(handlers, position: position)
     }
     
-    public func configureHTTPProxyServerHandlers(logger: Logger = .init(label: "com.netbot.http-server-tunnel"),
+    public func configureHTTPProxyServerHandlers(position: ChannelPipeline.Position = .last,
+                                                 logger: Logger,
                                                  credential: Credential? = nil,
-                                                 position: ChannelPipeline.Position = .last,
-                                                 proxyProtocol: ProxyProtocol,
-                                                 completion: @escaping (String) -> EventLoopFuture<Channel>) throws {
-        eventLoop.assertInEventLoop()
+                                                 enableHTTPCapture: Bool = false,
+                                                 enableMitM: Bool = false,
+                                                 mitmConfig: MitMConfiguration? = nil,
+                                                 completion: @escaping (Request) -> EventLoopFuture<Channel>) throws {
+        self.eventLoop.assertInEventLoop()
+        
+        let responseEncoder = HTTPResponseEncoder()
+        let requestDecoder = HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)
+        
+        let serverHandler = HTTPProxyServerHandler(logger: logger, authorization: credential != nil ? .init(username: credential!.identity, password: credential!.identityTokenString) : nil, outEFLBuilder: completion) { req, channel in
+            let serverHostname = req.serverHostname
+            
+            let enableHTTPCapture0 = {
+                // Those handlers will be added to `self`.
+                let handlers0: [ChannelHandler] = [
+                    HTTPResponseCompressor(),
+                    HTTPCaptureHandler<HTTPRequestHead>(logger: logger),
+                    HTTPIOTransformer<HTTPRequestHead>()
+                ]
+                
+                // Those handlers will be added to the channel which is from completion handler invoke.
+                let handlers1: [ChannelHandler] = [
+                    NIOHTTPResponseDecompressor(limit: .none),
+                    HTTPCaptureHandler<HTTPResponseHead>(logger: logger),
+                    HTTPIOTransformer<HTTPResponseHead>()
+                ]
+                
+                try self.addHandlers(handlers0)
+                
+                try channel.pipeline.syncOperations.addHandlers(handlers1)
+            }
+            
+            guard enableMitM else {
+                guard enableHTTPCapture else {
+                    return
+                }
+                return try enableHTTPCapture0()
+            }
+            
+            guard let mitmConfig = mitmConfig else {
+                // "In order to enable the HTTP MitM feature, you must provide the corresponding configuration."
+                throw NIOSSLError.failedToLoadCertificate
+            }
+            
+            // Filter p12 bundle from pool
+            let p12 = mitmConfig.pool.first {
+                guard $0.key.hasPrefix("*") else {
+                    return $0.key == serverHostname
+                }
+                return serverHostname.contains($0.key.dropFirst())
+            }?.value
+            
+            // CONNECT only.
+            guard let p12 = p12, req.httpMethod == .CONNECT else {
+                guard enableHTTPCapture else {
+                    return
+                }
+                
+                return try enableHTTPCapture0()
+            }
+            
+            let certificateChain = p12.certificateChain.map(NIOSSLCertificateSource.certificate)
+            let privateKey = NIOSSLPrivateKeySource.privateKey(p12.privateKey)
+            
+            try self.configureSSLServerHandlers(certificateChain: certificateChain, privateKey: privateKey)
+            try self.configureHTTPServerPipeline(withPipeliningAssistance: false, withErrorHandling: false)
+            
+            // Peer channel pipeline setup.
+            try channel.pipeline.syncOperations.addSSLClientHandlers(serverHostname: serverHostname)
+            try channel.pipeline.syncOperations.addHTTPClientHandlers()
+            
+            try enableHTTPCapture0()
+        }
+        
+        let handlers: [RemovableChannelHandler] = [responseEncoder, ByteToMessageHandler(requestDecoder), serverHandler]
+        
+        try self.addHandlers(handlers, position: position)
     }
 }
