@@ -22,63 +22,20 @@ import NIOSSL
 /// Configuration for HTTPS traffic decraption with MitM attacks.
 public struct MitMConfiguration: Codable {
     
-    public var skipServerCertificateVerification: Bool
+    public let skipServerCertificateVerification: Bool
     
     /// Hostnames that should perform MitM.
-    public var hostnames: [String] = [] {
-        didSet {
-            let pool = self.pool
-            self.pool.removeAll()
-            
-            guard !hostnames.isEmpty, let passphrase = passphrase, let base64EncodedP12String = base64EncodedP12String else {
-                return
-            }
-            
-            do {
-                let bundle = try boringSSLParseBase64EncodedPKCS12BundleString(
-                    passphrase: passphrase,
-                    base64EncodedString: base64EncodedP12String
-                )
-                
-                try self.hostnames.forEach { hostname in
-                    guard pool[hostname] == nil else {
-                        self.pool[hostname] = pool[hostname]
-                        return
-                    }
-                    
-                    let p12 = try boringSSLSelfSignedPKCS12Bundle(
-                        passphrase: passphrase,
-                        certificate: bundle.certificateChain[0],
-                        privateKey: bundle.privateKey, hostname: hostname
-                    )
-                    
-                    self.pool[hostname] = try NIOSSLPKCS12Bundle(
-                        buffer: boringSSLPKCS12BundleDERBytes(p12),
-                        passphrase: Array(passphrase.utf8)
-                    )
-                    
-                    CNIOBoringSSL_PKCS12_free(p12)
-                }
-            } catch {
-                fatalError("Failed to sign ssl server certificate for sites \(hostnames.joined(separator: ",")).")
-            }
-        }
-    }
+    public let hostnames: [String]
     
     /// Base64 encoded CA P12 bundle.
-    public var base64EncodedP12String: String?
+    public let base64EncodedP12String: String?
     
     /// Passphrase for P12 bundle.
-    public var passphrase: String?
+    public let passphrase: String?
     
     /// P12 bundle pool keyed by hostname.
-    internal var pool: [String : NIOSSLPKCS12Bundle] = [:]
-    
-    enum CodingKeys: String, CodingKey {
-        case skipServerCertificateVerification
-        case hostnames
-        case passphrase
-        case base64EncodedP12String
+    var pool: [String : NIOSSLPKCS12Bundle] {
+        return buildP12BundlePool()
     }
     
     /// Initialize an instance of `MitMConfiguration` with specified skipServerCertificateVerification, hostnames, base64EncodedP12String, passphrase.
@@ -92,11 +49,9 @@ public struct MitMConfiguration: Codable {
                 base64EncodedP12String: String?,
                 passphrase: String?) {
         self.skipServerCertificateVerification = skipServerCertificateVerification
-        // Filter hostname if host contains in a wildcard host. e.g. apple.com and *.apple.com
+        self.hostnames = hostnames
         self.passphrase = passphrase
         self.base64EncodedP12String = base64EncodedP12String
-        // Workaround for `didSet` not call when setting new value in `init`.
-        ({ self.hostnames = hostnames })()
     }
     
     /// Initialize an instance of `MitMConfiguration`.
@@ -106,6 +61,38 @@ public struct MitMConfiguration: Codable {
     /// with a default skipServerCertificateVerification, hostnames, base64EncodedP12String and passphrase values.
     public init() {
         self.init(skipServerCertificateVerification: false, hostnames: [], base64EncodedP12String: nil, passphrase: nil)
+    }
+    
+    private func buildP12BundlePool() -> [String : NIOSSLPKCS12Bundle] {
+        guard !hostnames.isEmpty, let passphrase = passphrase, let base64EncodedP12String = base64EncodedP12String else {
+            return [:]
+        }
+        
+        guard let bundle = try? boringSSLParseBase64EncodedPKCS12BundleString(
+            passphrase: passphrase,
+            base64EncodedString: base64EncodedP12String
+        ) else {
+            return [:]
+        }
+        
+        var pool: [String : NIOSSLPKCS12Bundle] = [:]
+
+        try? hostnames.forEach { hostname in
+            let p12 = try boringSSLSelfSignedPKCS12Bundle(
+                passphrase: passphrase,
+                certificate: bundle.certificateChain[0],
+                privateKey: bundle.privateKey, hostname: hostname
+            )
+            
+            pool[hostname] = try NIOSSLPKCS12Bundle(
+                buffer: boringSSLPKCS12BundleDERBytes(p12),
+                passphrase: Array(passphrase.utf8)
+            )
+            
+            CNIOBoringSSL_PKCS12_free(p12)
+        }
+        
+        return pool
     }
 }
 
