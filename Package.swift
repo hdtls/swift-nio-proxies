@@ -89,6 +89,12 @@ let package = Package(
                     .product(name: "Crypto", package: "swift-crypto"),
                     .product(name: "NIOCore", package: "swift-nio"),
                 ]),
+        .target(name: "NetbotTrojan",
+                dependencies: [
+                    "NetbotCore",
+                    .product(name: "Crypto", package: "swift-crypto"),
+                    .product(name: "NIOCore", package: "swift-nio"),
+                ]),
         .target(name: "NetbotVMESS",
                 dependencies: [
                     "NetbotCore",
@@ -104,6 +110,7 @@ let package = Package(
                     "NetbotHTTP",
                     "NetbotSOCKS",
                     "NetbotSS",
+                    "NetbotTrojan",
                     "NetbotVMESS",
                     .product(name: "ArgumentParser", package: "swift-argument-parser"),
                     .product(name: "EraseNilDecoding", package: "swift-erase-nil-decoding"),
@@ -139,6 +146,10 @@ let package = Package(
                     ],
                     exclude: [ "RuleTests.swift.gyb" ]
                    ),
+        .testTarget(name: "NetbotTrojanTests",
+                    dependencies: [
+                        "NetbotTrojan"
+                    ]),
         .testTarget(name: "SHAKE128Tests",
                     dependencies: [ "SHAKE128" ]),
         .testTarget(name: "NetbotSOCKSTests",
