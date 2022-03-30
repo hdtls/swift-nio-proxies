@@ -15,7 +15,9 @@
 import ConnectionPool
 import Foundation
 import Logging
+import NetbotHTTP
 import NIOCore
+import NIOPosix
 import NIOSSL
 #if canImport(Network)
 import NIOTransportServices
@@ -130,7 +132,21 @@ extension SOCKS5OverTLSPolicy: ConnectionPoolSource {
 extension HTTPProxyPolicy: ConnectionPoolSource {
     
     public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
-        eventLoop.makeFailedFuture(ConnectionPoolError.shutdown)
+        do {
+            guard let taskAddress = taskAddress else {
+                throw HTTPProxyError.invalidURL(url: String(describing: taskAddress))
+            }
+            
+            let credential = configuration.username != nil && configuration.password != nil ? NetbotHTTP.Credential(identity: configuration.username!, identityTokenString: configuration.password!) : nil
+            
+            return ClientBootstrap.init(group: eventLoop.next())
+                .channelInitializer { channel in
+                    channel.pipeline.addHTTPProxyClientHandlers(logger: logger, credential: credential, taskAddress: taskAddress)
+                }
+                .connect(host: configuration.serverHostname, port: configuration.serverPort)
+        } catch {
+            return eventLoop.makeFailedFuture(error)
+        }
     }
 }
 

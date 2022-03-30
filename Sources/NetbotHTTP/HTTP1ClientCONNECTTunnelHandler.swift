@@ -14,6 +14,7 @@
 
 import Foundation
 import Logging
+import NetbotCore
 import NIOCore
 import NIOHTTP1
 
@@ -29,24 +30,25 @@ public struct Credential {
     }
 }
 
-public final class HTTP1ClientCONNECTTunnelHandler: ChannelInboundHandler, RemovableChannelHandler {
-    
-    public typealias OutboundOut = HTTPClientRequestPart
+public final class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, RemovableChannelHandler {
+
     public typealias InboundIn = HTTPClientResponsePart
+    public typealias OutboundIn = NIOAny
     
     public let logger: Logger
-    public let targetAddress: SocketAddress
+    public let taskAddress: NetAddress
     public let credential: Credential?
     
     private var state: ConnectionState
-    private var requestHead: HTTPResponseHead?
+    private var headPart: HTTPResponseHead?
+    private var bufferedWrites: MarkedCircularBuffer<BufferedWrite>
     
-    public init(logger: Logger = .init(label: "com.netbot.http-client-tunnel"), credential: Credential? = nil,
-                targetAddress: SocketAddress) {
+    public init(logger: Logger, credential: Credential? = nil, taskAddress: NetAddress) {
         self.logger = logger
         self.credential = credential
-        self.targetAddress = targetAddress
+        self.taskAddress = taskAddress
         self.state = .idle
+        self.bufferedWrites = .init(initialCapacity: 6)
     }
     
     public func handlerAdded(context: ChannelHandlerContext) {
@@ -66,14 +68,14 @@ public final class HTTP1ClientCONNECTTunnelHandler: ChannelInboundHandler, Remov
         
         do {
             switch unwrapInboundIn(data) {
-                case .head(let head) where state == .active:
+                case .head(let head) where state == .evaluating:
                     switch head.status.code {
                         case 200..<300:
-                            requestHead = head
+                            headPart = head
                         default:
                             throw HTTPProxyError.invalidProxyResponse(head)
                     }
-                case .end where requestHead != nil:
+                case .end where state == .evaluating && headPart != nil:
                     try established(context: context)
                 default:
                     throw HTTPProxyError.invalidHTTPOrdering
@@ -83,6 +85,37 @@ public final class HTTP1ClientCONNECTTunnelHandler: ChannelInboundHandler, Remov
         }
     }
 
+    public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
+        bufferedWrites.append((data, promise))
+    }
+    
+    public func flush(context: ChannelHandlerContext) {
+        bufferedWrites.mark()
+        
+        // Unbuffer writes when handshake is success.
+        guard state == .active else {
+            return
+        }
+        unbufferWrites(context: context)
+    }
+}
+
+extension HTTP1ClientCONNECTTunnelHandler {
+    
+    private typealias BufferedWrite = (data: NIOAny, promise: EventLoopPromise<Void>?)
+    
+    private func unbufferWrites(context: ChannelHandlerContext) {
+        while bufferedWrites.hasMark {
+            let bufferedWrite = bufferedWrites.removeFirst()
+            context.write(bufferedWrite.data, promise: bufferedWrite.promise)
+        }
+        context.flush()
+        
+        while !bufferedWrites.isEmpty {
+            let bufferedWrite = bufferedWrites.removeFirst()
+            context.write(bufferedWrite.data, promise: bufferedWrite.promise)
+        }
+    }
 }
 
 extension HTTP1ClientCONNECTTunnelHandler {
@@ -100,27 +133,37 @@ extension HTTP1ClientCONNECTTunnelHandler {
     }
     
     private func sendClientGreeting(context: ChannelHandlerContext) throws {
-        guard let ipAddress = targetAddress.ipAddress else {
-            throw HTTPProxyError.invalidURL(url: "nil")
-        }
+        var head: HTTPRequestHead
         
-        var head = HTTPRequestHead(
-            version: .http1_1,
-            method: .CONNECT,
-            uri: "\(ipAddress):\(targetAddress.port ?? 80)"
-        )
+        switch self.taskAddress {
+            case .domainPort(let domain, let port):
+                head = .init(version: .http1_1, method: .CONNECT, uri: "\(domain):\(port)")
+            case .socketAddress(let socketAddress):
+                guard let host = socketAddress.ipAddress else {
+                    throw HTTPProxyError.invalidURL(url: "nil")
+                }
+                head = .init(version: .http1_1, method: .CONNECT, uri: "\(host):\(socketAddress.port ?? 80)")
+        }
         
         if let credential = credential {
             let authorization = "Basic " + "\(credential.identity):\(credential.identityTokenString)".data(using: .utf8)!.base64EncodedString()
             head.headers.replaceOrAdd(name: "proxy-authorization", value: authorization)
         }
                 
-        context.write(wrapOutboundOut(.head(head)), promise: nil)
-        context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
+        context.write(NIOAny(HTTPClientRequestPart.head(head)), promise: nil)
+        context.writeAndFlush(NIOAny(HTTPClientRequestPart.end(nil)), promise: nil)
     }
     
     private func established(context: ChannelHandlerContext) throws {
-        try state.established()
+        _ = context.pipeline.handler(type: HTTPRequestEncoder.self)
+            .flatMap(context.pipeline.removeHandler(_:))
+            .flatMap { context.pipeline.handler(type: ByteToMessageHandler<HTTPResponseDecoder>.self) }
+            .flatMap(context.pipeline.removeHandler(_:))
+            .flatMapThrowing { _ in
+                self.unbufferWrites(context: context)
+                try self.state.established()
+            }
+            .flatMap { context.pipeline.removeHandler(self) }
     }
     
     private func deliverOneError(_ error: Error, context: ChannelHandlerContext) {

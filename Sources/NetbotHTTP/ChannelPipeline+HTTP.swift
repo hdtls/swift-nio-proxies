@@ -24,17 +24,18 @@ extension ChannelPipeline {
     
     public func addHTTPProxyClientHandlers(position: ChannelPipeline.Position = .last,
                                            logger: Logger,
-                                           credential: Credential? = nil) -> EventLoopFuture<Void> {
+                                           credential: Credential? = nil,
+                                           taskAddress: NetAddress) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
         
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
-                try self.syncOperations.addHTTPProxyClientHandlers(position: position, logger: logger, credential: credential)
+                try self.syncOperations.addHTTPProxyClientHandlers(position: position, logger: logger, credential: credential, taskAddress: taskAddress)
             }
             eventLoopFuture = eventLoop.makeCompletedFuture(result)
         } else {
             eventLoopFuture = eventLoop.submit {
-                try self.syncOperations.addHTTPProxyClientHandlers(position: position, logger: logger, credential: credential)
+                try self.syncOperations.addHTTPProxyClientHandlers(position: position, logger: logger, credential: credential, taskAddress: taskAddress)
             }
         }
         
@@ -74,10 +75,12 @@ extension ChannelPipeline.SynchronousOperations {
     
     public func addHTTPProxyClientHandlers(position: ChannelPipeline.Position = .last,
                                            logger: Logger,
-                                           credential: Credential? = nil) throws {
+                                           credential: Credential? = nil,
+                                           taskAddress: NetAddress) throws {
         eventLoop.assertInEventLoop()
-        let handlers: [ChannelHandler] = []
-        try addHandlers(handlers, position: position)
+        let handlers: [ChannelHandler] = [HTTP1ClientCONNECTTunnelHandler(logger: logger, credential: credential, taskAddress: taskAddress)]
+        try self.addHTTPClientHandlers()
+        try self.addHandlers(handlers, position: position)
     }
     
     public func configureHTTPProxyServerHandlers(position: ChannelPipeline.Position = .last,

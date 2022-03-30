@@ -69,7 +69,7 @@ public struct Request: Equatable {
         
         components = head.uri.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
         
-        port = components.last.map { Int($0, radix: 10) } ?? defaultPort
+        port = Int(components.last!, radix: 10) ?? defaultPort
 
         return port!
     }
