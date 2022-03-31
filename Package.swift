@@ -93,7 +93,8 @@ let package = Package(
                 dependencies: [
                     "NetbotCore",
                     .product(name: "Crypto", package: "swift-crypto"),
-                    .product(name: "NIOCore", package: "swift-nio"),
+                    .product(name: "Logging", package: "swift-log"),
+                    .product(name: "NIOCore", package: "swift-nio")
                 ]),
         .target(name: "NetbotVMESS",
                 dependencies: [
