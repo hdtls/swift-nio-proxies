@@ -94,7 +94,8 @@ let package = Package(
                     "NetbotCore",
                     .product(name: "Crypto", package: "swift-crypto"),
                     .product(name: "Logging", package: "swift-log"),
-                    .product(name: "NIOCore", package: "swift-nio")
+                    .product(name: "NIOCore", package: "swift-nio"),
+                    .product(name: "NIOSSL", package: "swift-nio")
                 ]),
         .target(name: "NetbotVMESS",
                 dependencies: [
@@ -147,6 +148,13 @@ let package = Package(
                     ],
                     exclude: [ "RuleTests.swift.gyb" ]
                    ),
+        .testTarget(name: "NetbotHTTPTests",
+                   dependencies: [
+                    "NetbotHTTP",
+                    .product(name: "NIO", package: "swift-nio"),
+                    .product(name: "NIOHTTP1", package: "swift-nio"),
+                    .product(name: "NIOSSL", package: "swift-nio")
+                   ]),
         .testTarget(name: "NetbotTrojanTests",
                     dependencies: [
                         "NetbotTrojan"
