@@ -19,6 +19,7 @@ import Foundation
 @_exported import NetbotHTTP
 @_exported import NetbotSOCKS
 @_exported import NetbotSS
+@_exported import NetbotTrojan
 @_exported import NetbotVMESS
 @_exported import NIOCore
 @_exported import NIOExtras

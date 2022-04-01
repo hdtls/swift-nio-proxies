@@ -155,7 +155,7 @@ extension HTTP1ClientCONNECTTunnelHandler {
     }
     
     private func established(context: ChannelHandlerContext) throws {
-        _ = context.pipeline.handler(type: HTTPRequestEncoder.self)
+        context.pipeline.handler(type: HTTPRequestEncoder.self)
             .flatMap(context.pipeline.removeHandler(_:))
             .flatMap { context.pipeline.handler(type: ByteToMessageHandler<HTTPResponseDecoder>.self) }
             .flatMap(context.pipeline.removeHandler(_:))
@@ -164,6 +164,9 @@ extension HTTP1ClientCONNECTTunnelHandler {
                 try self.state.established()
             }
             .flatMap { context.pipeline.removeHandler(self) }
+            .whenFailure { error in
+                self.deliverOneError(error, context: context)
+            }
     }
     
     private func deliverOneError(_ error: Error, context: ChannelHandlerContext) {

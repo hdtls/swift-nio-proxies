@@ -64,6 +64,7 @@ public struct Request: Equatable {
             return port!
         }
 
+        // TODO: The default port for HTTPS should be 443.
         // Port 80 if not specified
         let defaultPort = 80
         
