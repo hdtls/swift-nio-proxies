@@ -137,11 +137,14 @@ extension HTTPProxyPolicy: ConnectionPoolSource {
                 throw HTTPProxyError.invalidURL(url: String(describing: taskAddress))
             }
             
-            let credential = configuration.username != nil && configuration.password != nil ? NetbotHTTP.Credential(identity: configuration.username!, identityTokenString: configuration.password!) : nil
+            var authorization: BasicAuthorization?
+            if let username = configuration.username, let password = configuration.password {
+                authorization = .init(username: username, password: password)
+            }
             
             return ClientBootstrap.init(group: eventLoop.next())
                 .channelInitializer { channel in
-                    channel.pipeline.addHTTPProxyClientHandlers(logger: logger, credential: credential, taskAddress: taskAddress)
+                    channel.pipeline.addHTTPProxyClientHandlers(logger: logger, taskAddress: taskAddress, authorization: authorization)
                 }
                 .connect(host: configuration.serverHostname, port: configuration.serverPort)
         } catch {

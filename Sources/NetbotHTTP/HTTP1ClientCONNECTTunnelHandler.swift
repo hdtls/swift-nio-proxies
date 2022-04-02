@@ -18,34 +18,21 @@ import NetbotCore
 import NIOCore
 import NIOHTTP1
 
-/// Credential use for username and password authentication.
-public struct Credential {
-    
-    public let identity: String
-    public let identityTokenString: String
-    
-    public init(identity: String, identityTokenString: String) {
-        self.identity = identity
-        self.identityTokenString = identityTokenString
-    }
-}
-
 public final class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, RemovableChannelHandler {
 
     public typealias InboundIn = HTTPClientResponsePart
     public typealias OutboundIn = NIOAny
     
-    public let logger: Logger
-    public let taskAddress: NetAddress
-    public let credential: Credential?
-    
+    private let logger: Logger
+    private let authorization: BasicAuthorization?
+    private let taskAddress: NetAddress
     private var state: ConnectionState
     private var headPart: HTTPResponseHead?
     private var bufferedWrites: MarkedCircularBuffer<BufferedWrite>
     
-    public init(logger: Logger, credential: Credential? = nil, taskAddress: NetAddress) {
+    public init(logger: Logger, taskAddress: NetAddress, authorization: BasicAuthorization? = nil) {
         self.logger = logger
-        self.credential = credential
+        self.authorization = authorization
         self.taskAddress = taskAddress
         self.state = .idle
         self.bufferedWrites = .init(initialCapacity: 6)
@@ -145,9 +132,8 @@ extension HTTP1ClientCONNECTTunnelHandler {
                 head = .init(version: .http1_1, method: .CONNECT, uri: "\(host):\(socketAddress.port ?? 80)")
         }
         
-        if let credential = credential {
-            let authorization = "Basic " + "\(credential.identity):\(credential.identityTokenString)".data(using: .utf8)!.base64EncodedString()
-            head.headers.replaceOrAdd(name: "proxy-authorization", value: authorization)
+        if let authorization = self.authorization {
+            head.headers.basicAuthorization = authorization
         }
                 
         context.write(NIOAny(HTTPClientRequestPart.head(head)), promise: nil)

@@ -22,80 +22,73 @@ import NIOHTTPCompression
 
 extension ChannelPipeline {
     
-    public func addHTTPProxyClientHandlers(position: ChannelPipeline.Position = .last,
-                                           logger: Logger,
-                                           credential: Credential? = nil,
-                                           taskAddress: NetAddress) -> EventLoopFuture<Void> {
-        let eventLoopFuture: EventLoopFuture<Void>
-        
-        if eventLoop.inEventLoop {
-            let result = Result<Void, Error> {
-                try self.syncOperations.addHTTPProxyClientHandlers(position: position, logger: logger, credential: credential, taskAddress: taskAddress)
-            }
-            eventLoopFuture = eventLoop.makeCompletedFuture(result)
-        } else {
-            eventLoopFuture = eventLoop.submit {
-                try self.syncOperations.addHTTPProxyClientHandlers(position: position, logger: logger, credential: credential, taskAddress: taskAddress)
-            }
+    public func addHTTPProxyClientHandlers(logger: Logger,
+                                           taskAddress: NetAddress,
+                                           authorization: BasicAuthorization? = nil,
+                                           position: ChannelPipeline.Position = .last) -> EventLoopFuture<Void> {
+        let execute = {
+            try self.syncOperations.addHTTPProxyClientHandlers(
+                logger: logger,
+                taskAddress: taskAddress,
+                authorization: authorization,
+                position: position
+            )
         }
         
-        return eventLoopFuture
+        return self.eventLoop.inEventLoop
+        ? self.eventLoop.makeCompletedFuture(.init(catching: execute))
+        : self.eventLoop.submit(execute)
     }
     
-    public func configureHTTPProxyServerHandlers(position: ChannelPipeline.Position = .last,
-                                                 logger: Logger,
-                                                 credential: Credential? = nil,
+    public func configureHTTPProxyServerPipeline(logger: Logger,
+                                                 authorization: BasicAuthorization? = nil,
                                                  enableHTTPCapture: Bool = false,
                                                  enableMitM: Bool = false,
                                                  mitmConfig: MitMConfiguration? = nil,
+                                                 position: ChannelPipeline.Position = .last,
                                                  completion: @escaping (Request) -> EventLoopFuture<Channel>) -> EventLoopFuture<Void> {
-        let eventLoopFuture: EventLoopFuture<Void>
-        
-        let execution = {
-            try self.syncOperations.configureHTTPProxyServerHandlers(position: position,
-                                                                     logger: logger,
-                                                                     credential: credential,
-                                                                     enableHTTPCapture: enableHTTPCapture,
-                                                                     enableMitM: enableMitM,
-                                                                     mitmConfig: mitmConfig,
-                                                                     completion: completion)
+        let execute = {
+            try self.syncOperations.configureHTTPProxyServerPipeline(
+                logger: logger,
+                authorization: authorization,
+                enableHTTPCapture: enableHTTPCapture,
+                enableMitM: enableMitM,
+                position: position,
+                completion: completion
+            )
         }
         
-        if eventLoop.inEventLoop {
-            eventLoopFuture = eventLoop.makeCompletedFuture(.init(catching: execution))
-        } else {
-            eventLoopFuture = eventLoop.submit(execution)
-        }
-        
-        return eventLoopFuture
+        return self.eventLoop.inEventLoop
+        ? self.eventLoop.makeCompletedFuture(.init(catching: execute))
+        : self.eventLoop.submit(execute)
     }
 }
 
 extension ChannelPipeline.SynchronousOperations {
     
-    public func addHTTPProxyClientHandlers(position: ChannelPipeline.Position = .last,
-                                           logger: Logger,
-                                           credential: Credential? = nil,
-                                           taskAddress: NetAddress) throws {
+    public func addHTTPProxyClientHandlers(logger: Logger,
+                                           taskAddress: NetAddress,
+                                           authorization: BasicAuthorization? = nil,
+                                           position: ChannelPipeline.Position = .last) throws {
         eventLoop.assertInEventLoop()
-        let handlers: [ChannelHandler] = [HTTP1ClientCONNECTTunnelHandler(logger: logger, credential: credential, taskAddress: taskAddress)]
+        let handlers: [ChannelHandler] = [HTTP1ClientCONNECTTunnelHandler(logger: logger, taskAddress: taskAddress, authorization: authorization)]
         try self.addHTTPClientHandlers()
         try self.addHandlers(handlers, position: position)
     }
     
-    public func configureHTTPProxyServerHandlers(position: ChannelPipeline.Position = .last,
-                                                 logger: Logger,
-                                                 credential: Credential? = nil,
+    public func configureHTTPProxyServerPipeline(logger: Logger,
+                                                 authorization: BasicAuthorization? = nil,
                                                  enableHTTPCapture: Bool = false,
                                                  enableMitM: Bool = false,
                                                  mitmConfig: MitMConfiguration? = nil,
+                                                 position: ChannelPipeline.Position = .last,
                                                  completion: @escaping (Request) -> EventLoopFuture<Channel>) throws {
         self.eventLoop.assertInEventLoop()
         
         let responseEncoder = HTTPResponseEncoder()
         let requestDecoder = HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)
         
-        let serverHandler = HTTPProxyServerHandler(logger: logger, authorization: credential != nil ? .init(username: credential!.identity, password: credential!.identityTokenString) : nil, outEFLBuilder: completion) { req, channel in
+        let serverHandler = HTTPProxyServerHandler(logger: logger, authorization: authorization, outEFLBuilder: completion) { req, channel in
             let serverHostname = req.serverHostname
             
             let enableHTTPCapture0 = {

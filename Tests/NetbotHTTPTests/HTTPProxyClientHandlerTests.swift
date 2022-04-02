@@ -28,7 +28,7 @@ class HTTPProxyClientHandlerTests: XCTestCase {
     override func setUpWithError() throws {
         XCTAssertNil(self.channel)
         
-        self.handler = .init(logger: .init(label: ""), credential: nil, taskAddress: .socketAddress(try .init(ipAddress: "127.0.0.1", port: 8080)))
+        self.handler = .init(logger: .init(label: ""), taskAddress: .socketAddress(try .init(ipAddress: "127.0.0.1", port: 8080)))
         self.channel = EmbeddedChannel(handler: self.handler)
     }
     

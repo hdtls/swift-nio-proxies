@@ -98,10 +98,8 @@ public class Netbot {
                     channel.pipeline.addHandler(self.quiesce.makeServerChannelHandler(channel: channel))
                 }
                 .childChannelInitializer { channel in
-                    //                    channel.pipeline.configureHTTP1ProxyServerHandlers(
-                    channel.pipeline.configureHTTPProxyServerHandlers(
+                    channel.pipeline.configureHTTPProxyServerPipeline(
                         logger: self.logger,
-                        credential: nil,
                         enableHTTPCapture: self.isHTTPCaptureEnabled,
                         enableMitM: self.isMitmEnabled,
                         mitmConfig: self.configuration.mitm) { req in
