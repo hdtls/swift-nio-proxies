@@ -41,11 +41,11 @@ hide-crash-reporter-request = true
     
     let policiesString = """
 [Proxy Policy]
-HTTP = http, server-hostname=127.0.0.1, server-port=8310
-HTTP BASIC = http, server-hostname=127.0.0.1, server-port=8311, username=Netbot, password=password
-SOCKS = socks5, server-hostname=127.0.0.1, server-port=8320, username=Netbot, password=password
-SHADOWSOCKS = ss, server-hostname=127.0.0.1, server-port=8330, algorithm=chacha20-ietf-poly1305, password=password, allow-udp-relay=true, tfo=true
-VMESS = vmess, server-hostname=127.0.0.1, server-port=8390, username=2EB5690D-225B-4B49-997F-697D5A36CD9D, tls=false, ws=false, ws-path=/tunnel, tfo=true
+HTTP = http, server-address=127.0.0.1, port=8310
+HTTP BASIC = http, server-address=127.0.0.1, port=8311, username=Netbot, password=password
+SOCKS = socks5, server-address=127.0.0.1, port=8320, username=Netbot, password=password
+SHADOWSOCKS = ss, server-address=127.0.0.1, port=8330, algorithm=chacha20-ietf-poly1305, password=password, allow-udp-relay=true, tfo=true
+VMESS = vmess, server-address=127.0.0.1, port=8390, username=2EB5690D-225B-4B49-997F-697D5A36CD9D, tls=false, ws=false, ws-path=/tunnel, tfo=true
 """
     
     let policyGroupsString = """
@@ -117,7 +117,7 @@ base64-encoded-p12-string = MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfcEggnzMIIJ7zCCBGcG
     func testUnsupportedPoliciesDecoding() throws {
         let policiesString = """
 [Proxy Policy]
-HTTP = IKEv2, server-hostname=127.0.0.1, server-port=8310
+HTTP = IKEv2, server-address=127.0.0.1, port=8310
 """
         let jsonObject = try ConfigurationSerialization.jsonObject(with: policiesString.data(using: .utf8)!)
         

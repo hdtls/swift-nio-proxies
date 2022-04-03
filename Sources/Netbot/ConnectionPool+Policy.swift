@@ -80,7 +80,7 @@ extension ShadowsocksPolicy: ConnectionPoolSource {
                 .channelInitializer { channel in
                     channel.pipeline.addSSClientHandlers(logger: logger, taskAddress: taskAddress, secretKey: configuration.password)
                 }
-                .connect(host: configuration.serverHostname, port: configuration.serverPort)
+                .connect(host: configuration.serverAddress, port: configuration.port)
         } catch {
             return eventLoop.makeFailedFuture(error)
         }
@@ -101,7 +101,7 @@ extension SOCKS5Policy: ConnectionPoolSource {
                                                             taskAddress: taskAddress,
                                                             credential: configuration.username != nil && configuration.password != nil ? .init(identity: configuration.username!, identityTokenString: configuration.password!) : nil)
                 }
-                .connect(host: configuration.serverHostname, port: configuration.serverPort)
+                .connect(host: configuration.serverAddress, port: configuration.port)
         } catch {
             return eventLoop.makeFailedFuture(error)
         }
@@ -122,7 +122,7 @@ extension SOCKS5OverTLSPolicy: ConnectionPoolSource {
                                                             taskAddress: taskAddress,
                                                             credential: configuration.username != nil && configuration.password != nil ? .init(identity: configuration.username!, identityTokenString: configuration.password!) : nil)
                 }
-                .connect(host: configuration.serverHostname, port: configuration.serverPort)
+                .connect(host: configuration.serverAddress, port: configuration.port)
         } catch {
             return eventLoop.makeFailedFuture(error)
         }
@@ -146,7 +146,7 @@ extension HTTPProxyPolicy: ConnectionPoolSource {
                 .channelInitializer { channel in
                     channel.pipeline.addHTTPProxyClientHandlers(logger: logger, taskAddress: taskAddress, authorization: authorization)
                 }
-                .connect(host: configuration.serverHostname, port: configuration.serverPort)
+                .connect(host: configuration.serverAddress, port: configuration.port)
         } catch {
             return eventLoop.makeFailedFuture(error)
         }
@@ -176,7 +176,7 @@ extension VMESSPolicy: ConnectionPoolSource {
                 .channelInitializer { channel in
                     channel.pipeline.addVMESSClientHandlers(logger: logger, taskAddress: taskAddress, id: id)
                 }
-                .connect(host: configuration.serverHostname, port: configuration.serverPort)
+                .connect(host: configuration.serverAddress, port: configuration.port)
         } catch {
             return eventLoop.makeFailedFuture(error)
         }
