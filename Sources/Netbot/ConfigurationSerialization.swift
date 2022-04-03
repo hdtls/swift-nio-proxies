@@ -149,7 +149,7 @@ final public class ConfigurationSerialization {
                         string.split(separator: ",")
                             .map { .convertFromString($0.trimmingCharacters(in: .whitespaces)) }
                     )
-                case _ where key.hasSuffix("_port"):
+                case _ where key.hasSuffix("port"):
                     return .number(string)
                 default:
                     return .convertFromString(string)
@@ -219,7 +219,21 @@ final public class ConfigurationSerialization {
                     __policies.append(o.0)
                     
                     // Rebuild policies as json array.
-                    let jsonValue = JSONValue.string("\(JSONKey(rawValue: o.0)!.rawValue)=\(o.1)")
+                    let components = o.1.split(separator: ",")
+                    
+                    var configuration: [String : JSONValue] = [:]
+                    components.suffix(from: 1)
+                        .forEach {
+                            let components = $0.split(separator: "=").map { $0.trimmingCharacters(in: .whitespaces) }
+                            let jsonKey = JSONKey(rawValue: components.first!)!.rawValue
+                            configuration[jsonKey] = .convertFromString(components.last!, forKey: jsonKey)
+                        }
+                    
+                    let jsonValue = JSONValue.object([
+                        PolicyJSONKeys.name.rawValue: .string(o.0),
+                        "type": .string(components[0].trimmingCharacters(in: .whitespaces)),
+                        PolicyJSONKeys.configuration.rawValue: .object(configuration)
+                    ])
                     
                     array.append(jsonValue)
                     
@@ -345,7 +359,7 @@ final public class ConfigurationSerialization {
                 default:
                     components.append("\(key)")
             }
-
+            
             guard key != JSONKey.policyGroups.rawValue else {
                 guard let selectablePolicyGroups = value as? [[String : Any]] else {
                     throw ConfigurationSerializationError.dataCorrupted
@@ -354,6 +368,27 @@ final public class ConfigurationSerialization {
                     let policies = ($0[JSONKey.policies.rawValue] as? [String]) ?? []
                     components.append("\($0["name"]!) = \(policies.joined(separator: ","))")
                 }
+                return
+            }
+            
+            guard key != JSONKey.policies.rawValue else {
+                guard let policies = value as? [[String : Any]] else {
+                    throw ConfigurationSerializationError.dataCorrupted
+                }
+                
+                components.append(contentsOf: try policies.map {
+                    guard let configuration = $0[PolicyJSONKeys.configuration.rawValue] as? [String : Any],
+                          let name = $0[PolicyJSONKeys.name.rawValue],
+                          let type = $0["type"] else {
+                        throw ConfigurationSerializationError.dataCorrupted
+                    }
+                    
+                    let configurationString = configuration.map {
+                        "\($0.key.replacingOccurrences(of: "_", with: "-"))=\($0.value)"
+                    }.joined(separator: ", ")
+                    
+                    return "\(name) = \(type), \(configurationString)"
+                })
                 return
             }
             

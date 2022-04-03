@@ -15,12 +15,11 @@
 import ConnectionPool
 import Foundation
 import NetbotCore
+import EraseNilDecoding
 
-public struct __Never: Codable, Hashable {}
-
-public protocol Policy: Codable, ConnectionPoolSource {
+public protocol Policy: ConnectionPoolSource {
     
-    associatedtype Configuration: Codable
+    associatedtype Configuration
     
     static var schema: String { get }
     
@@ -33,69 +32,10 @@ public protocol Policy: Codable, ConnectionPoolSource {
     init()
 }
 
-extension Policy {
-    
-    public init(stringLiteral: String) throws {
-        var components = stringLiteral.components(separatedBy: ",")
-        
-        self.init()
-        
-        let l = components.removeFirst().trimmingCharacters(in: .whitespaces).components(separatedBy: "=")
-        // l must be NAME = TYPE pair.
-        guard l.count == 2, Self.schema == l.last?.trimmingCharacters(in: .whitespaces) else {
-            throw ConfigurationSerializationError.dataCorrupted
-        }
-        name = l.first!.trimmingCharacters(in: .whitespaces)
-        
-        let json = try components.reduce(into: [:], { result, substring in
-            let sequence = substring.split(separator: "=")
-            guard sequence.count == 2 else {
-                throw ConfigurationSerializationError.dataCorrupted
-            }
-            let stringLiteral = sequence[1].trimmingCharacters(in: .whitespaces)
-            var value: Any
-            switch stringLiteral {
-                case "true":
-                    value = true
-                case "false":
-                    value = false
-                default:
-                    value = Int(stringLiteral) ?? stringLiteral
-            }
-            result.updateValue(value, forKey: sequence[0].trimmingCharacters(in: .whitespaces))
-        })
-        
-        let data = try JSONSerialization.data(withJSONObject: json, options: .fragmentsAllowed)
-        configuration = try JSONDecoder().decode(Configuration.self, from: data)
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let stringLiteral = try container.decode(String.self)
-        try self.init(stringLiteral: stringLiteral)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        
-        var stringLiteral = name + " = \(Self.schema)"
-        
-        let data = try JSONEncoder().encode(configuration)
-        let json = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? [String : Any]
-        json?.keys.sorted().forEach {
-            let value = json![$0]!
-            if let bool = value as? Bool {
-                stringLiteral.append(", \($0)=\(bool ? "true" : "false")")
-            } else {
-                stringLiteral.append(", \($0)=\(value)")
-            }
-        }
-        
-        try container.encode(stringLiteral)
-    }
+enum PolicyJSONKeys: String, CodingKey {
+    case name
+    case configuration
 }
-
-typealias ProxyProvider = ConnectionPoolSource
 
 public enum ProxyPolicy: Codable {
     
@@ -187,41 +127,7 @@ public enum ProxyPolicy: Codable {
             }
         }
     }
-    
-    public init(stringLiteral: String) throws {
-        let components = stringLiteral.components(separatedBy: ",")
-        guard components.count >= 1 else {
-            throw ConfigurationSerializationError.dataCorrupted
-        }
-        
-        let type = components.first!.components(separatedBy: "=")
-            .last?.trimmingCharacters(in: .whitespaces)
-            .uppercased()
-        
-        switch type {
-            case .some("DIRECT"):
-                self = .direct(try DirectPolicy.init(stringLiteral: stringLiteral))
-            case .some("HTTP"):
-                self = .http(try HTTPProxyPolicy.init(stringLiteral: stringLiteral))
-            case .some("HTTPS"):
-                self = .https(try HTTPSProxyPolicy.init(stringLiteral: stringLiteral))
-            case .some("REJECT"):
-                self = .reject(try RejectPolicy.init(stringLiteral: stringLiteral))
-            case .some("REJECT-TINYGIF"):
-                self = .rejectTinyGif(try RejectTinyGifPolicy.init(stringLiteral: stringLiteral))
-            case .some("SS"):
-                self = .shadowsocks(try ShadowsocksPolicy.init(stringLiteral: stringLiteral))
-            case .some("SOCKS5"):
-                self = .socks5(try SOCKS5Policy.init(stringLiteral: stringLiteral))
-            case .some("SOCKS5-TLS"):
-                self = .socks5TLS(try SOCKS5OverTLSPolicy.init(stringLiteral: stringLiteral))
-            case .some("VMESS"):
-                self = .vmess(try VMESSPolicy.init(stringLiteral: stringLiteral))
-            default:
-                throw ConfigurationSerializationError.dataCorrupted
-        }
-    }
-    
+
     public func encode(to encoder: Encoder) throws {
         switch self {
             case .direct(let underlying):
@@ -245,10 +151,35 @@ public enum ProxyPolicy: Codable {
         }
     }
     
+    private enum CodingKeys: String, CodingKey {
+        case type
+    }
+    
     public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let stringLiteral = try container.decode(String.self)
-        try self.init(stringLiteral: stringLiteral)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        switch try container.decode(String.self, forKey: .type).uppercased() {
+            case "DIRECT":
+                self = .direct(try DirectPolicy.init(from: decoder))
+            case "HTTP":
+                self = .http(try HTTPProxyPolicy(from: decoder))
+            case "HTTPS":
+                self = .https(try HTTPSProxyPolicy(from: decoder))
+            case "REJECT":
+                self = .reject(.init())
+            case "REJECT-TINYGIF":
+                self = .rejectTinyGif(.init())
+            case "SS":
+                self = .shadowsocks(try ShadowsocksPolicy(from: decoder))
+            case "SOCKS5":
+                self = .socks5(try SOCKS5Policy(from: decoder))
+            case "SOCKS5-TLS":
+                self = .socks5TLS(try SOCKS5OverTLSPolicy(from: decoder))
+            case "VMESS":
+                self = .vmess(try VMESSPolicy(from: decoder))
+            default:
+                throw ConfigurationSerializationError.dataCorrupted
+        }
     }
     
     public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
@@ -275,311 +206,260 @@ public enum ProxyPolicy: Codable {
     }
 }
 
-public struct NetworkPolicy<C> {
+public struct DirectPolicy: Codable, Equatable, Policy {
+        
+    typealias CodingKeys = PolicyJSONKeys
     
-    /// The protocol used by the policy.
-    public let `protocol`: String
+    public struct Configuration: Codable, Equatable {}
     
-    /// A string containing the policy name.
-    public let name: String
+    public static let schema: String = "direct"
     
-    /// An object containing the configuration for this policy.
-    public var configuration: C
-}
-
-public struct DirectPolicy: Codable, Hashable, Policy {
+    public var configuration: Configuration
     
-    public typealias Configuration = __Never
+    public var name: String
     
-    public var configuration: Configuration = .init()
-    public var name: String = "DIRECT"
     public var taskAddress: NetAddress?
-    public static var schema: String {
-        "direct"
-    }
     
-    public init() {}
+    public init() {
+        self.init(taskAddress: nil)
+    }
     
     public init(taskAddress: NetAddress?) {
         self.taskAddress = taskAddress
+        self.name = "DIRECT"
+        self.configuration = .init()
     }
 }
 
-public struct RejectPolicy: Codable, Hashable, Policy {
+public struct RejectPolicy: Codable, Equatable, Policy {
     
-    public typealias Configuration = __Never
-    
+    typealias CodingKeys = PolicyJSONKeys
+
+    public struct Configuration: Codable, Equatable {}
+
     public static var schema: String = "reject"
     
-    public var configuration: Configuration = .init()
+    public var configuration: Configuration
     
-    public var name: String = "REJECT"
+    public var name: String
     
     public var taskAddress: NetAddress?
     
-    public init() {}
+    public init() {
+        self.init(taskAddress: nil)
+    }
     
     public init(taskAddress: NetAddress?) {
         self.taskAddress = taskAddress
+        self.name = "REJECT"
+        self.configuration = .init()
     }
 }
 
-public struct RejectTinyGifPolicy: Codable, Hashable, Policy {
+public struct RejectTinyGifPolicy: Codable, Equatable, Policy {
     
-    public typealias Configuration = __Never
-    
+    typealias CodingKeys = PolicyJSONKeys
+
+    public struct Configuration: Codable, Equatable {}
+
     public static var schema: String = "reject-tinygif"
     
-    public var configuration: Configuration = .init()
+    public var configuration: Configuration
     
-    public var name: String = "REJECT-TINYGIF"
+    public var name: String
     
     public var taskAddress: NetAddress?
     
-    public init() {}
+    public init() {
+        self.init(taskAddress: nil)
+    }
     
     public init(taskAddress: NetAddress?) {
         self.taskAddress = taskAddress
+        self.name = "REJECT-TINYGIF"
+        self.configuration = .init()
     }
 }
 
-/// SHADOWSOCKS = ss, algorithm=chacha20-ietf-poly1305, allow-udp-relay=true, password=password, server-port=8389, server-hostname=127.0.0.1, tfo=true
-public struct ShadowsocksPolicy: Codable, Hashable, Policy {
+public struct ShadowsocksPolicy: Codable, Equatable, Policy {
     
-    public struct Configuration: Codable, Hashable {
+    typealias CodingKeys = PolicyJSONKeys
+
+    public struct Configuration: Codable, Equatable {
         
         public var algorithm: String = ""
-        private var codableAllowUDPRelay: Bool?
-        public var allowUDPRelay: Bool {
-            set { codableAllowUDPRelay = newValue }
-            get { codableAllowUDPRelay ?? false }
-        }
+        @EraseNilToFalse public var enableUdpRelay = false
         public var password: String = ""
-        public var serverHostname: String = ""
-        public var serverPort: Int = 0
-        private var codableIsTFOEnabled: Bool?
-        public var isTFOEnabled: Bool {
-            set { codableIsTFOEnabled = newValue }
-            get { codableIsTFOEnabled ?? false }
-        }
-        
-        private enum CodingKeys: String, CodingKey {
-            case serverHostname = "server-hostname"
-            case serverPort = "server-port"
-            case password
-            case algorithm
-            case codableAllowUDPRelay = "allow-udp-relay"
-            case codableIsTFOEnabled = "tfo"
-        }
+        public var serverAddress: String = ""
+        public var port: Int = 0
+        @EraseNilToFalse public var enableTfo = false
     }
     
-    public static var schema: String = "ss"
+    public static let schema: String = "ss"
     
-    public var configuration: Configuration = .init()
+    public var configuration: Configuration
     
-    public var name: String = "ss"
+    public var name: String
     
     public var taskAddress: NetAddress?
     
-    public init() {}
+    public init() {
+        self.init(name: "SS", configuration: .init())
+    }
     
-    public init(name: String, configuration: Configuration, taskAddress: NetAddress? = nil) {
+    public init(name: String, configuration: Configuration) {
         self.name = name
         self.configuration = configuration
-        self.taskAddress = taskAddress
     }
 }
 
-/// SOCKS = socks5, password=password, server-port=8385, server-hostname=127.0.0.1, username=username
-public struct SOCKS5Policy: Codable, Hashable, Policy {
+public struct SOCKS5Policy: Codable, Equatable, Policy {
     
-    public struct Configuration: Codable, Hashable {
+    typealias CodingKeys = PolicyJSONKeys
+
+    public struct Configuration: Codable, Equatable {
         
         public var password: String?
         public var username: String?
-        public var serverHostname: String = ""
-        public var serverPort: Int = 0
-        
-        private enum CodingKeys: String, CodingKey {
-            case password
-            case username
-            case serverHostname = "server-hostname"
-            case serverPort = "server-port"
-        }
+        public var serverAddress: String = ""
+        public var port: Int = 0
     }
     
-    public static var schema: String = "socks5"
+    public static let schema: String = "socks5"
     
-    public var configuration: Configuration = .init()
+    public var configuration: Configuration
     
-    public var name: String = "socks5"
+    public var name: String
     
     public var taskAddress: NetAddress?
     
-    public init() {}
+    public init() {
+        self.init(name: "SOCKS5", configuration: .init())
+    }
     
-    public init(name: String, configuration: Configuration, taskAddress: NetAddress? = nil) {
+    public init(name: String, configuration: Configuration) {
         self.name = name
         self.configuration = configuration
-        self.taskAddress = taskAddress
     }
 }
 
-/// SOCKS TLS = socks5-tls, password=password, server-port=443, server-hostname=socks5-tls.com, username=username
-public struct SOCKS5OverTLSPolicy: Codable, Hashable, Policy {
+public struct SOCKS5OverTLSPolicy: Codable, Equatable, Policy {
     
-    public struct Configuration: Codable, Hashable {
+    typealias CodingKeys = PolicyJSONKeys
+
+    public struct Configuration: Codable, Equatable {
         
         // TODO: Allow user add client certificate.
         //        public var clientCerficateString: String?
-        public var customTLSSNI: String?
+        public var sni: String?
         public var password: String?
         public var username: String?
-        public var serverHostname: String = ""
-        public var serverPort: Int = 0
-        private var codableSkipCertificateVerification: Bool?
-        public var skipCertificateVerification: Bool {
-            set { codableSkipCertificateVerification = newValue }
-            get { codableSkipCertificateVerification ?? false }
-        }
-        
-        private enum CodingKeys: String, CodingKey {
-            case customTLSSNI = "sni"
-            case password
-            case username
-            case serverHostname = "server-hostname"
-            case serverPort = "server-port"
-            case codableSkipCertificateVerification = "skip-certificate-verification"
-        }
-        
-        init() {}
+        public var serverAddress: String = ""
+        public var port: Int = 0
+        @EraseNilToFalse public var skipCertificateVerification: Bool = false
     }
     
-    public static var schema: String = "socks5-tls"
+    public static let schema: String = "socks5-tls"
     
-    public var name: String = "socks5-tls"
+    public var name: String
     
-    public var configuration: Configuration = .init()
+    public var configuration: Configuration
     
     public var taskAddress: NetAddress?
     
-    public init() {}
+    public init() {
+        self.init(name: "SOCKS5OverTLS", configuration: .init())
+    }
     
-    public init(name: String, configuration: Configuration, taskAddress: NetAddress? = nil) {
+    public init(name: String, configuration: Configuration) {
         self.name = name
         self.configuration = configuration
-        self.taskAddress = taskAddress
     }
 }
 
-/// HTTP = https, password=password, server-hostname=127.0.0.1, server-port=8385, username=username
-public struct HTTPProxyPolicy: Codable, Hashable, Policy {
+public struct HTTPProxyPolicy: Codable, Equatable, Policy {
     
-    public struct Configuration: Codable, Hashable {
+    typealias CodingKeys = PolicyJSONKeys
+
+    public struct Configuration: Codable, Equatable {
         
         public var password: String?
         public var username: String?
-        public var serverHostname: String = ""
-        public var serverPort: Int = 0
-        private var codablePerformHTTPTunneling: Bool?
-        public var performHTTPTunneling: Bool {
-            set { codablePerformHTTPTunneling = newValue }
-            get { codablePerformHTTPTunneling ?? false }
-        }
-        
-        private enum CodingKeys: String, CodingKey {
-            case password
-            case username
-            case serverHostname = "server-hostname"
-            case serverPort = "server-port"
-            case codablePerformHTTPTunneling = "always-use-connect"
-        }
+        public var serverAddress: String = ""
+        public var port: Int = 0
+        @EraseNilToFalse public var performHttpTunneling: Bool = false
     }
     
+    public static let schema: String = "http"
     /// Name for proxy.
-    public var name: String = "http"
-    public var configuration: Configuration = .init()
+    public var name: String
+    public var configuration: Configuration
     public var taskAddress: NetAddress?
-    public static var schema: String {
-        "http"
-    }
     
-    public init() {}
+    public init() {
+        self.name = "HTTP"
+        self.configuration = .init()
+    }
 }
 
-/// HTTPS = https, password=password, server-hostname=https.com, server-port=8385, username=username
-public struct HTTPSProxyPolicy: Codable, Hashable, Policy {
+public struct HTTPSProxyPolicy: Codable, Equatable, Policy {
     
-    public struct Configuration: Codable, Hashable {
+    typealias CodingKeys = PolicyJSONKeys
+
+    public struct Configuration: Codable, Equatable {
         
         // TODO: Allow user add client certificate.
         //        public var clientCerficateString: String?
-        public var customTLSSNI: String?
+        public var sni: String?
         public var password: String?
         public var username: String?
-        public var serverHostname: String = ""
-        public var serverPort: Int = 0
-        private var codablePerformHTTPTunneling: Bool?
-        public var performHTTPTunneling: Bool {
-            set { codablePerformHTTPTunneling = newValue }
-            get { codablePerformHTTPTunneling ?? false }
-        }
-        private var codableSkipCertificateVerification: Bool?
-        public var skipCertificateVerification: Bool {
-            set { codableSkipCertificateVerification = newValue }
-            get { codableSkipCertificateVerification ?? false }
-        }
+        public var serverAddress: String = ""
+        public var port: Int = 0
         
-        private enum CodingKeys: String, CodingKey {
-            case customTLSSNI = "sni"
-            case password
-            case username
-            case serverHostname = "server-hostname"
-            case serverPort = "server-port"
-            case codablePerformHTTPTunneling = "always-use-connect"
-            case codableSkipCertificateVerification = "skip-certificate-verification"
-        }
+        @EraseNilToFalse public var performHttpTunneling: Bool = false
+
+        @EraseNilToFalse public var skipCertificateVerification: Bool = false
     }
     
     public static var schema: String = "https"
     
     /// Name for proxy.
-    public var name: String = "https"
-    public var configuration: Configuration = .init()
+    public var name: String
+    public var configuration: Configuration
     public var taskAddress: NetAddress?
     
-    public init() {}
+    public init() {
+        self.name = "HTTPS"
+        self.configuration = .init()
+    }
 }
 
-public struct VMESSPolicy: Codable, Hashable, Policy {
+public struct VMESSPolicy: Codable, Equatable, Policy {
     
+    typealias CodingKeys = PolicyJSONKeys
+
     public static var schema: String = "vmess"
     
-    public var configuration: Configuration = .init()
+    public struct Configuration: Codable, Equatable {
+        
+        public var username: String?
+        public var serverAddress: String = ""
+        public var port: Int = 0
+    }
     
-    public var name: String = "vmess"
+    public var configuration: Configuration
+    
+    public var name: String
     
     public var taskAddress: NetAddress?
     
-    public struct Configuration: Codable, Hashable {
-        
-        public var username: String?
-        public var serverHostname: String = ""
-        public var serverPort: Int = 0
-        
-        private enum CodingKeys: String, CodingKey {
-            case username
-            case serverHostname = "server-hostname"
-            case serverPort = "server-port"
-        }
+    public init() {
+        self.init(name: "VMESS", configuration: .init())
     }
     
-    public init() {}
-    
-    public init(name: String, configuration: Configuration, taskAddress: NetAddress? = nil) {
+    public init(name: String, configuration: Configuration) {
         self.name = name
         self.configuration = configuration
-        self.taskAddress = taskAddress
     }
 }
 
