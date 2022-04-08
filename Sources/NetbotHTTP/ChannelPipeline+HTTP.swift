@@ -53,6 +53,7 @@ extension ChannelPipeline {
                 authorization: authorization,
                 enableHTTPCapture: enableHTTPCapture,
                 enableMitM: enableMitM,
+                mitmConfig: mitmConfig,
                 position: position,
                 completion: completion
             )
@@ -127,10 +128,10 @@ extension ChannelPipeline.SynchronousOperations {
             
             // Filter p12 bundle from pool
             let p12 = mitmConfig.pool.first {
-                guard $0.key.hasPrefix("*") else {
+                guard $0.key.hasPrefix("*.") else {
                     return $0.key == serverHostname
                 }
-                return serverHostname.contains($0.key.dropFirst())
+                return serverHostname.contains($0.key.suffix(from: $0.key.index($0.key.startIndex, offsetBy: 2)))
             }?.value
             
             guard let p12 = p12 else {
