@@ -159,7 +159,7 @@ extension HTTPProxyServerHandler {
         
         // Proxy Authorization
         if let authorization = authorization {
-            guard let basicAuthorization = head.headers.basicAuthorization else {
+            guard let basicAuthorization = head.headers.proxyBasicAuthorization else {
                 throw HTTPProxyError.unacceptable(code: .proxyAuthenticationRequired)
             }
             guard authorization == basicAuthorization else {

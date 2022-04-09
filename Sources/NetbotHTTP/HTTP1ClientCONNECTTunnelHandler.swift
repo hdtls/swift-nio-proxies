@@ -133,7 +133,7 @@ extension HTTP1ClientCONNECTTunnelHandler {
         }
         
         if let authorization = self.authorization {
-            head.headers.basicAuthorization = authorization
+            head.headers.proxyBasicAuthorization = authorization
         }
                 
         context.write(NIOAny(HTTPClientRequestPart.head(head)), promise: nil)

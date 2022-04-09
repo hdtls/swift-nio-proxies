@@ -20,43 +20,43 @@ class BasicAuthorizationTests: XCTestCase {
 
     func testParseBasicAuthorizationFromHTTPHeadersWithoutAuthorizationField() {
         let headers = HTTPHeaders()
-        XCTAssertNil(headers.basicAuthorization)
+        XCTAssertNil(headers.proxyBasicAuthorization)
     }
     
     func testParseBasicAuthorizationFromHTTPHeadersWitchAuthorizationFieldIsNotBasicAuthorization() {
         var headers = HTTPHeaders()
         headers.add(name: .authorization, value: "Bearer <token>")
-        XCTAssertNil(headers.basicAuthorization)
+        XCTAssertNil(headers.proxyBasicAuthorization)
     }
     
     func testParseBasicAuthorizationFromHTTPHeadersWitchAuthorizationFieldIsInvalid() {
         var headers = HTTPHeaders()
         headers.add(name: .authorization, value: "Basic <token>")
-        XCTAssertNil(headers.basicAuthorization)
+        XCTAssertNil(headers.proxyBasicAuthorization)
         
         headers.replaceOrAdd(name: .authorization, value: "Basic cGFzc3dvcmQ=")
-        XCTAssertNil(headers.basicAuthorization)
+        XCTAssertNil(headers.proxyBasicAuthorization)
     }
     
     func testParseBasicAuthorization() {
         var headers = HTTPHeaders()
         headers.add(name: .authorization, value: "Basic dGVzdDpwYXNzd29yZA==")
 
-        XCTAssertNotNil(headers.basicAuthorization)
+        XCTAssertNotNil(headers.proxyBasicAuthorization)
         
-        XCTAssertEqual(headers.basicAuthorization?.username, "test")
-        XCTAssertEqual(headers.basicAuthorization?.password, "password")
+        XCTAssertEqual(headers.proxyBasicAuthorization?.username, "test")
+        XCTAssertEqual(headers.proxyBasicAuthorization?.password, "password")
     }
     
     func testSetBasicAuthorizationForHTTPHeaders() {
         var headers = HTTPHeaders()
-        headers.basicAuthorization = .init(username: "test", password: "password")
-        XCTAssertEqual(headers.first(name: .authorization), "Basic dGVzdDpwYXNzd29yZA==")
+        headers.proxyBasicAuthorization = .init(username: "test", password: "password")
+        XCTAssertEqual(headers.first(name: .proxyAuthorization), "Basic dGVzdDpwYXNzd29yZA==")
         
-        headers.basicAuthorization = .init(username: "replacePreviouse", password: "password")
-        XCTAssertEqual(headers.first(name: .authorization), "Basic cmVwbGFjZVByZXZpb3VzZTpwYXNzd29yZA==")
+        headers.proxyBasicAuthorization = .init(username: "replacePreviouse", password: "password")
+        XCTAssertEqual(headers.first(name: .proxyAuthorization), "Basic cmVwbGFjZVByZXZpb3VzZTpwYXNzd29yZA==")
         
-        headers.basicAuthorization = nil
+        headers.proxyBasicAuthorization = nil
         XCTAssertFalse(headers.contains(name: .authorization))
     }
 }

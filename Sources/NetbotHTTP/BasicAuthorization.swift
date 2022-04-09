@@ -32,7 +32,7 @@ public struct BasicAuthorization: Equatable {
 
 extension HTTPHeaders {
 
-    public var basicAuthorization: BasicAuthorization? {
+    public var proxyBasicAuthorization: BasicAuthorization? {
         get {
             guard let string = self.first(name: .authorization) else {
                 return nil
@@ -59,9 +59,9 @@ extension HTTPHeaders {
             if let basic = newValue {
                 let credentials = "\(basic.username):\(basic.password)"
                 let encoded = Data(credentials.utf8).base64EncodedString()
-                replaceOrAdd(name: .authorization, value: "Basic \(encoded)")
+                replaceOrAdd(name: .proxyAuthorization, value: "Basic \(encoded)")
             } else {
-                remove(name: .authorization)
+                remove(name: .proxyAuthorization)
             }
         }
     }
