@@ -68,28 +68,16 @@ public struct MitMConfiguration: Codable {
             return [:]
         }
         
-        guard let bundle = try? boringSSLParseBase64EncodedPKCS12BundleString(
-            passphrase: passphrase,
-            base64EncodedString: base64EncodedP12String
-        ) else {
+        guard let certificateStore = try? CertificateStore.init(passphrase: passphrase, base64EncodedP12String: base64EncodedP12String) else {
             return [:]
         }
-        
+
         var pool: [String : NIOSSLPKCS12Bundle] = [:]
 
         try? hostnames.forEach { hostname in
-            let p12 = try boringSSLSelfSignedPKCS12Bundle(
-                passphrase: passphrase,
-                certificate: bundle.certificateChain[0],
-                privateKey: bundle.privateKey, hostname: hostname
-            )
-            
-            pool[hostname] = try NIOSSLPKCS12Bundle(
-                buffer: boringSSLPKCS12BundleDERBytes(p12),
-                passphrase: Array(passphrase.utf8)
-            )
-            
-            CNIOBoringSSL_PKCS12_free(p12)
+            let privateKey = CertificateStore.generateRSAPrivateKey()
+            let certificate = certificateStore.generateCertificate(commonName: hostname, subjectAltNames: [hostname], pubkey: privateKey)
+            pool[hostname] = try CertificateStore.exportP12Bundle(passphrase: passphrase, certificate: certificate, privateKey: privateKey)            
         }
         
         return pool

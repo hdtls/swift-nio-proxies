@@ -20,7 +20,7 @@ import FoundationNetworking
 #endif
 
 @main
-public struct NetbotCommand: ParsableCommand {
+public struct NetbotCLITool: ParsableCommand {
     
 #if os(macOS)
     /// A configuration object use for config this command.
@@ -30,8 +30,7 @@ public struct NetbotCommand: ParsableCommand {
         discussion: "",
         version: "1.0.0",
         subcommands: [
-            ProxyConfigCommand.self,
-            BoringSSLCommand.self
+            ProxyConfigCommand.self
         ])
 #else
     /// A configuration object use for config this command.
@@ -39,10 +38,8 @@ public struct NetbotCommand: ParsableCommand {
         commandName: "netbot",
         abstract: "",
         discussion: "",
-        version: "1.0.0",
-        subcommands: [
-            BoringSSLCommand.self
-        ])
+        version: "1.0.0"
+    )
 #endif
     
     
@@ -82,7 +79,7 @@ public struct NetbotCommand: ParsableCommand {
     @Flag(help: "Enable MitM, should be enabled only when needed.")
     public var enableMitm: Bool = false
     
-    /// Initialize an instance of `NetbotCommand`.
+    /// Initialize an instance of `NetbotCLITool`.
     public init() {}
     
     public func run() throws {

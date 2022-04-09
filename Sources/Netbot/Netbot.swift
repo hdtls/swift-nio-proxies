@@ -52,6 +52,8 @@ public class Netbot {
         NIOThreadPool.init(numberOfThreads: System.coreCount)
     }()
     
+    private var cache: LRUCache<String, AnyRule> = .init(capacity: 100)
+    
     public init(configuration: Configuration,
                 outboundMode: OutboundMode = .direct,
                 enableHTTPCapture: Bool = false,
@@ -169,6 +171,14 @@ public class Netbot {
                                         self.logger.info("Rule evaluating end with \((DispatchTime.now().uptimeNanoseconds - startTime) / 1000)ms.", metadata: ["Request" : "\(taskAddress)"])
                                     }
                                     
+                                    // Fetch rule from LRU cache.
+                                    for pattern in patterns {
+                                        savedFinalRule = self.cache[pattern]
+                                        if savedFinalRule != nil {
+                                            return savedFinalRule!
+                                        }
+                                    }
+                                    
                                     for rule in self.configuration.rules {
                                         guard patterns.first(where: rule.match) == nil else {
                                             savedFinalRule = rule
@@ -180,6 +190,10 @@ public class Netbot {
                                         }
                                     }
                                     
+                                    // Cache rule evaluating result.
+                                    patterns.forEach { pattern in
+                                        self.cache[pattern] = savedFinalRule
+                                    }
                                     precondition(savedFinalRule != nil, "Rules defined in configuration MUST contain one and only one FinalRule.")
                                     return savedFinalRule!
                                 }
@@ -194,7 +208,7 @@ public class Netbot {
                                     // `policyGroups`, if group exists use group's
                                     // `selected` as policy ID else use rule's policy as ID.
                                     if let policyGroup = (self.configuration.policyGroups.first { $0.name == rule.policy }) {
-                                        preferred = policyGroup.selected
+                                        preferred = policyGroup.policies.first
                                     } else {
                                         preferred = rule.policy
                                     }
