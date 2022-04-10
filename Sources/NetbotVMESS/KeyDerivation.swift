@@ -17,7 +17,7 @@ import Foundation
 
 fileprivate protocol Updatable {
     
-    static var blockByteCount: Int { get }
+    static var blockSize: Int { get }
     
     mutating func update(bufferPointer: UnsafeRawBufferPointer)
     
@@ -27,6 +27,10 @@ fileprivate protocol Updatable {
 }
 
 extension SHA256: Updatable {
+    
+    static var blockSize: Int {
+        64
+    }
     
     fileprivate func get() -> [UInt8] {
         finalize().withUnsafeBytes { ptr in
@@ -39,7 +43,7 @@ struct KDF {
     
     private struct __HMAC: Updatable {
         
-        static var blockByteCount: Int { SHA256.blockByteCount }
+        static var blockSize: Int { 64 }
         
         mutating func update(bufferPointer: UnsafeRawBufferPointer) {
             innerHasher.update(bufferPointer: bufferPointer)
@@ -68,16 +72,16 @@ struct KDF {
         init<U: Updatable>(H: () -> U, key: SymmetricKey) {
             var K: ContiguousBytes
             
-            if key.withUnsafeBytes({ $0.count }) == U.blockByteCount {
+            if key.withUnsafeBytes({ $0.count }) == U.blockSize {
                 K = key
-            } else if key.withUnsafeBytes({ $0.count }) > U.blockByteCount {
+            } else if key.withUnsafeBytes({ $0.count }) > U.blockSize {
                 K = key.withUnsafeBytes { (keyBytes)  in
                     var hash = H()
                     hash.update(bufferPointer: keyBytes)
                     return hash.get()
                 }
             } else {
-                var keyArray = Array(repeating: UInt8(0), count: U.blockByteCount)
+                var keyArray = Array(repeating: UInt8(0), count: U.blockSize)
                 key.withUnsafeBytes { keyArray.replaceSubrange(0..<$0.count, with: $0) }
                 K = keyArray
             }
