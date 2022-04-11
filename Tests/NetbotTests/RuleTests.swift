@@ -721,8 +721,8 @@ DOMAIN-KEYWORD,apple
     func testParsingAnyRule() throws {
         func assertUnderliyingRule<T: Rule & Equatable>(_ stringLiteral: String, _ type: T.Type) throws {
             let expected = try AnyRule.init(stringLiteral: stringLiteral)
-            XCTAssertTrue(expected.underlying is T)
-            XCTAssertEqual(expected.underlying as! T, try T.init(stringLiteral: stringLiteral))
+            XCTAssertTrue(expected.base is T)
+            XCTAssertEqual(expected.base as! T, try T.init(stringLiteral: stringLiteral))
         }
         
         try assertUnderliyingRule("DOMAIN,apple.com,DIRECT", DomainRule.self)
@@ -745,11 +745,11 @@ DOMAIN-KEYWORD,apple
         }
         waitForExpectations(timeout: 5, handler: nil)
         
-        XCTAssertTrue(actual.underlying is RuleSet)
-        XCTAssertEqual(actual.underlying as! RuleSet, expected)
+        XCTAssertTrue(actual.base is RuleSet)
+        XCTAssertEqual(actual.base as! RuleSet, expected)
         
-        XCTAssertTrue(actual1.underlying is DomainSet)
-        XCTAssertEqual(actual1.underlying as! DomainSet, expected1)
+        XCTAssertTrue(actual1.base is DomainSet)
+        XCTAssertEqual(actual1.base as! DomainSet, expected1)
 #endif
     }
 }

@@ -446,66 +446,77 @@ public struct RuleSet: Codable, Equatable, RuleCollectionPrivate {
     }
 }
 
-/// A type-erased rule.
+/// A type-erased rule value.
+///
+/// The `AnyRule` type forwards match coding and equality comparisons operations
+/// to an underlying rule value, hiding the type of the wrapped value.
 public struct AnyRule: Codable, Rule {
     
-    public static let schema: String = "*"
+    public static var schema: String {
+        fatalError("\(#function) is unavailable, use each rule's class methods instead.")
+    }
     
     public var pattern: String {
-        set { underlying.pattern = newValue }
-        get { underlying.pattern }
+        set { base.pattern = newValue }
+        get { base.pattern }
     }
     
     public var policy: String {
-        set { underlying.policy = newValue }
-        get { underlying.policy }
+        set { base.policy = newValue }
+        get { base.policy }
     }
     
     public var comment: String? {
-        set { underlying.comment = newValue }
-        get { underlying.comment }
+        set { base.comment = newValue }
+        get { base.comment }
     }
     
-    var underlying: Rule
+    /// The value wrapped by this instance.
+    ///
+    /// The `base` property can be cast back to its original type using one of
+    /// the type casting operators (`as?`, `as!`, or `as`).
+    public var base: Rule
     
-    public init<R>(underlying: R) where R: Rule {
-        self.underlying = underlying
+    /// Creates a type-erased rule value that wraps the given instance.
+    /// - Parameter base: A rule value to wrap.
+    public init<R>(_ base: R) where R: Rule {
+        self.base = base
     }
     
     public init(stringLiteral: String) throws {
         switch stringLiteral.components(separatedBy: ",").first!.trimmingCharacters(in: .whitespaces) {
             case DomainRule.schema:
-                self = .init(underlying: try DomainRule(stringLiteral: stringLiteral))
+                self = .init(try DomainRule(stringLiteral: stringLiteral))
             case DomainSuffixRule.schema:
-                self = .init(underlying: try DomainSuffixRule(stringLiteral: stringLiteral))
+                self = .init(try DomainSuffixRule(stringLiteral: stringLiteral))
             case DomainKeywordRule.schema:
-                self = .init(underlying: try DomainKeywordRule(stringLiteral: stringLiteral))
+                self = .init(try DomainKeywordRule(stringLiteral: stringLiteral))
             case DomainSet.schema:
-                self = .init(underlying: try DomainSet(stringLiteral: stringLiteral))
+                self = .init(try DomainSet(stringLiteral: stringLiteral))
             case FinalRule.schema:
-                self = .init(underlying: try FinalRule(stringLiteral: stringLiteral))
+                self = .init(try FinalRule(stringLiteral: stringLiteral))
             case GeoIPRule.schema:
-                self = .init(underlying: try GeoIPRule(stringLiteral: stringLiteral))
+                self = .init(try GeoIPRule(stringLiteral: stringLiteral))
             case RuleSet.schema:
-                self = .init(underlying: try RuleSet(stringLiteral: stringLiteral))
+                self = .init(try RuleSet(stringLiteral: stringLiteral))
             default:
                 throw ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
         }
     }
     
     public func encode(to encoder: Encoder) throws {
-        try underlying.encode(to: encoder)
+        try base.encode(to: encoder)
     }
     
     public func match(_ pattern: String) -> Bool {
-        underlying.match(pattern)
+        base.match(pattern)
     }
 }
 
 extension AnyRule: CustomStringConvertible {
     
     public var description: String {
-        underlying.description
+        base.description
     }
 }
 

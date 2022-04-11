@@ -376,10 +376,10 @@ HTTP = IKEv2, server-address=127.0.0.1, port=8310
             try AnyRule(stringLiteral: "FINAL,dns-failed,PROXY")
         ])
         
-        XCTAssertTrue(result.first?.underlying is DomainSuffixRule)
-        XCTAssertTrue(result[1].underlying is RuleSet)
-        XCTAssertTrue(result[2].underlying is GeoIPRule)
-        XCTAssertTrue(result[3].underlying is FinalRule)
+        XCTAssertTrue(result.first?.base is DomainSuffixRule)
+        XCTAssertTrue(result[1].base is RuleSet)
+        XCTAssertTrue(result[2].base is GeoIPRule)
+        XCTAssertTrue(result[3].base is FinalRule)
     }
     
     func testMitMDecoding() throws {

@@ -185,7 +185,7 @@ public class Netbot {
                                             break
                                         }
                                         
-                                        if rule.underlying is FinalRule {
+                                        if rule.base is FinalRule {
                                             savedFinalRule = rule
                                         }
                                     }
