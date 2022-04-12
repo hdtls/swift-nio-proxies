@@ -80,21 +80,21 @@ final class RuleTests: XCTestCase {
     func testParsingDomainRule() throws {
         let stringLiteral = "DOMAIN,swift.org,DIRECT"
         let standardRule = try DomainRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.expression, "swift.org")
         XCTAssertEqual(standardRule.policy, "DIRECT")
         XCTAssertNil(standardRule.comment)
     }
     
     func testParsingDomainRuleWithComment() throws {
-        let stringLiteral = "DOMAIN,swift.org,DIRECT // This is rule comment."
+        let stringLiteral = "DOMAIN,swift.org,DIRECT // this is rule comment."
         let standardRule = try DomainRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.expression, "swift.org")
         XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+        XCTAssertEqual(standardRule.comment, "this is rule comment.")
     }
     
     func testAppropriateErrorWhenParsingDomainRuleWithInvalidSchema() {
-        let stringLiteral = "invalidSchema,swift.org,DIRECT // This is rule comment."
+        let stringLiteral = "invalidSchema,swift.org,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try DomainRule.init(stringLiteral: stringLiteral)) { error in
             XCTAssertTrue(error is ConfigurationSerializationError)
@@ -160,27 +160,27 @@ final class RuleTests: XCTestCase {
     
     func testDomainRuleCoding() throws {
         assertRuleCodingSuccess(DomainRule.self, expect: "DOMAIN,swift.org,DIRECT")
-        assertRuleCodingSuccess(DomainRule.self, expect: "DOMAIN,swift.org,DIRECT // This is rule comment.")
+        assertRuleCodingSuccess(DomainRule.self, expect: "DOMAIN,swift.org,DIRECT // this is rule comment.")
     }
     
     func testParsingDomainSuffixRule() throws {
         let stringLiteral = "DOMAIN-SUFFIX,swift.org,DIRECT"
         let standardRule = try DomainSuffixRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.expression, "swift.org")
         XCTAssertEqual(standardRule.policy, "DIRECT")
         XCTAssertNil(standardRule.comment)
     }
     
     func testParsingDomainSuffixRuleWithComment() throws {
-        let stringLiteral = "DOMAIN-SUFFIX,swift.org,DIRECT // This is rule comment."
+        let stringLiteral = "DOMAIN-SUFFIX,swift.org,DIRECT // this is rule comment."
         let standardRule = try DomainSuffixRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.expression, "swift.org")
         XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+        XCTAssertEqual(standardRule.comment, "this is rule comment.")
     }
     
     func testAppropriateErrorWhenParsingDomainSuffixRuleWithInvalidSchema() {
-        let stringLiteral = "invalidSchema,swift.org,DIRECT // This is rule comment."
+        let stringLiteral = "invalidSchema,swift.org,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try DomainSuffixRule.init(stringLiteral: stringLiteral)) { error in
             XCTAssertTrue(error is ConfigurationSerializationError)
@@ -246,27 +246,27 @@ final class RuleTests: XCTestCase {
     
     func testDomainSuffixRuleCoding() throws {
         assertRuleCodingSuccess(DomainSuffixRule.self, expect: "DOMAIN-SUFFIX,swift.org,DIRECT")
-        assertRuleCodingSuccess(DomainSuffixRule.self, expect: "DOMAIN-SUFFIX,swift.org,DIRECT // This is rule comment.")
+        assertRuleCodingSuccess(DomainSuffixRule.self, expect: "DOMAIN-SUFFIX,swift.org,DIRECT // this is rule comment.")
     }
     
     func testParsingDomainKeywordRule() throws {
         let stringLiteral = "DOMAIN-KEYWORD,swift.org,DIRECT"
         let standardRule = try DomainKeywordRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.expression, "swift.org")
         XCTAssertEqual(standardRule.policy, "DIRECT")
         XCTAssertNil(standardRule.comment)
     }
     
     func testParsingDomainKeywordRuleWithComment() throws {
-        let stringLiteral = "DOMAIN-KEYWORD,swift.org,DIRECT // This is rule comment."
+        let stringLiteral = "DOMAIN-KEYWORD,swift.org,DIRECT // this is rule comment."
         let standardRule = try DomainKeywordRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.expression, "swift.org")
         XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+        XCTAssertEqual(standardRule.comment, "this is rule comment.")
     }
     
     func testAppropriateErrorWhenParsingDomainKeywordRuleWithInvalidSchema() {
-        let stringLiteral = "invalidSchema,swift.org,DIRECT // This is rule comment."
+        let stringLiteral = "invalidSchema,swift.org,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try DomainKeywordRule.init(stringLiteral: stringLiteral)) { error in
             XCTAssertTrue(error is ConfigurationSerializationError)
@@ -332,27 +332,27 @@ final class RuleTests: XCTestCase {
     
     func testDomainKeywordRuleCoding() throws {
         assertRuleCodingSuccess(DomainKeywordRule.self, expect: "DOMAIN-KEYWORD,swift.org,DIRECT")
-        assertRuleCodingSuccess(DomainKeywordRule.self, expect: "DOMAIN-KEYWORD,swift.org,DIRECT // This is rule comment.")
+        assertRuleCodingSuccess(DomainKeywordRule.self, expect: "DOMAIN-KEYWORD,swift.org,DIRECT // this is rule comment.")
     }
     
     func testParsingDomainSet() throws {
         let stringLiteral = "DOMAIN-SET,http://domainset.com,DIRECT"
         let standardRule = try DomainSet.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "http://domainset.com")
+        XCTAssertEqual(standardRule.expression, "http://domainset.com")
         XCTAssertEqual(standardRule.policy, "DIRECT")
         XCTAssertNil(standardRule.comment)
     }
     
     func testParsingDomainSetWithComment() throws {
-        let stringLiteral = "DOMAIN-SET,http://domainset.com,DIRECT // This is rule comment."
+        let stringLiteral = "DOMAIN-SET,http://domainset.com,DIRECT // this is rule comment."
         let standardRule = try DomainSet.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "http://domainset.com")
+        XCTAssertEqual(standardRule.expression, "http://domainset.com")
         XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+        XCTAssertEqual(standardRule.comment, "this is rule comment.")
     }
     
     func testAppropriateErrorWhenParsingDomainSetWithInvalidSchema() {
-        let stringLiteral = "invalidSchema,http://domainset.com,DIRECT // This is rule comment."
+        let stringLiteral = "invalidSchema,http://domainset.com,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try DomainSet.init(stringLiteral: stringLiteral)) { error in
             XCTAssertTrue(error is ConfigurationSerializationError)
@@ -430,9 +430,9 @@ swift.org
         domainset.performLoadingExternalResources { _ in
             expectation.fulfill()
         }
-        waitForExpectations(timeout: 5, handler: nil)
+        waitForExpectations(timeout: 15, handler: nil)
         
-        XCTAssertEqual(domainset.pattern, "http://domainset.com")
+        XCTAssertEqual(domainset.expression, "http://domainset.com")
         XCTAssertEqual(domainset.policy, "DIRECT")
         XCTAssertNil(domainset.comment)
         XCTAssertEqual(domainset.standardRules.count, try text.components(separatedBy: "\n").map { try AnyRule(stringLiteral: "DOMAIN-SUFFIX,\($0),DIRECT") }.count)
@@ -443,21 +443,21 @@ swift.org
     func testParsingGeoIPRule() throws {
         let stringLiteral = "GEOIP,swift.org,DIRECT"
         let standardRule = try GeoIPRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.expression, "swift.org")
         XCTAssertEqual(standardRule.policy, "DIRECT")
         XCTAssertNil(standardRule.comment)
     }
     
     func testParsingGeoIPRuleWithComment() throws {
-        let stringLiteral = "GEOIP,swift.org,DIRECT // This is rule comment."
+        let stringLiteral = "GEOIP,swift.org,DIRECT // this is rule comment."
         let standardRule = try GeoIPRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.expression, "swift.org")
         XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+        XCTAssertEqual(standardRule.comment, "this is rule comment.")
     }
     
     func testAppropriateErrorWhenParsingGeoIPRuleWithInvalidSchema() {
-        let stringLiteral = "invalidSchema,swift.org,DIRECT // This is rule comment."
+        let stringLiteral = "invalidSchema,swift.org,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try GeoIPRule.init(stringLiteral: stringLiteral)) { error in
             XCTAssertTrue(error is ConfigurationSerializationError)
@@ -523,27 +523,27 @@ swift.org
     
     func testGeoIPRuleCoding() throws {
         assertRuleCodingSuccess(GeoIPRule.self, expect: "GEOIP,swift.org,DIRECT")
-        assertRuleCodingSuccess(GeoIPRule.self, expect: "GEOIP,swift.org,DIRECT // This is rule comment.")
+        assertRuleCodingSuccess(GeoIPRule.self, expect: "GEOIP,swift.org,DIRECT // this is rule comment.")
     }
     
     func testParsingFinalRule() throws {
         let stringLiteral = "FINAL,swift.org,DIRECT"
         let standardRule = try FinalRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.expression, "swift.org")
         XCTAssertEqual(standardRule.policy, "DIRECT")
         XCTAssertNil(standardRule.comment)
     }
     
     func testParsingFinalRuleWithComment() throws {
-        let stringLiteral = "FINAL,swift.org,DIRECT // This is rule comment."
+        let stringLiteral = "FINAL,swift.org,DIRECT // this is rule comment."
         let standardRule = try FinalRule.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "swift.org")
+        XCTAssertEqual(standardRule.expression, "swift.org")
         XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+        XCTAssertEqual(standardRule.comment, "this is rule comment.")
     }
     
     func testAppropriateErrorWhenParsingFinalRuleWithInvalidSchema() {
-        let stringLiteral = "invalidSchema,swift.org,DIRECT // This is rule comment."
+        let stringLiteral = "invalidSchema,swift.org,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try FinalRule.init(stringLiteral: stringLiteral)) { error in
             XCTAssertTrue(error is ConfigurationSerializationError)
@@ -609,27 +609,27 @@ swift.org
     
     func testFinalRuleCoding() throws {
         assertRuleCodingSuccess(FinalRule.self, expect: "FINAL,swift.org,DIRECT")
-        assertRuleCodingSuccess(FinalRule.self, expect: "FINAL,swift.org,DIRECT // This is rule comment.")
+        assertRuleCodingSuccess(FinalRule.self, expect: "FINAL,swift.org,DIRECT // this is rule comment.")
     }
     
     func testParsingRuleSet() throws {
         let stringLiteral = "RULE-SET,http://ruleset.com,DIRECT"
         let standardRule = try RuleSet.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "http://ruleset.com")
+        XCTAssertEqual(standardRule.expression, "http://ruleset.com")
         XCTAssertEqual(standardRule.policy, "DIRECT")
         XCTAssertNil(standardRule.comment)
     }
     
     func testParsingRuleSetWithComment() throws {
-        let stringLiteral = "RULE-SET,http://ruleset.com,DIRECT // This is rule comment."
+        let stringLiteral = "RULE-SET,http://ruleset.com,DIRECT // this is rule comment."
         let standardRule = try RuleSet.init(stringLiteral: stringLiteral)
-        XCTAssertEqual(standardRule.pattern, "http://ruleset.com")
+        XCTAssertEqual(standardRule.expression, "http://ruleset.com")
         XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertEqual(standardRule.comment, "This is rule comment.")
+        XCTAssertEqual(standardRule.comment, "this is rule comment.")
     }
     
     func testAppropriateErrorWhenParsingRuleSetWithInvalidSchema() {
-        let stringLiteral = "invalidSchema,http://ruleset.com,DIRECT // This is rule comment."
+        let stringLiteral = "invalidSchema,http://ruleset.com,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try RuleSet.init(stringLiteral: stringLiteral)) { error in
             XCTAssertTrue(error is ConfigurationSerializationError)
@@ -708,9 +708,9 @@ DOMAIN-KEYWORD,apple
         ruleset.performLoadingExternalResources { _ in
             expectation.fulfill()
         }
-        waitForExpectations(timeout: 30, handler: nil)
+        waitForExpectations(timeout: 15, handler: nil)
         
-        XCTAssertEqual(ruleset.pattern, "http://ruleset.com")
+        XCTAssertEqual(ruleset.expression, "http://ruleset.com")
         XCTAssertEqual(ruleset.policy, "DIRECT")
         XCTAssertNil(ruleset.comment)
         XCTAssertEqual(ruleset.standardRules.count, try text.components(separatedBy: "\n").map { try AnyRule(stringLiteral: $0 + ",DIRECT") }.count)
@@ -743,7 +743,7 @@ DOMAIN-KEYWORD,apple
         DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
             expectation.fulfill()
         }
-        waitForExpectations(timeout: 5, handler: nil)
+        waitForExpectations(timeout: 15, handler: nil)
         
         XCTAssertTrue(actual.base is RuleSet)
         XCTAssertEqual(actual.base as! RuleSet, expected)
