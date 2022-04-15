@@ -59,7 +59,7 @@ BLOCK = DIRECT, REJECT, REJECT-TINYGIF
 DOMAIN-SUFFIX,icloud.com,DIRECT
 RULE-SET,SYSTEM,DIRECT
 GEOIP,CN,DIRECT
-FINAL,dns-failed,PROXY
+FINAL,PROXY
 """
     
     let mitmString = """
@@ -370,16 +370,16 @@ HTTP = IKEv2, server-address=127.0.0.1, port=8310
         let result = configuration.rules
         XCTAssertEqual(result.count, 4)
         XCTAssertEqual(result, [
-            try AnyRule(stringLiteral: "DOMAIN-SUFFIX,icloud.com,DIRECT"),
-            try AnyRule(stringLiteral: "RULE-SET,SYSTEM,DIRECT"),
-            try AnyRule(stringLiteral: "GEOIP,CN,DIRECT"),
-            try AnyRule(stringLiteral: "FINAL,dns-failed,PROXY")
+            try AnyRule(string: "DOMAIN-SUFFIX,icloud.com,DIRECT"),
+            try AnyRule(string: "RULE-SET,SYSTEM,DIRECT"),
+            try AnyRule(string: "GEOIP,CN,DIRECT"),
+            try AnyRule(string: "FINAL,PROXY")
         ])
         
-        XCTAssertTrue(result.first?.base is DomainSuffixRule)
-        XCTAssertTrue(result[1].base is RuleSet)
-        XCTAssertTrue(result[2].base is GeoIPRule)
-        XCTAssertTrue(result[3].base is FinalRule)
+        XCTAssertTrue(result.first?.type == .domainSuffix)
+        XCTAssertTrue(result[1].type == .ruleSet)
+        XCTAssertTrue(result[2].type == .geoIp)
+        XCTAssertTrue(result[3].type == .final)
     }
     
     func testMitMDecoding() throws {

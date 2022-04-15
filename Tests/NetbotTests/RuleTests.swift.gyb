@@ -19,23 +19,24 @@ import FoundationNetworking
 #endif
 %{
     class Rule:
-        def __init__(self, tag, className, expression="swift.org", standardRules=None):
+        def __init__(self, tag, className, type, expression="swift.org", standardRules=None):
             self.tag = tag
             self.className = className
+            self.type = type
             self.expression = expression
             self.standardRules = standardRules
     
     pythonRules = [
-        Rule("DOMAIN", "DomainRule"),
-        Rule("DOMAIN-SUFFIX", "DomainSuffixRule"),
-        Rule("DOMAIN-KEYWORD", "DomainKeywordRule"),
-        Rule("DOMAIN-SET", "DomainSet", "http://domainset.com", [
+        Rule("DOMAIN", "DomainRule", ".domain"),
+        Rule("DOMAIN-SUFFIX", "DomainSuffixRule", ".domainSuffix"),
+        Rule("DOMAIN-KEYWORD", "DomainKeywordRule", ".domainKeyword"),
+        Rule("DOMAIN-SET", "DomainSet", ".domainSet", "http://domainset.com", [
             "swift.org",
             ".apple.com"
         ]),
-        Rule("GEOIP", "GeoIPRule"),
-        Rule("FINAL", "FinalRule"),
-        Rule("RULE-SET", "RuleSet", "http://ruleset.com", [
+        Rule("GEOIP", "GeoIPRule", ".geoIp"),
+        Rule("FINAL", "FinalRule", ".final"),
+        Rule("RULE-SET", "RuleSet", ".ruleSet", "http://ruleset.com", [
             "DOMAIN,apple.com",
             "DOMAIN-SUFFIX,apple.com",
             "DOMAIN-KEYWORD,apple"
@@ -84,45 +85,50 @@ final class RuleTests: XCTestCase {
         _ = URLProtocol.registerClass(MockURLProtocol.self)
         URLSession.shared.configuration.protocolClasses?.insert(MockURLProtocol.self, at: 0)
     }
-    
-    func assertRuleCodingSuccess<R>(_ type: R.Type, expect: String) where R: Codable {
-        var data: Data!
-        
-        XCTAssertNoThrow(data = try JSONSerialization.data(withJSONObject: expect, options: .fragmentsAllowed))
-        XCTAssertNotNil(data)
-        
-        var standardRule: R!
-        XCTAssertNoThrow(standardRule = try JSONDecoder().decode(R.self, from: data))
-        XCTAssertNotNil(standardRule)
-        
-        var stringLiteral: String!
-        XCTAssertNoThrow(stringLiteral = try JSONSerialization.jsonObject(with: JSONEncoder().encode(standardRule), options: .fragmentsAllowed) as? String)
-        XCTAssertNotNil(stringLiteral)
-        
-        XCTAssertEqual(stringLiteral, expect)
-    }
     %for rule in pythonRules:
     
     func testParsing${rule.className}() throws {
-        let stringLiteral = "${rule.tag},${rule.expression},DIRECT"
-        let standardRule = try ${rule.className}.init(stringLiteral: stringLiteral)
+        %if rule.tag == "FINAL":
+        let string = "${rule.tag},DIRECT"
+        %else:
+        let string = "${rule.tag},${rule.expression},DIRECT"
+        %end
+        let standardRule = try AnyRule.init(string: string)
+        XCTAssertEqual(standardRule.type, ${rule.type})
+        %if rule.tag == "FINAL":
+        XCTAssertEqual(standardRule.expression, "")
+        %else:
         XCTAssertEqual(standardRule.expression, "${rule.expression}")
+        %end
         XCTAssertEqual(standardRule.policy, "DIRECT")
-        XCTAssertNil(standardRule.comment)
+        XCTAssertEqual(standardRule.comment, "")
     }
     
     func testParsing${rule.className}WithComment() throws {
-        let stringLiteral = "${rule.tag},${rule.expression},DIRECT // this is rule comment."
-        let standardRule = try ${rule.className}.init(stringLiteral: stringLiteral)
+        %if rule.tag == "FINAL":
+        let string = "${rule.tag},DIRECT // this is rule comment."
+        %else:
+        let string = "${rule.tag},${rule.expression},DIRECT // this is rule comment."
+        %end
+        let standardRule = try AnyRule.init(string: string)
+        XCTAssertEqual(standardRule.type, ${rule.type})
+        %if rule.tag == "FINAL":
+        XCTAssertEqual(standardRule.expression, "")
+        %else:
         XCTAssertEqual(standardRule.expression, "${rule.expression}")
+        %end
         XCTAssertEqual(standardRule.policy, "DIRECT")
         XCTAssertEqual(standardRule.comment, "this is rule comment.")
     }
     
     func testAppropriateErrorWhenParsing${rule.className}WithInvalidSchema() {
-        let stringLiteral = "invalidSchema,${rule.expression},DIRECT // this is rule comment."
-
-        XCTAssertThrowsError(try ${rule.className}.init(stringLiteral: stringLiteral)) { error in
+        %if rule.tag == "FINAL":
+        let string = "invalidSchema,DIRECT // this is rule comment."
+        %else:
+        let string = "invalidSchema,${rule.expression},DIRECT // this is rule comment."
+        %end
+        
+        XCTAssertThrowsError(try AnyRule.init(string: string)) { error in
             XCTAssertTrue(error is ConfigurationSerializationError)
             let actualErrorString = String(describing: error as! ConfigurationSerializationError)
             let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported))
@@ -130,20 +136,12 @@ final class RuleTests: XCTestCase {
         }
     }
     
-    func testAppropriateErrorWhenParsing${rule.className}WithUnmatchedSchema() {
-        %for s in filter(lambda e: e.className != rule.className, pythonRules):
-        
-        XCTAssertThrowsError(try ${rule.className}.init(stringLiteral: "${s.tag},${rule.expression},DIRECT")) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
-            let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .failedToParseAs(${rule.className}.self, butCanBeParsedAs: ${s.className}.self)))
-            XCTAssertEqual(actualErrorString, expectedErrorString)
-        }
-        %end
-    }
-    
     func testAppropriateErrorWhenParsing${rule.className}WithMissingFieldRuleString() {
-        XCTAssertThrowsError(try ${rule.className}.init(stringLiteral: "${rule.tag},${rule.expression}")) { error in
+        %if rule.tag == "FINAL":
+        XCTAssertThrowsError(try AnyRule.init(string: "${rule.tag}")) { error in
+        %else:
+        XCTAssertThrowsError(try AnyRule.init(string: "${rule.tag},${rule.expression}")) { error in
+        %end
             XCTAssertTrue(error is ConfigurationSerializationError)
             let actualErrorString = String(describing: error as! ConfigurationSerializationError)
             let expectedErrorString = String(describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField))
@@ -153,8 +151,31 @@ final class RuleTests: XCTestCase {
     %if not rule.tag.endswith("-SET"):
     
     func test${rule.className}Coding() throws {
-        assertRuleCodingSuccess(${rule.className}.self, expect: "${rule.tag},${rule.expression},DIRECT")
-        assertRuleCodingSuccess(${rule.className}.self, expect: "${rule.tag},${rule.expression},DIRECT // this is rule comment.")
+        %if rule.tag == "FINAL":
+        let jsonString = "${rule.tag},DIRECT // this is rule comment."
+        %else:
+        let jsonString = "${rule.tag},${rule.expression},DIRECT // this is rule comment."
+        %end
+        var data: Data!
+        XCTAssertNoThrow(data = try JSONSerialization.data(withJSONObject: jsonString, options: .fragmentsAllowed))
+        XCTAssertNotNil(data)
+        
+        var standardRule: AnyRule!
+        XCTAssertNoThrow(standardRule = try JSONDecoder().decode(AnyRule.self, from: data))
+        XCTAssertNotNil(standardRule)
+        XCTAssertEqual(standardRule.type, ${rule.type})
+        %if rule.tag == "FINAL":
+        XCTAssertEqual(standardRule.expression, "")
+        %else:
+        XCTAssertEqual(standardRule.expression, "${rule.expression}")
+        %end
+        XCTAssertEqual(standardRule.policy, "DIRECT")
+        XCTAssertEqual(standardRule.comment, "this is rule comment.")
+        
+        var string: String!
+        XCTAssertNoThrow(string = try JSONSerialization.jsonObject(with: JSONEncoder().encode(standardRule), options: .fragmentsAllowed) as? String)
+        XCTAssertNotNil(string)
+        XCTAssertEqual(string, jsonString)
     }
     %else:
     
@@ -168,59 +189,19 @@ ${l}
         
         let expectation = self.expectation(description: "${rule.tag}")
         MockURLProtocol.stub(url: .init(string: "${rule.expression}")!, response: text.data(using: .utf8)!)
-        let stringLiteral = "${rule.tag},${rule.expression},DIRECT"
-        let ${rule.className.lower()} = try ${rule.className}(stringLiteral: stringLiteral)
-        ${rule.className.lower()}.performLoadingExternalResources { _ in
+        let string = "${rule.tag},${rule.expression},DIRECT"
+        let ${rule.className.lower()} = try AnyRule(string: string)
+        ${rule.className.lower()}.performExternalResourcesLoading { _ in
             expectation.fulfill()
         }
         waitForExpectations(timeout: 15, handler: nil)
         
         XCTAssertEqual(${rule.className.lower()}.expression, "${rule.expression}")
         XCTAssertEqual(${rule.className.lower()}.policy, "DIRECT")
-        XCTAssertNil(${rule.className.lower()}.comment)
-        %if rule.tag == "RULE-SET":
-        XCTAssertEqual(${rule.className.lower()}.standardRules.count, try text.components(separatedBy: "\n").map { try AnyRule(stringLiteral: $0 + ",DIRECT") }.count)
-        %elif rule.tag == "DOMAIN-SET":
-        XCTAssertEqual(${rule.className.lower()}.standardRules.count, try text.components(separatedBy: "\n").map { try AnyRule(stringLiteral: "DOMAIN-SUFFIX,\($0),DIRECT") }.count)
-        %end
-        XCTAssertEqual(try JSONSerialization.jsonObject(with: try JSONEncoder().encode(${rule.className.lower()}), options: .fragmentsAllowed) as? String, stringLiteral)
+        XCTAssertEqual(${rule.className.lower()}.comment, "")
+        XCTAssertEqual(try JSONSerialization.jsonObject(with: try JSONEncoder().encode(${rule.className.lower()}), options: .fragmentsAllowed) as? String, string)
     }
     #endif
     %end
     %end
-    
-    func testParsingAnyRule() throws {
-        func assertUnderliyingRule<T: Rule & Equatable>(_ stringLiteral: String, _ type: T.Type) throws {
-            let expected = try AnyRule.init(stringLiteral: stringLiteral)
-            XCTAssertTrue(expected.base is T)
-            XCTAssertEqual(expected.base as! T, try T.init(stringLiteral: stringLiteral))
-        }
-        
-        try assertUnderliyingRule("DOMAIN,apple.com,DIRECT", DomainRule.self)
-        try assertUnderliyingRule("DOMAIN-SUFFIX,apple.com,DIRECT", DomainSuffixRule.self)
-        try assertUnderliyingRule("DOMAIN-KEYWORD,apple.com,DIRECT", DomainKeywordRule.self)
-        try assertUnderliyingRule("FINAL,dns-failed,DIRECT", FinalRule.self)
-        try assertUnderliyingRule("GEOIP,CN,DIRECT", GeoIPRule.self)
-        
-#if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
-        let expected = try RuleSet.init(stringLiteral: "RULE-SET,https://ruleset,DIRECT")
-        let actual = try AnyRule.init(stringLiteral: "RULE-SET,https://ruleset,DIRECT")
-        
-        let expected1 = try DomainSet.init(stringLiteral: "DOMAIN-SET,https://domainset,DIRECT")
-        let actual1 = try AnyRule.init(stringLiteral: "DOMAIN-SET,https://domainset,DIRECT")
-        
-        let expectation = expectation(description: "ANY-RULE")
-        // wait for 1 seconds for mock execute.
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
-            expectation.fulfill()
-        }
-        waitForExpectations(timeout: 15, handler: nil)
-        
-        XCTAssertTrue(actual.base is RuleSet)
-        XCTAssertEqual(actual.base as! RuleSet, expected)
-        
-        XCTAssertTrue(actual1.base is DomainSet)
-        XCTAssertEqual(actual1.base as! DomainSet, expected1)
-#endif
-    }
 }

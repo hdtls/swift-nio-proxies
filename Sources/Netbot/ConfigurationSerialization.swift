@@ -300,7 +300,7 @@ final public class ConfigurationSerialization {
         
         // All proxy label defined in rule should
         try __rulesKeyedByLine.forEach { (cursor, line) in
-            guard let rule = try? AnyRule.init(stringLiteral: line) else {
+            guard let rule = try? AnyRule.init(string: line) else {
                 throw ConfigurationSerializationError.invalidFile(reason: .invalidLine(cursor: cursor, description: line))
             }
             // Validate rule policy.

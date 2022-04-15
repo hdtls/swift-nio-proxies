@@ -40,8 +40,8 @@ public class Netbot {
     public var isMitmEnabled: Bool = false
     
     public var geoLite2: MaxMindDB {
-        set { GeoIPRule.geo = newValue }
-        get { GeoIPRule.geo! }
+        set { AnyRule.db = newValue }
+        get { AnyRule.db! }
     }
     
     private var eventLoopGroup: EventLoopGroup!
@@ -185,7 +185,7 @@ public class Netbot {
                                             break
                                         }
                                         
-                                        if rule.base is FinalRule {
+                                        if rule.type == .final {
                                             savedFinalRule = rule
                                         }
                                     }
