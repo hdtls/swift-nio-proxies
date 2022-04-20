@@ -369,12 +369,6 @@ HTTP = IKEv2, server-address=127.0.0.1, port=8310
         
         let result = configuration.rules
         XCTAssertEqual(result.count, 4)
-        XCTAssertEqual(result, [
-            try AnyRule(string: "DOMAIN-SUFFIX,icloud.com,DIRECT"),
-            try AnyRule(string: "RULE-SET,SYSTEM,DIRECT"),
-            try AnyRule(string: "GEOIP,CN,DIRECT"),
-            try AnyRule(string: "FINAL,PROXY")
-        ])
         
         XCTAssertTrue(result.first?.type == .domainSuffix)
         XCTAssertTrue(result[1].type == .ruleSet)

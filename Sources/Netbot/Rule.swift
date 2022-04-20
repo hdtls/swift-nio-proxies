@@ -19,7 +19,7 @@ import FoundationNetworking
 #endif
 import MaxMindDB
 
-public enum RuleType: String, CaseIterable, Equatable {
+public enum RuleType: String, CaseIterable {
     case domain = "DOMAIN"
     case domainSuffix = "DOMAIN-SUFFIX"
     case domainKeyword = "DOMAIN-KEYWORD"
@@ -39,7 +39,10 @@ public enum RuleType: String, CaseIterable, Equatable {
 }
 
 /// `Rule` protocol define basic rule object protocol.
-public protocol Rule: Codable {
+public protocol Rule {
+    
+    /// Identifier for this rule.
+    var id: UUID { get }
     
     /// The rule type.
     var type: RuleType { get }
@@ -63,7 +66,9 @@ public protocol Rule: Codable {
     init(string: String) throws
 }
 
-public struct AnyRule: Rule, CustomStringConvertible {
+public struct AnyRule: Rule {
+
+    public var id: UUID = UUID()
     
     @Protected static var db: MaxMindDB?
     
@@ -104,18 +109,20 @@ public struct AnyRule: Rule, CustomStringConvertible {
         return dstURL
     }
     
-    public var description: String {
-        type.rawValue + (type == .final ? "," : ",\(expression),") + policy + (comment.isEmpty ? "" : " // \(comment)")
-    }
-    
-    public init(type: RuleType = .domain,
-                expression: String = "example.com",
-                policy: String = "DIRECT",
-                comment: String = "") {
+    /// Initialize an instance of `AnyRule` with specified type, expression, policy and comment.
+    public init(type: RuleType, expression: String, policy: String, comment: String) {
         self.type = type
         self.expression = expression
         self.policy = policy
         self.comment = comment
+    }
+    
+    /// Initialize an instance of `AnyRule` with default values..
+    ///
+    /// Calling this method is equivalent to calling `init(type:domain:expression:policy:comment:)`
+    /// with `.domain` type empty expression `DIRECT` policy and empty comment.
+    public init() {
+        self.init(type: .domain, expression: "", policy: "DIRECT", comment: "")
     }
     
     public init(string: String) throws {
@@ -299,23 +306,10 @@ extension AnyRule: Codable {
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        try container.encode(description)
-    }
-}
-
-extension AnyRule: Equatable {
-    
-    public static func ==(lhs: AnyRule, rhs: AnyRule) -> Bool {
-        lhs.type == rhs.type
-        && lhs.expression == rhs.expression
-        && lhs.policy == rhs.policy
-        && lhs.comment == rhs.comment
-    }
-}
-
-extension AnyRule: Hashable {
-    
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(description)
+        var string = type == .final ? "\(type.rawValue),\(policy)" : "\(type.rawValue),\(expression),\(policy)"
+        if !comment.isEmpty {
+            string.append(" // \(comment)")
+        }
+        try container.encode(string)
     }
 }
