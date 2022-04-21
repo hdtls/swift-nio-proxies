@@ -16,15 +16,18 @@ import Crypto
 import Foundation
 import Logging
 import NIOCore
+import NetbotCore
 
 public class RequestEncoder: MessageToByteEncoder {
     
     public typealias OutboundIn = ByteBuffer
     
     public var logger: Logger
+    
     public let taskAddress: NetAddress
     public let secretKey: String
     private var symmetricKey: SymmetricKey!
+    
     private var nonce: [UInt8]!
     
     public init(logger: Logger = .init(label: "com.netbot.shadowsocks"), taskAddress: NetAddress, secretKey: String) {
@@ -73,16 +76,31 @@ public class RequestEncoder: MessageToByteEncoder {
         var sequence = withUnsafeBytes(of: UInt16(message.count).bigEndian) {
             Array($0)
         }
-        var sealedBox = try ChaChaPoly.seal(sequence, using: symmetricKey, nonce: .init(data: nonce))
-        packet.append(sealedBox.ciphertext)
-        packet.append(sealedBox.tag)
         
-        nonce.increment(nonce.count)
-        
-        sequence = Array(message)
-        sealedBox = try ChaChaPoly.seal(sequence, using: symmetricKey, nonce: .init(data: nonce))
-        packet.append(sealedBox.ciphertext)
-        packet.append(sealedBox.tag)
+        switch configuration.algorithm {
+            case .aes128Gcm:
+                var sealedBox = try AES.GCM.seal(sequence, using: symmetricKey, nonce: .init(data: nonce))
+                packet.append(sealedBox.ciphertext)
+                packet.append(sealedBox.tag)
+                
+                nonce.increment(nonce.count)
+                
+                sequence = Array(message)
+                sealedBox = try AES.GCM.seal(sequence, using: symmetricKey, nonce: .init(data: nonce))
+                packet.append(sealedBox.ciphertext)
+                packet.append(sealedBox.tag)
+            case .chaCha20Poly1305:
+                var sealedBox = try ChaChaPoly.seal(sequence, using: symmetricKey, nonce: .init(data: nonce))
+                packet.append(sealedBox.ciphertext)
+                packet.append(sealedBox.tag)
+                
+                nonce.increment(nonce.count)
+                
+                sequence = Array(message)
+                sealedBox = try ChaChaPoly.seal(sequence, using: symmetricKey, nonce: .init(data: nonce))
+                packet.append(sealedBox.ciphertext)
+                packet.append(sealedBox.tag)
+        }
         
         nonce.increment(nonce.count)
         return packet

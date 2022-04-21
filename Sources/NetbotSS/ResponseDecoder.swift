@@ -81,8 +81,17 @@ public class ResponseDecoder: ByteToMessageDecoder {
         }
         
         var combined = nonce + buffer.readBytes(length: copyLength)!
-        var sealedBox = try ChaChaPoly.SealedBox.init(combined: combined)
-        var bytes = try ChaChaPoly.open(sealedBox, using: symmetricKey)
+        
+        var bytes: Data
+        
+        switch configuration.algorithm {
+            case .aes128Gcm:
+                let sealedBox = try AES.GCM.SealedBox.init(combined: combined)
+                bytes = try AES.GCM.open(sealedBox, using: symmetricKey)
+            case .chaCha20Poly1305:
+                let sealedBox = try ChaChaPoly.SealedBox.init(combined: combined)
+                bytes = try ChaChaPoly.open(sealedBox, using: symmetricKey)
+        }
         
         copyLength = bytes.withUnsafeBytes {
             Int($0.bindMemory(to: UInt16.self).baseAddress!.pointee.bigEndian) + tagByteCount
@@ -96,9 +105,16 @@ public class ResponseDecoder: ByteToMessageDecoder {
         nonce.increment(nonce.count)
         
         combined = nonce + buffer.readBytes(length: copyLength)!
-        sealedBox = try ChaChaPoly.SealedBox.init(combined: combined)
-        bytes = try ChaChaPoly.open(sealedBox, using: symmetricKey)
         
+        switch configuration.algorithm {
+            case .aes128Gcm:
+                let sealedBox = try AES.GCM.SealedBox.init(combined: combined)
+                bytes = try AES.GCM.open(sealedBox, using: symmetricKey)
+            case .chaCha20Poly1305:
+                let sealedBox = try ChaChaPoly.SealedBox.init(combined: combined)
+                bytes = try ChaChaPoly.open(sealedBox, using: symmetricKey)
+        }
+
         nonce.increment(nonce.count)
         
         context.fireChannelRead(wrapInboundOut(ByteBuffer(bytes: bytes)))
