@@ -49,14 +49,14 @@ public class ResponseDecoder: ByteToMessageDecoder {
     
     public typealias InboundOut = ByteBuffer
     
-    public let secretKey: String
+    public let configuration: ConfigurationProtocol
     
     private var symmetricKey: SymmetricKey!
     
     private var nonce: [UInt8]
     
-    public init(secretKey: String) {
-        self.secretKey = secretKey
+    public init(configuration: ConfigurationProtocol) {
+        self.configuration = configuration
         self.nonce = .init(repeating: 0, count: 12)
     }
     
@@ -68,7 +68,7 @@ public class ResponseDecoder: ByteToMessageDecoder {
                 return .needMoreData
             }
             let salt = buffer.readBytes(length: saltByteCount)!
-            symmetricKey = hkdfDerivedSymmetricKey(secretKey: secretKey, salt: salt, outputByteCount: keyByteCount)
+            symmetricKey = hkdfDerivedSymmetricKey(secretKey: configuration.passwordReference, salt: salt, outputByteCount: keyByteCount)
         }
         
         let tagByteCount = 16

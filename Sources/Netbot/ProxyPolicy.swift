@@ -16,6 +16,7 @@ import ConnectionPool
 import Foundation
 import NetbotCore
 import EraseNilDecoding
+import NetbotSS
 
 public protocol Policy: ConnectionPoolSource {
     
@@ -285,14 +286,41 @@ public struct ShadowsocksPolicy: Codable, Equatable, Policy {
     
     typealias CodingKeys = PolicyJSONKeys
 
-    public struct Configuration: Codable, Equatable {
+    public struct Configuration: NetbotSS.ConfigurationProtocol, Codable, Equatable {
         
-        public var algorithm: String = ""
-        @EraseNilToFalse public var enableUdpRelay = false
-        public var password: String = ""
-        public var serverAddress: String = ""
-        public var port: Int = 0
-        @EraseNilToFalse public var enableTfo = false
+        public var serverAddress: String
+        
+        public var port: Int
+        
+        public var algorithm: NetbotSS.CryptoAlgorithm
+        
+        @EraseNilToFalse public var enableUdpRelay: Bool
+        
+        public var password: String
+        
+        @EraseNilToFalse public var enableTfo: Bool
+        
+        public var passwordReference: String {
+            password
+        }
+        
+        public init(serverAddress: String,
+                    port: Int,
+                    algorithm: NetbotSS.CryptoAlgorithm,
+                    password: String,
+                    enableUdpRelay: Bool,
+                    enableTfo: Bool) {
+            self.serverAddress = serverAddress
+            self.port = port
+            self.algorithm = algorithm
+            self.password = password
+            self.enableUdpRelay = enableUdpRelay
+            self.enableTfo = enableTfo
+        }
+        
+        public init() {
+            self.init(serverAddress: "", port: 0, algorithm: .aes128Gcm, password: "", enableUdpRelay: false, enableTfo: false)
+        }
     }
     
     public static let schema: String = "ss"
@@ -304,7 +332,7 @@ public struct ShadowsocksPolicy: Codable, Equatable, Policy {
     public var taskAddress: NetAddress?
     
     public init() {
-        self.init(name: "SS", configuration: .init())
+        self.init(name: "Shadowsocks", configuration: .init())
     }
     
     public init(name: String, configuration: Configuration) {
@@ -312,6 +340,8 @@ public struct ShadowsocksPolicy: Codable, Equatable, Policy {
         self.configuration = configuration
     }
 }
+
+extension NetbotSS.CryptoAlgorithm: Codable {}
 
 public struct SOCKS5Policy: Codable, Equatable, Policy {
     

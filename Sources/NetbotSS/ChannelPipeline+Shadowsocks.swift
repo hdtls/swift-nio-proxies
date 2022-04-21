@@ -19,27 +19,27 @@ import NIOCore
 
 extension ChannelPipeline {
     
-    public func addSSClientHandlers(logger: Logger = .init(label: "com.netbot.shadowsocks"),
+    public func addSSClientHandlers(logger: Logger,
+                                    configuration: ConfigurationProtocol,
                                     taskAddress: NetAddress,
-                                    secretKey: String,
                                     position: Position = .last) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
         
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
                 try syncOperations.addSSClientHandlers(logger: logger,
+                                                       configuration: configuration,
                                                        taskAddress: taskAddress,
-                                                       secretKey: secretKey,
                                                        position: position)
             }
             eventLoopFuture = eventLoop.makeCompletedFuture(result)
         } else {
-            eventLoopFuture = eventLoop.submit({
+            eventLoopFuture = eventLoop.submit {
                 try self.syncOperations.addSSClientHandlers(logger: logger,
+                                                            configuration: configuration,
                                                             taskAddress: taskAddress,
-                                                            secretKey: secretKey,
                                                             position: position)
-            })
+            }
         }
         
         return eventLoopFuture
@@ -48,13 +48,13 @@ extension ChannelPipeline {
 
 extension ChannelPipeline.SynchronousOperations {
     
-    public func addSSClientHandlers(logger: Logger = .init(label: "com.netbot.shadowsocks"),
+    public func addSSClientHandlers(logger: Logger,
+                                    configuration: ConfigurationProtocol,
                                     taskAddress: NetAddress,
-                                    secretKey: String,
                                     position: ChannelPipeline.Position = .last) throws {
         eventLoop.assertInEventLoop()
-        let inboundDecoder = ResponseDecoder(secretKey: secretKey)
-        let outboundEncoder = RequestEncoder(taskAddress: taskAddress, secretKey: secretKey)
+        let inboundDecoder = ResponseDecoder(configuration: configuration)
+        let outboundEncoder = RequestEncoder(logger: logger, configuration: configuration, taskAddress: taskAddress)
         let handlers: [ChannelHandler] = [ByteToMessageHandler(inboundDecoder), MessageToByteHandler(outboundEncoder)]
         try addHandlers(handlers, position: position)
     }

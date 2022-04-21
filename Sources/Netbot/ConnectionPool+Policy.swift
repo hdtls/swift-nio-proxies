@@ -78,7 +78,7 @@ extension ShadowsocksPolicy: ConnectionPoolSource {
             
             return ClientBootstrap.init(group: eventLoop.next())
                 .channelInitializer { channel in
-                    channel.pipeline.addSSClientHandlers(logger: logger, taskAddress: taskAddress, secretKey: configuration.password)
+                    channel.pipeline.addSSClientHandlers(logger: logger, configuration: configuration, taskAddress: taskAddress)
                 }
                 .connect(host: configuration.serverAddress, port: configuration.port)
         } catch {

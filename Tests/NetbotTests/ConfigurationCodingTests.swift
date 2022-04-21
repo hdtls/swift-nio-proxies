@@ -44,7 +44,7 @@ hide-crash-reporter-request = true
 HTTP = http, server-address=127.0.0.1, port=8310
 HTTP BASIC = http, server-address=127.0.0.1, port=8311, username=Netbot, password=password
 SOCKS = socks5, server-address=127.0.0.1, port=8320, username=Netbot, password=password
-SHADOWSOCKS = ss, server-address=127.0.0.1, port=8330, algorithm=chacha20-ietf-poly1305, password=password, allow-udp-relay=true, tfo=true
+SHADOWSOCKS = ss, server-address=127.0.0.1, port=8330, algorithm=chacha20-poly1305, password=password, allow-udp-relay=true, tfo=true
 VMESS = vmess, server-address=127.0.0.1, port=8390, username=2EB5690D-225B-4B49-997F-697D5A36CD9D, tls=false, ws=false, ws-path=/tunnel, tfo=true
 """
     
@@ -278,7 +278,7 @@ SHADOWSOCKS = ss, server-address=127.0.0.1, port=8310, algorithm=aes-128-gcm, pa
         XCTAssertEqual(policy.configuration.port, 8310)
         XCTAssertEqual(policy.configuration.password, "password")
         XCTAssertEqual(policy.name, "SHADOWSOCKS")
-        XCTAssertEqual(policy.configuration.algorithm, "aes-128-gcm")
+        XCTAssertEqual(policy.configuration.algorithm, .aes128Gcm)
         XCTAssertTrue(policy.configuration.enableUdpRelay)
         XCTAssertTrue(policy.configuration.enableTfo)
         XCTAssertNil(policy.taskAddress)

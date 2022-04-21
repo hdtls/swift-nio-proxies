@@ -25,15 +25,17 @@ public class RequestEncoder: MessageToByteEncoder {
     public var logger: Logger
     
     public let taskAddress: NetAddress
-    public let secretKey: String
+    
+    public let configuration: ConfigurationProtocol
+    
     private var symmetricKey: SymmetricKey!
     
     private var nonce: [UInt8]!
     
-    public init(logger: Logger = .init(label: "com.netbot.shadowsocks"), taskAddress: NetAddress, secretKey: String) {
+    public init(logger: Logger, configuration: ConfigurationProtocol, taskAddress: NetAddress) {
         self.logger = logger
+        self.configuration = configuration
         self.taskAddress = taskAddress
-        self.secretKey = secretKey
     }
     
     public func encode(data: ByteBuffer, out: inout ByteBuffer) throws {
@@ -49,7 +51,7 @@ public class RequestEncoder: MessageToByteEncoder {
             let salt = Array<UInt8>(repeating: 0, count: saltByteCount).map({ _ in
                 UInt8.random(in: UInt8.min...UInt8.max)
             })
-            symmetricKey = hkdfDerivedSymmetricKey(secretKey: secretKey, salt: salt, outputByteCount: keyByteCount)
+            symmetricKey = hkdfDerivedSymmetricKey(secretKey: configuration.passwordReference, salt: salt, outputByteCount: keyByteCount)
             
             packet.applying(taskAddress)
             packet = try seal(packet, using: symmetricKey)
