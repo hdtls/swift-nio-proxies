@@ -117,13 +117,14 @@ base64-encoded-p12-string = MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfcEggnzMIIJ7zCCBGcG
     func testHTTPProxyPolicySerializationAndDecoding() throws {
         let policiesString = """
 [Proxy Policy]
-HTTP = http, server-address=127.0.0.1, port=8310, username=username, password=password, perform-http-tunneling=true
+HTTP = http, server-address=127.0.0.1, port=8310, username=username, password=password, preferer-http-tunneling=true
 """
         let jsonObject = try ConfigurationSerialization.jsonObject(with: policiesString.data(using: .utf8)!)
         let configuration = try jsonDecoder.decode(Configuration.self, from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed))
         
-        let result = configuration.policies.first
-        guard case .http(let policy) = result else {
+        XCTAssertFalse(configuration.policies.isEmpty)
+        let policy = configuration.policies.first!
+        guard case .proxy(via: let p) = policy.type, p == .http else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
@@ -132,9 +133,9 @@ HTTP = http, server-address=127.0.0.1, port=8310, username=username, password=pa
         XCTAssertEqual(policy.configuration.port, 8310)
         XCTAssertEqual(policy.configuration.username, "username")
         XCTAssertEqual(policy.configuration.password, "password")
-        XCTAssertTrue(policy.configuration.performHttpTunneling)
+        XCTAssertTrue(policy.configuration.prefererHttpTunneling)
         XCTAssertEqual(policy.name, "HTTP")
-        XCTAssertNil(policy.taskAddress)
+        XCTAssertNil(policy.destinationAddress)
     }
     
     func testHTTPProxyPolicyDefaultValueSerializationAndDecoding() throws {
@@ -145,25 +146,29 @@ HTTP = http, server-address=127.0.0.1, port=8310
         let jsonObject = try ConfigurationSerialization.jsonObject(with: policiesString.data(using: .utf8)!)
         let configuration = try jsonDecoder.decode(Configuration.self, from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed))
         
-        let result = configuration.policies.first
-        guard case .http(let policy) = result else {
+        XCTAssertFalse(configuration.policies.isEmpty)
+        let policy = configuration.policies.first!
+        
+        guard case .proxy(via: let p) = policy.type, p == .http else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
         
-        XCTAssertFalse(policy.configuration.performHttpTunneling)
+        XCTAssertFalse(policy.configuration.prefererHttpTunneling)
     }
     
     func testHTTPSProxyPolicySerializationAndDecoding() throws {
         let policiesString = """
 [Proxy Policy]
-HTTPS = https, server-address=127.0.0.1, port=8310, username=username, password=password, sni=sni, perform-http-tunneling=true, skip-certificate-verification=true
+HTTPS = https, server-address=127.0.0.1, port=8310, username=username, password=password, sni=sni, preferer-http-tunneling=true, skip-certificate-verification=true
 """
         let jsonObject = try ConfigurationSerialization.jsonObject(with: policiesString.data(using: .utf8)!)
         let configuration = try jsonDecoder.decode(Configuration.self, from: JSONSerialization.data(withJSONObject: jsonObject))
         
-        let result = configuration.policies.first
-        guard case .https(let policy) = result else {
+        XCTAssertFalse(configuration.policies.isEmpty)
+        let policy = configuration.policies.first!
+        
+        guard case .proxy(via: let p) = policy.type, p == .https else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
@@ -173,10 +178,10 @@ HTTPS = https, server-address=127.0.0.1, port=8310, username=username, password=
         XCTAssertEqual(policy.configuration.username, "username")
         XCTAssertEqual(policy.configuration.password, "password")
         XCTAssertEqual(policy.configuration.sni, "sni")
-        XCTAssertTrue(policy.configuration.performHttpTunneling)
+        XCTAssertTrue(policy.configuration.prefererHttpTunneling)
         XCTAssertTrue(policy.configuration.skipCertificateVerification)
         XCTAssertEqual(policy.name, "HTTPS")
-        XCTAssertNil(policy.taskAddress)
+        XCTAssertNil(policy.destinationAddress)
     }
     
     func testHTTPSProxyPolicyDefaultValueSerializationAndDecoding() throws {
@@ -187,13 +192,15 @@ HTTPS = https, server-address=127.0.0.1, port=8310
         let jsonObject = try ConfigurationSerialization.jsonObject(with: policiesString.data(using: .utf8)!)
         let configuration = try jsonDecoder.decode(Configuration.self, from: JSONSerialization.data(withJSONObject: jsonObject))
         
-        let result = configuration.policies.first
-        guard case .https(let policy) = result else {
+        XCTAssertFalse(configuration.policies.isEmpty)
+        let policy = configuration.policies.first!
+        
+        guard case .proxy(via: let p) = policy.type, p == .https else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
         
-        XCTAssertFalse(policy.configuration.performHttpTunneling)
+        XCTAssertFalse(policy.configuration.prefererHttpTunneling)
         XCTAssertFalse(policy.configuration.skipCertificateVerification)
     }
     
@@ -205,8 +212,10 @@ SOCKS5 = socks5, server-address=127.0.0.1, port=8310, username=username, passwor
         let jsonObject = try ConfigurationSerialization.jsonObject(with: policiesString.data(using: .utf8)!)
         let configuration = try jsonDecoder.decode(Configuration.self, from: JSONSerialization.data(withJSONObject: jsonObject))
         
-        let result = configuration.policies.first
-        guard case .socks5(let policy) = result else {
+        XCTAssertFalse(configuration.policies.isEmpty)
+        let policy = configuration.policies.first!
+        
+        guard case .proxy(via: let p) = policy.type, p == .socks5 else {
             XCTFail("should decoded as SOCKS5 proxy policy.")
             return
         }
@@ -216,7 +225,7 @@ SOCKS5 = socks5, server-address=127.0.0.1, port=8310, username=username, passwor
         XCTAssertEqual(policy.configuration.username, "username")
         XCTAssertEqual(policy.configuration.password, "password")
         XCTAssertEqual(policy.name, "SOCKS5")
-        XCTAssertNil(policy.taskAddress)
+        XCTAssertNil(policy.destinationAddress)
     }
     
     func testSOCKS5OverTLSPolicySerializationAndDecoding() throws {
@@ -227,8 +236,10 @@ SOCKS5OverTLS = socks5-tls, server-address=127.0.0.1, port=8310, username=userna
         let jsonObject = try ConfigurationSerialization.jsonObject(with: policiesString.data(using: .utf8)!)
         let configuration = try jsonDecoder.decode(Configuration.self, from: JSONSerialization.data(withJSONObject: jsonObject))
         
-        let result = configuration.policies.first
-        guard case .socks5TLS(let policy) = result else {
+        XCTAssertFalse(configuration.policies.isEmpty)
+        let policy = configuration.policies.first!
+        
+        guard case .proxy(via: let p) = policy.type, p == .socks5OverTLS else {
             XCTFail("should decoded as SOCKS5 over TLS proxy policy.")
             return
         }
@@ -240,7 +251,7 @@ SOCKS5OverTLS = socks5-tls, server-address=127.0.0.1, port=8310, username=userna
         XCTAssertEqual(policy.name, "SOCKS5OverTLS")
         XCTAssertEqual(policy.configuration.sni, "sni")
         XCTAssertTrue(policy.configuration.skipCertificateVerification)
-        XCTAssertNil(policy.taskAddress)
+        XCTAssertNil(policy.destinationAddress)
     }
     
     func testSOCKS5OverTLSPolicyDefaultValueSerializationAndDecoding() throws {
@@ -251,8 +262,10 @@ SOCKS5OverTLS = socks5-tls, server-address=127.0.0.1, port=8310
         let jsonObject = try ConfigurationSerialization.jsonObject(with: policiesString.data(using: .utf8)!)
         let configuration = try jsonDecoder.decode(Configuration.self, from: JSONSerialization.data(withJSONObject: jsonObject))
         
-        let result = configuration.policies.first
-        guard case .socks5TLS(let policy) = result else {
+        XCTAssertFalse(configuration.policies.isEmpty)
+        let policy = configuration.policies.first!
+
+        guard case .proxy(via: let p) = policy.type, p == .socks5OverTLS else {
             XCTFail("should decoded as SOCKS5 over TLS proxy policy.")
             return
         }
@@ -268,8 +281,10 @@ SHADOWSOCKS = ss, server-address=127.0.0.1, port=8310, algorithm=aes-128-gcm, pa
         let jsonObject = try ConfigurationSerialization.jsonObject(with: policiesString.data(using: .utf8)!)
         let configuration = try jsonDecoder.decode(Configuration.self, from: JSONSerialization.data(withJSONObject: jsonObject))
         
-        let result = configuration.policies.first
-        guard case .shadowsocks(let policy) = result else {
+        XCTAssertFalse(configuration.policies.isEmpty)
+        let policy = configuration.policies.first!
+        
+        guard case .proxy(via: let p) = policy.type, p == .shadowsocks else {
             XCTFail("should decoded as shadowsocks proxy policy.")
             return
         }
@@ -279,9 +294,7 @@ SHADOWSOCKS = ss, server-address=127.0.0.1, port=8310, algorithm=aes-128-gcm, pa
         XCTAssertEqual(policy.configuration.password, "password")
         XCTAssertEqual(policy.name, "SHADOWSOCKS")
         XCTAssertEqual(policy.configuration.algorithm, .aes128Gcm)
-        XCTAssertTrue(policy.configuration.enableUdpRelay)
-        XCTAssertTrue(policy.configuration.enableTfo)
-        XCTAssertNil(policy.taskAddress)
+        XCTAssertNil(policy.destinationAddress)
     }
     
     func testShadowsocksPolicyDefualtValueSerilizationAndDecoding() throws {
@@ -292,14 +305,13 @@ SHADOWSOCKS = ss, server-address=127.0.0.1, port=8310, algorithm=aes-128-gcm, pa
         let jsonObject = try ConfigurationSerialization.jsonObject(with: policiesString.data(using: .utf8)!)
         let configuration = try jsonDecoder.decode(Configuration.self, from: JSONSerialization.data(withJSONObject: jsonObject))
         
-        let result = configuration.policies.first
-        guard case .shadowsocks(let policy) = result else {
+        XCTAssertFalse(configuration.policies.isEmpty)
+        let policy = configuration.policies.first!
+        
+        guard case .proxy(via: let p) = policy.type, p == .shadowsocks else {
             XCTFail("should decoded as shadowsocks proxy policy.")
             return
         }
-        
-        XCTAssertFalse(policy.configuration.enableUdpRelay)
-        XCTAssertFalse(policy.configuration.enableTfo)
     }
     
     func testVMESSPolicySerilizationAndDecoding() throws {
@@ -311,16 +323,18 @@ VMESS = vmess, server-address=127.0.0.1, port=8310, username=\(uuid)
         let jsonObject = try ConfigurationSerialization.jsonObject(with: policiesString.data(using: .utf8)!)
         let configuration = try jsonDecoder.decode(Configuration.self, from: JSONSerialization.data(withJSONObject: jsonObject))
         
-        let result = configuration.policies.first
-        guard case .vmess(let policy) = result else {
+        XCTAssertFalse(configuration.policies.isEmpty)
+        let policy = configuration.policies.first!
+        
+        guard case .proxy(via: let p) = policy.type, p == .vmess else {
             XCTFail("should decoded as VMESS proxy policy.")
             return
         }
         XCTAssertEqual(policy.configuration.serverAddress, "127.0.0.1")
         XCTAssertEqual(policy.configuration.port, 8310)
-        XCTAssertEqual(policy.configuration.username, uuid.uuidString)
+        XCTAssertEqual(policy.configuration.user, uuid)
         XCTAssertEqual(policy.name, "VMESS")
-        XCTAssertNil(policy.taskAddress)
+        XCTAssertNil(policy.destinationAddress)
     }
     
     func testUnsupportedPoliciesDecoding() throws {

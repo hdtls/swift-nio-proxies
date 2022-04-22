@@ -115,8 +115,12 @@ public class Netbot {
                             }
                             
                             guard self.outboundMode != .direct else {
-                                return DirectPolicy(taskAddress: taskAddress)
-                                    .makeConnection(logger: self.logger, on: eventLoop)
+                                do {
+                                    return try AnyPolicy.direct.asPolicy()
+                                        .makeConnection(logger: self.logger, on: eventLoop)
+                                } catch {
+                                    return eventLoop.makeFailedFuture(error)
+                                }
                             }
                             
                             // DNS lookup for taskAddress.
@@ -197,9 +201,9 @@ public class Netbot {
                                     precondition(savedFinalRule != nil, "Rules defined in configuration MUST contain one and only one FinalRule.")
                                     return savedFinalRule!
                                 }
-                                .map { rule -> ProxyPolicy in
+                                .map { rule -> AnyPolicy in
                                     // Policy evaluating.
-                                    let fallback = ProxyPolicy.direct(.init())
+                                    let fallback = AnyPolicy.direct
                                     
                                     var preferred: String?
                                     
@@ -219,7 +223,7 @@ public class Netbot {
                                         return fallback
                                     }
                                     
-                                    let policy = (self.configuration.policies + Builtin.policies).first {
+                                    let policy = (self.configuration.policies + AnyPolicy.builtin).first {
                                         $0.name == preferred
                                     }
                                     
@@ -229,8 +233,13 @@ public class Netbot {
                                 .flatMap {
                                     self.logger.info("Policy evaluating - \($0.name)", metadata: ["Request" : "\(taskAddress)"])
                                     var policy = $0
-                                    policy.taskAddress = taskAddress
-                                    return policy.makeConnection(logger: self.logger, on: eventLoop)
+                                    policy.destinationAddress = taskAddress
+                                    
+                                    do {
+                                        return try policy.asPolicy().makeConnection(logger: self.logger, on: eventLoop)
+                                    } catch {
+                                        return eventLoop.makeFailedFuture(error)
+                                    }
                                 }
                         }
                 }

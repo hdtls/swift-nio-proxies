@@ -163,7 +163,7 @@ final public class ConfigurationSerialization {
     public static func jsonObject(with data: ByteBuffer) throws -> Any {
         var __rulesKeyedByLine: [Int : String] = [:]
         var __groupKeyedByLine: [Int : [String : [String]]] = [:]
-        var __policies: [String] = Builtin.policies.map { $0.name }
+        var __policies: [String] = AnyPolicy.builtin.map { $0.name }
         
         /// Line number being parsed.
         var cursor: Int = 0
@@ -230,9 +230,9 @@ final public class ConfigurationSerialization {
                         }
                     
                     let jsonValue = JSONValue.object([
-                        PolicyJSONKeys.name.rawValue: .string(o.0),
-                        "type": .string(components[0].trimmingCharacters(in: .whitespaces)),
-                        PolicyJSONKeys.configuration.rawValue: .object(configuration)
+                        AnyPolicy.CodingKeys.name.rawValue: .string(o.0),
+                        AnyPolicy.CodingKeys.type.rawValue: .string(components[0].trimmingCharacters(in: .whitespaces)),
+                        AnyPolicy.CodingKeys.configuration.rawValue: .object(configuration)
                     ])
                     
                     array.append(jsonValue)
@@ -377,9 +377,9 @@ final public class ConfigurationSerialization {
                 }
                 
                 components.append(contentsOf: try policies.map {
-                    guard let configuration = $0[PolicyJSONKeys.configuration.rawValue] as? [String : Any],
-                          let name = $0[PolicyJSONKeys.name.rawValue],
-                          let type = $0["type"] else {
+                    guard let configuration = $0[AnyPolicy.CodingKeys.configuration.rawValue] as? [String : Any],
+                          let name = $0[AnyPolicy.CodingKeys.name.rawValue],
+                          let type = $0[AnyPolicy.CodingKeys.type.rawValue] else {
                         throw ConfigurationSerializationError.dataCorrupted
                     }
                     

@@ -33,25 +33,18 @@ public struct Configuration: Codable {
     @EraseNilToEmpty public var replica: ReplicaConfiguration
     
     /// All proxy policy object contains in this configuration object.
-    @EraseNilToEmpty public var policies: [ProxyPolicy]
+    @EraseNilToEmpty public var policies: [AnyPolicy]
     
     /// All selectable policy groups contains in this configuration object.
     @EraseNilToEmpty public var policyGroups: [SelectablePolicyGroup]
     
     /// Initialize an instance of `Configuration` with the specified general, replicat, rules, mitm,
     /// polcies and policyGroups.
-    /// - Parameters:
-    ///   - general: A general configuration object that will be included in this configuration.
-    ///   - replica: A replica configuration object that will be included in this configuration.
-    ///   - rules: Rules that will be included in this configuration.
-    ///   - mitm: A MitM configuration object that will be included in this configuration.
-    ///   - policies: Policies that will be included in this configuration.
-    ///   - policyGroups: SelectablePolicyGroups that will be included in this configuration.
     public init(general: BasicConfiguration,
                 replica: ReplicaConfiguration,
                 rules: [AnyRule],
                 mitm: MitMConfiguration,
-                policies: [ProxyPolicy],
+                policies: [AnyPolicy],
                 policyGroups: [SelectablePolicyGroup]) {
         self.general = general
         self.replica = replica
@@ -81,7 +74,7 @@ public struct BasicConfiguration: Codable, Equatable, EmptyInitializable {
     
     /// Log level use for `Logging.Logger`.`
     public var logLevel: Logger.Level
-
+    
     /// DNS servers use for system proxy.
     @EraseNilToEmpty public var dnsServers: [String]
     
@@ -218,7 +211,7 @@ public struct SelectablePolicyGroup: Codable, Equatable {
         case name
         case policies
     }
-
+    
     /// Initialize an instance of `SelectablePolicyGroup` with specified name and policies.
     public init(name: String, policies: [String]) {
         precondition(!policies.isEmpty, "You must provide at least one policy.")
