@@ -23,14 +23,14 @@ import NIOHTTPCompression
 extension ChannelPipeline {
     
     public func addHTTPProxyClientHandlers(logger: Logger,
-                                           taskAddress: NetAddress,
-                                           authorization: BasicAuthorization? = nil,
+                                           configuration: HTTPProxyConfigurationProtocol,
+                                           destinationAddress: NetAddress,
                                            position: ChannelPipeline.Position = .last) -> EventLoopFuture<Void> {
         let execute = {
             try self.syncOperations.addHTTPProxyClientHandlers(
                 logger: logger,
-                taskAddress: taskAddress,
-                authorization: authorization,
+                configuration: configuration,
+                destinationAddress: destinationAddress,
                 position: position
             )
         }
@@ -68,11 +68,11 @@ extension ChannelPipeline {
 extension ChannelPipeline.SynchronousOperations {
     
     public func addHTTPProxyClientHandlers(logger: Logger,
-                                           taskAddress: NetAddress,
-                                           authorization: BasicAuthorization? = nil,
+                                           configuration: HTTPProxyConfigurationProtocol,
+                                           destinationAddress: NetAddress,
                                            position: ChannelPipeline.Position = .last) throws {
         eventLoop.assertInEventLoop()
-        let handlers: [ChannelHandler] = [HTTP1ClientCONNECTTunnelHandler(logger: logger, taskAddress: taskAddress, authorization: authorization)]
+        let handlers: [ChannelHandler] = [HTTP1ClientCONNECTTunnelHandler(logger: logger, configuration: configuration, destinationAddress: destinationAddress)]
         try self.addHTTPClientHandlers()
         try self.addHandlers(handlers, position: position)
     }

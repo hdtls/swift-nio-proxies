@@ -18,26 +18,26 @@ import NIOCore
 
 extension ChannelPipeline {
     
-    public func addSOCKSClientHandlers(logger: Logger = .init(label: "com.netbot.socks"),
-                                    taskAddress: NetAddress,
-                                    credential: Credential?,
-                                    position: Position = .last) -> EventLoopFuture<Void> {
+    public func addSOCKSClientHandlers(logger: Logger,
+                                       configuration: SOCKS5ConfigurationProtocol,
+                                       destinationAddress: NetAddress,
+                                       position: Position = .last) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
         
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
                 try syncOperations.addSOCKSClientHandlers(logger: logger,
-                                                       taskAddress: taskAddress,
-                                                          credential: credential,
-                                                       position: position)
+                                                          configuration: configuration,
+                                                          destinationAddress: destinationAddress,
+                                                          position: position)
             }
             eventLoopFuture = eventLoop.makeCompletedFuture(result)
         } else {
             eventLoopFuture = eventLoop.submit({
                 try self.syncOperations.addSOCKSClientHandlers(logger: logger,
-                                                            taskAddress: taskAddress,
-                                                               credential: credential,
-                                                            position: position)
+                                                               configuration: configuration,
+                                                               destinationAddress: destinationAddress,
+                                                               position: position)
             })
         }
         
@@ -47,11 +47,14 @@ extension ChannelPipeline {
 
 extension ChannelPipeline.SynchronousOperations {
     
-    public func addSOCKSClientHandlers(logger: Logger = .init(label: "com.netbot.socks"),
-                                    taskAddress: NetAddress,
-                                    credential: Credential?,
-                                    position: ChannelPipeline.Position = .last) throws {
+    public func addSOCKSClientHandlers(logger: Logger,
+                                       configuration: SOCKS5ConfigurationProtocol,
+                                       destinationAddress: NetAddress,
+                                       position: ChannelPipeline.Position = .last) throws {
         eventLoop.assertInEventLoop()
-        try addHandler(SOCKS5ClientHandler(credential: credential, targetAddress: taskAddress))
+        
+        let handler = SOCKS5ClientHandler(logger: logger, configuration: configuration, destinationAddress: destinationAddress)
+        
+        try addHandler(handler)
     }
 }

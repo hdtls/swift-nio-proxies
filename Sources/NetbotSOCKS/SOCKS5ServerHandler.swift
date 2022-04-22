@@ -32,11 +32,11 @@ public final class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHa
     private var bufferedWrites: MarkedCircularBuffer<BufferedWrite> = .init(initialCapacity: 8)
     
     public let logger: Logger
-    public let credential: Credential?
+    private let configuration: SOCKS5ConfigurationProtocol
     
-    public init(logger: Logger = .init(label: "com.netbot.socks"), credential: Credential? = nil, completion: @escaping (NetAddress) -> EventLoopFuture<Channel>) {
+    public init(logger: Logger, configuration: SOCKS5ConfigurationProtocol, completion: @escaping (NetAddress) -> EventLoopFuture<Channel>) {
         self.logger = logger
-        self.credential = credential
+        self.configuration = configuration
         self.state = .idle
     }
     
@@ -136,7 +136,7 @@ extension SOCKS5ServerHandler {
         // Choose authentication method
         let method: SelectedAuthenticationMethod
         
-        if credential != nil && clientGreeting.methods.contains(.usernamePassword) {
+        if configuration.username != nil && configuration.password != nil && clientGreeting.methods.contains(.usernamePassword) {
             method = .init(method: .usernamePassword)
             try state.greeting(.usernamePassword)
         } else if clientGreeting.methods.contains(.noRequired) {
@@ -162,7 +162,7 @@ extension SOCKS5ServerHandler {
         
         try state.authorizing()
         
-        let success = authMsg.username == credential?.identity && authMsg.password == credential?.identityTokenString
+        let success = authMsg.username == configuration.username && authMsg.password == configuration.password
         
         var buffer = context.channel.allocator.buffer(capacity: 2)
         buffer.writeClientBasicAuthenticationResponse(UsernamePasswordAuthenticationResponse(status: success ? 0 : 1))

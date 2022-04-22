@@ -26,13 +26,13 @@ public class RequestEncoder: MessageToByteEncoder {
     
     public let taskAddress: NetAddress
     
-    public let configuration: ConfigurationProtocol
+    public let configuration: ShadowsocksConfigurationProtocol
     
     private var symmetricKey: SymmetricKey!
     
     private var nonce: [UInt8]!
     
-    public init(logger: Logger, configuration: ConfigurationProtocol, taskAddress: NetAddress) {
+    public init(logger: Logger, configuration: ShadowsocksConfigurationProtocol, taskAddress: NetAddress) {
         self.logger = logger
         self.configuration = configuration
         self.taskAddress = taskAddress

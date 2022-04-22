@@ -15,18 +15,6 @@
 import NetbotCore
 import NIOCore
 
-/// Credential use for username and password authentication.
-public struct Credential {
-    
-    public let identity: String
-    public let identityTokenString: String
-    
-    public init(identity: String, identityTokenString: String) {
-        self.identity = identity
-        self.identityTokenString = identityTokenString
-    }
-}
-
 /// Connects to a SOCKS server to establish a proxied connection
 /// to a host. This handler should be inserted at the beginning of a
 /// channel's pipeline. Note that SOCKS only supports fully-qualified
@@ -43,14 +31,15 @@ public final class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
     private var bufferedWrites: MarkedCircularBuffer<BufferedWrite>
     
     public let logger: Logger
-    public let credential: Credential?
-    public let targetAddress: NetAddress
+    public let destinationAddress: NetAddress
+    
+    private let configuration: SOCKS5ConfigurationProtocol
     
     /// Creates a new `SOCKS5ClientHandler` that connects to a server
-    /// and instructs the server to connect to `targetAddress`.
-    /// - parameter targetAddress: The desired end point - note that only IPv4, IPv6, and FQDNs are supported.
-    public init(logger: Logger = .init(label: "com.netbot.socks"), credential: Credential? = nil, targetAddress: NetAddress) {
-        switch targetAddress {
+    /// and instructs the server to connect to `destinationAddress`.
+    /// - parameter destinationAddress: The desired end point - note that only IPv4, IPv6, and FQDNs are supported.
+    public init(logger: Logger, configuration: SOCKS5ConfigurationProtocol, destinationAddress: NetAddress) {
+        switch destinationAddress {
             case .socketAddress(.unixDomainSocket):
                 preconditionFailure("UNIX domain sockets are not supported.")
             case .domainPort, .socketAddress(.v4), .socketAddress(.v6):
@@ -58,8 +47,8 @@ public final class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
         }
         
         self.logger = logger
-        self.credential = credential
-        self.targetAddress = targetAddress
+        self.configuration = configuration
+        self.destinationAddress = destinationAddress
         self.state = .idle
         self.bufferedWrites = .init(initialCapacity: 6)
     }
@@ -161,8 +150,8 @@ extension SOCKS5ClientHandler {
     }
     
     private func sendClientGreeting(context: ChannelHandlerContext) throws {
-        
-        let method: AuthenticationMethod = credential == nil ? .noRequired : .usernamePassword
+        // Authorization is performed when username is not nil
+        let method: AuthenticationMethod = configuration.username == nil ? .noRequired : .usernamePassword
         
         let greeting = ClientGreeting(methods: [method])
         
@@ -211,13 +200,13 @@ extension SOCKS5ClientHandler {
     }
     
     private func sendUsernamePasswordAuthentication(context: ChannelHandlerContext) throws {
-        guard let credential = credential else {
+        guard let username = configuration.username, let password = configuration.password else {
             throw SOCKSError.missingCredential
         }
         
-        let authentication = UsernamePasswordAuthentication(username: credential.identity, password: credential.identityTokenString)
+        let authentication = UsernamePasswordAuthentication(username: username, password: password)
         
-        let capacity = 3 + credential.identity.count + credential.identityTokenString.count
+        let capacity = 3 + username.count + password.count
         var byteBuffer = context.channel.allocator.buffer(capacity: capacity)
         byteBuffer.writeUsernamePasswordAuthentication(authentication)
         
@@ -225,7 +214,7 @@ extension SOCKS5ClientHandler {
     }
     
     private func sendClientRequest(context: ChannelHandlerContext) throws {
-        let request = Request(command: .connect, address: targetAddress)
+        let request = Request(command: .connect, address: destinationAddress)
         
         // the client request is always 6 bytes + the address info
         // [protocol_version, command, reserved, address type, <address>, port (2bytes)]

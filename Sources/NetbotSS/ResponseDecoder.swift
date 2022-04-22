@@ -49,13 +49,13 @@ public class ResponseDecoder: ByteToMessageDecoder {
     
     public typealias InboundOut = ByteBuffer
     
-    public let configuration: ConfigurationProtocol
+    public let configuration: ShadowsocksConfigurationProtocol
     
     private var symmetricKey: SymmetricKey!
     
     private var nonce: [UInt8]
     
-    public init(configuration: ConfigurationProtocol) {
+    public init(configuration: ShadowsocksConfigurationProtocol) {
         self.configuration = configuration
         self.nonce = .init(repeating: 0, count: 12)
     }

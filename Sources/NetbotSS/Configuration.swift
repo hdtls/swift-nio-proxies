@@ -36,7 +36,7 @@ public enum CryptoAlgorithm: String, CaseIterable, Equatable {
 }
 
 
-public protocol ConfigurationProtocol {
+public protocol ShadowsocksConfigurationProtocol {
     
     var algorithm: CryptoAlgorithm { get }
     

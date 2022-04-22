@@ -19,24 +19,24 @@ import NIOCore
 extension ChannelPipeline {
     
     public func addVMESSClientHandlers(logger: Logger = .init(label: "com.netbot.vmess"),
-                                       taskAddress: NetAddress,
-                                       id: UUID,
+                                       configuration: VMESSConfigurationProtocol,
+                                       destinationAddress: NetAddress,
                                        position: Position = .last) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
         
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
                 try syncOperations.addVMESSClientHandlers(logger: logger,
-                                                          taskAddress: taskAddress,
-                                                          id: id,
+                                                          configuration: configuration,
+                                                          destinationAddress: destinationAddress,
                                                           position: position)
             }
             eventLoopFuture = eventLoop.makeCompletedFuture(result)
         } else {
             eventLoopFuture = eventLoop.submit({
                 try self.syncOperations.addVMESSClientHandlers(logger: logger,
-                                                               taskAddress: taskAddress,
-                                                               id: id,
+                                                               configuration: configuration,
+                                                               destinationAddress: destinationAddress,
                                                                position: position)
             })
         }
@@ -48,12 +48,12 @@ extension ChannelPipeline {
 extension ChannelPipeline.SynchronousOperations {
     
     public func addVMESSClientHandlers(logger: Logger = .init(label: "com.netbot.vmess"),
-                                       taskAddress: NetAddress,
-                                       id: UUID,
+                                       configuration: VMESSConfigurationProtocol,
+                                       destinationAddress: NetAddress,
                                        position: ChannelPipeline.Position = .last) throws {
         eventLoop.assertInEventLoop()
         
-        let configuration: Configuration = .init(id: id, algorithm: .aes128gcm, command: .tcp, options: .masking)
+        let configuration: Configuration = .init(id: configuration.user, algorithm: .aes128gcm, command: .tcp, options: .masking)
         
         let symmetricKey = SecureBytes(count: 16)
         
@@ -67,7 +67,7 @@ extension ChannelPipeline.SynchronousOperations {
             symmetricKey: symmetricKey,
             nonce: nonce,
             configuration: configuration,
-            taskAddress: taskAddress
+            taskAddress: destinationAddress
         )
                 
         let responseDecoder = ResponseHeaderDecoder(

@@ -21,19 +21,25 @@ import NIOHTTP1
 public final class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, RemovableChannelHandler {
 
     public typealias InboundIn = HTTPClientResponsePart
+    
     public typealias OutboundIn = NIOAny
     
     private let logger: Logger
-    private let authorization: BasicAuthorization?
-    private let taskAddress: NetAddress
+    
+    private let configuration: HTTPProxyConfigurationProtocol
+    
+    private let destinationAddress: NetAddress
+    
     private var state: ConnectionState
+    
     private var headPart: HTTPResponseHead?
+    
     private var bufferedWrites: MarkedCircularBuffer<BufferedWrite>
     
-    public init(logger: Logger, taskAddress: NetAddress, authorization: BasicAuthorization? = nil) {
+    public init(logger: Logger, configuration: HTTPProxyConfigurationProtocol, destinationAddress: NetAddress) {
         self.logger = logger
-        self.authorization = authorization
-        self.taskAddress = taskAddress
+        self.configuration = configuration
+        self.destinationAddress = destinationAddress
         self.state = .idle
         self.bufferedWrites = .init(initialCapacity: 6)
     }
@@ -122,7 +128,7 @@ extension HTTP1ClientCONNECTTunnelHandler {
     private func sendClientGreeting(context: ChannelHandlerContext) throws {
         var head: HTTPRequestHead
         
-        switch self.taskAddress {
+        switch destinationAddress {
             case .domainPort(let domain, let port):
                 head = .init(version: .http1_1, method: .CONNECT, uri: "\(domain):\(port)")
             case .socketAddress(let socketAddress):
@@ -132,7 +138,7 @@ extension HTTP1ClientCONNECTTunnelHandler {
                 head = .init(version: .http1_1, method: .CONNECT, uri: "\(host):\(socketAddress.port ?? 80)")
         }
         
-        if let authorization = self.authorization {
+        if let authorization = configuration.authorization {
             head.headers.proxyBasicAuthorization = authorization
         }
                 

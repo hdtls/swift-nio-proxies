@@ -43,8 +43,8 @@ extension DirectPolicy: ConnectionPoolSource {
     
     public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
         do {
-            guard case .domainPort(let serverHostname, let serverPort) = taskAddress else {
-                throw HTTPProxyError.invalidURL(url: String(describing: taskAddress))
+            guard case .domainPort(let serverHostname, let serverPort) = destinationAddress else {
+                throw HTTPProxyError.invalidURL(url: String(describing: destinationAddress))
             }
             return ClientBootstrap.init(group: eventLoop.next())
                 .connect(host: serverHostname, port: serverPort)
@@ -62,7 +62,7 @@ extension RejectPolicy: ConnectionPoolSource {
 }
 
 extension RejectTinyGifPolicy: ConnectionPoolSource {
-    
+
     public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
         eventLoop.makeFailedFuture(ConnectionPoolError.shutdown)
     }
@@ -72,13 +72,13 @@ extension ShadowsocksPolicy: ConnectionPoolSource {
     
     public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
         do {
-            guard let taskAddress = taskAddress else {
-                throw HTTPProxyError.invalidURL(url: String(describing: taskAddress))
+            guard let destinationAddress = destinationAddress else {
+                throw HTTPProxyError.invalidURL(url: String(describing: destinationAddress))
             }
             
             return ClientBootstrap.init(group: eventLoop.next())
                 .channelInitializer { channel in
-                    channel.pipeline.addSSClientHandlers(logger: logger, configuration: configuration, taskAddress: taskAddress)
+                    channel.pipeline.addSSClientHandlers(logger: logger, configuration: configuration, taskAddress: destinationAddress)
                 }
                 .connect(host: configuration.serverAddress, port: configuration.port)
         } catch {
@@ -91,15 +91,15 @@ extension SOCKS5Policy: ConnectionPoolSource {
     
     public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
         do {
-            guard let taskAddress = taskAddress else {
-                throw HTTPProxyError.invalidURL(url: String(describing: taskAddress))
+            guard let destinationAddress = destinationAddress else {
+                throw HTTPProxyError.invalidURL(url: String(describing: destinationAddress))
             }
             
             return ClientBootstrap.init(group: eventLoop.next())
                 .channelInitializer { channel in
                     channel.pipeline.addSOCKSClientHandlers(logger: logger,
-                                                            taskAddress: taskAddress,
-                                                            credential: configuration.username != nil && configuration.password != nil ? .init(identity: configuration.username!, identityTokenString: configuration.password!) : nil)
+                                                            configuration: configuration,
+                                                            destinationAddress: destinationAddress)
                 }
                 .connect(host: configuration.serverAddress, port: configuration.port)
         } catch {
@@ -112,15 +112,15 @@ extension SOCKS5OverTLSPolicy: ConnectionPoolSource {
     
     public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
         do {
-            guard let taskAddress = taskAddress else {
-                throw HTTPProxyError.invalidURL(url: String(describing: taskAddress))
+            guard let destinationAddress = destinationAddress else {
+                throw HTTPProxyError.invalidURL(url: String(describing: destinationAddress))
             }
             
             return ClientBootstrap.init(group: eventLoop.next())
                 .channelInitializer { channel in
                     channel.pipeline.addSOCKSClientHandlers(logger: logger,
-                                                            taskAddress: taskAddress,
-                                                            credential: configuration.username != nil && configuration.password != nil ? .init(identity: configuration.username!, identityTokenString: configuration.password!) : nil)
+                                                            configuration: configuration,
+                                                            destinationAddress: destinationAddress)
                 }
                 .connect(host: configuration.serverAddress, port: configuration.port)
         } catch {
@@ -133,18 +133,13 @@ extension HTTPProxyPolicy: ConnectionPoolSource {
     
     public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
         do {
-            guard let taskAddress = taskAddress else {
-                throw HTTPProxyError.invalidURL(url: String(describing: taskAddress))
-            }
-            
-            var authorization: BasicAuthorization?
-            if let username = configuration.username, let password = configuration.password {
-                authorization = .init(username: username, password: password)
+            guard let destinationAddress = destinationAddress else {
+                throw HTTPProxyError.invalidURL(url: String(describing: destinationAddress))
             }
             
             return ClientBootstrap.init(group: eventLoop.next())
                 .channelInitializer { channel in
-                    channel.pipeline.addHTTPProxyClientHandlers(logger: logger, taskAddress: taskAddress, authorization: authorization)
+                    channel.pipeline.addHTTPProxyClientHandlers(logger: logger, configuration: configuration, destinationAddress: destinationAddress)
                 }
                 .connect(host: configuration.serverAddress, port: configuration.port)
         } catch {
@@ -164,17 +159,13 @@ extension VMESSPolicy: ConnectionPoolSource {
     
     public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
         do {
-            guard let taskAddress = taskAddress else {
-                throw HTTPProxyError.invalidURL(url: String(describing: taskAddress))
-            }
-            
-            guard let uuidString = configuration.username, let id = UUID(uuidString: uuidString) else {
-                throw EventLoopError.unsupportedOperation
+            guard let destinationAddress = destinationAddress else {
+                throw HTTPProxyError.invalidURL(url: String(describing: destinationAddress))
             }
             
             return ClientBootstrap.init(group: eventLoop.next())
                 .channelInitializer { channel in
-                    channel.pipeline.addVMESSClientHandlers(logger: logger, taskAddress: taskAddress, id: id)
+                    channel.pipeline.addVMESSClientHandlers(logger: logger, configuration: configuration, destinationAddress: destinationAddress)
                 }
                 .connect(host: configuration.serverAddress, port: configuration.port)
         } catch {
