@@ -13,16 +13,24 @@
 //===----------------------------------------------------------------------===//
 
 import XCTest
+
 @testable import NetbotVMESS
 @testable import SHAKE128
 
 class KDFTests: XCTestCase {
-    
+
     func testDeriveKey() {
         let symmetricKey = SymmetricKey(data: "Demo Key for KDF Value Test".data(using: .utf8)!)
         let expectedKey = "53e9d7e1bd7bd25022b71ead07d8a596efc8a845c7888652fd684b4903dc8892"
-        
-        let result = KDF.deriveKey(inputKeyMaterial: symmetricKey, info: [Array("Demo Path for KDF Value Test".utf8), Array("Demo Path for KDF Value Test2".utf8), Array("Demo Path for KDF Value Test3".utf8)])
+
+        let result = KDF.deriveKey(
+            inputKeyMaterial: symmetricKey,
+            info: [
+                Array("Demo Path for KDF Value Test".utf8),
+                Array("Demo Path for KDF Value Test2".utf8),
+                Array("Demo Path for KDF Value Test3".utf8),
+            ]
+        )
         result.withUnsafeBytes {
             XCTAssertEqual($0.hexString, expectedKey)
         }

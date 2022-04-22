@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import XCTest
+
 @testable import NetbotVMESS
 @testable import SHAKE128
 

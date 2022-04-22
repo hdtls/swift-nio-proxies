@@ -15,8 +15,8 @@
 import Foundation
 
 enum CodingError: Error {
-    
+
     case payloadTooLarge
-    
+
     case invalidPacketSize
 }

@@ -14,13 +14,13 @@
 
 /// The network outbound mode.
 public enum OutboundMode: String, CaseIterable {
-    
+
     /// Direct mode. In this mode all requests will be sent directly.
     case direct
 
     /// Global proxy mode. In this mode all requests will be forwarded to a proxy server.
     case proxy
-    
+
     /// Rule-based model. In this mode all requests will be forwarded base on rule system.
     case rule
 }

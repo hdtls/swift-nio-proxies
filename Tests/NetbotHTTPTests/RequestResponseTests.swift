@@ -13,10 +13,11 @@
 //===----------------------------------------------------------------------===//
 
 import XCTest
+
 @testable import NetbotHTTP
 
 final class RequestResponseTests: XCTestCase {
-    
+
     func testResponseInitialize() {
         let response = Response(head: .init(version: .http1_1, status: .ok, headers: .init()))
         XCTAssertEqual(response.httpVersion, .http1_1)
@@ -24,12 +25,12 @@ final class RequestResponseTests: XCTestCase {
         XCTAssertEqual(response.httpHeaders, .init())
         XCTAssertNil(response.httpBody)
     }
-    
+
     func testResponseCodable() throws {
         let expected = Response(head: .init(version: .http1_1, status: .ok, headers: .init()))
         let data = try JSONEncoder().encode(expected)
         let response = try JSONDecoder().decode(Response.self, from: data)
-        
+
         XCTAssertEqual(response, expected)
     }
 }

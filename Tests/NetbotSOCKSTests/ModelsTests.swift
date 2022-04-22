@@ -13,25 +13,32 @@
 //===----------------------------------------------------------------------===//
 
 import XCTest
+
 @testable import NetbotSOCKS
 
 class ModelsTests: XCTestCase {
-    
+
     func testRequestReadWrite() {
         var request = Request.init(command: .connect, address: .domainPort("localhost", 80))
         var buffer = ByteBuffer()
         buffer.writeClientRequest(request)
         XCTAssertNoThrow(XCTAssertEqual(try buffer.readClientRequestIfPossible(), request))
-        
-        request = .init(command: .bind, address: .socketAddress(try! .init(ipAddress: "127.0.0.1", port: 80)))
+
+        request = .init(
+            command: .bind,
+            address: .socketAddress(try! .init(ipAddress: "127.0.0.1", port: 80))
+        )
         buffer.writeClientRequest(request)
         XCTAssertNoThrow(XCTAssertEqual(try buffer.readClientRequestIfPossible(), request))
 
-        request = .init(command: .udpAssociate, address: .socketAddress(try! .init(ipAddress: "::1", port: 80)))
+        request = .init(
+            command: .udpAssociate,
+            address: .socketAddress(try! .init(ipAddress: "::1", port: 80))
+        )
         buffer.writeClientRequest(request)
         XCTAssertNoThrow(XCTAssertEqual(try buffer.readClientRequestIfPossible(), request))
     }
-    
+
     func testResponseReadWrite() {
         let response = Response.init(reply: .succeeded, boundAddress: .domainPort("localhost", 80))
         var buffer = ByteBuffer()

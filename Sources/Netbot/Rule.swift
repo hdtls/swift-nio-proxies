@@ -14,10 +14,11 @@
 
 import Crypto
 import Foundation
+import MaxMindDB
+
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
-import MaxMindDB
 
 public enum RuleType: String, CaseIterable {
     case domain = "DOMAIN"
@@ -27,7 +28,7 @@ public enum RuleType: String, CaseIterable {
     case ruleSet = "RULE-SET"
     case geoIp = "GEOIP"
     case final = "FINAL"
-    
+
     fileprivate var containsExternalResources: Bool {
         switch self {
             case .domainSet, .ruleSet:
@@ -40,28 +41,28 @@ public enum RuleType: String, CaseIterable {
 
 /// `Rule` protocol define basic rule object protocol.
 public protocol Rule {
-    
+
     /// Identifier for this rule.
     var id: UUID { get }
-    
+
     /// The rule type.
     var type: RuleType { get }
-    
+
     /// The expression fot this rule.
     ///
     /// If rule is collection expression is used to save external resources url string.
     var expression: String { get set }
-    
+
     /// The policy pointed to by the rule.
     var policy: String { get set }
-    
+
     /// The comment for this rule, if no comment return empty string.
     var comment: String { get set }
-    
+
     /// Rule evaluating function to determinse whether this rule match the given expression.
     /// - Returns: True if match else false.
     func match(_ pattern: String) -> Bool
-    
+
     /// Initialize an instance of `Rule` with specified string.
     init(string: String) throws
 }
@@ -69,35 +70,35 @@ public protocol Rule {
 public struct AnyRule: Rule {
 
     public var id: UUID = UUID()
-    
+
     @Protected static var db: MaxMindDB?
-    
+
     public var type: RuleType
-    
+
     public var expression: String
-    
+
     public var policy: String
-    
+
     public var comment: String
-    
+
     @Protected private var standardRules: [AnyRule] = []
-    
+
     /// External resources storage url.
     public var dstURL: URL? {
         guard type == .domainSet || type == .ruleSet else {
             return nil
         }
-        
+
         if let url = URL(string: expression), url.isFileURL {
             return url
         }
-        
+
         let filename = Insecure.SHA1.hash(data: Data(expression.utf8))
             .compactMap { String(format: "%02x", $0) }
             .joined()
-        
+
         var dstURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        
+
         dstURL.appendPathComponent("io.tenbits.Netbot")
         dstURL.appendPathComponent("External Resources")
         do {
@@ -108,7 +109,7 @@ public struct AnyRule: Rule {
         dstURL.appendPathComponent(filename)
         return dstURL
     }
-    
+
     /// Initialize an instance of `AnyRule` with specified type, expression, policy and comment.
     public init(type: RuleType, expression: String, policy: String, comment: String) {
         self.type = type
@@ -116,7 +117,7 @@ public struct AnyRule: Rule {
         self.policy = policy
         self.comment = comment
     }
-    
+
     /// Initialize an instance of `AnyRule` with default values..
     ///
     /// Calling this method is equivalent to calling `init(type:domain:expression:policy:comment:)`
@@ -124,32 +125,32 @@ public struct AnyRule: Rule {
     public init() {
         self.init(type: .domain, expression: "", policy: "DIRECT", comment: "")
     }
-    
+
     public init(string: String) throws {
         // Rule definitions are comma-separated except comments, and comment are
         // always at the end of the rule and followed by //.
         //
         // Becase comments may contain commas, so we parse comments first.
         var components = string.components(separatedBy: ",")
-        
+
         let rawValue = components.removeFirst().trimmingCharacters(in: .whitespaces)
         guard let type = RuleType(rawValue: rawValue) else {
             throw ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
         }
-        
+
         self.type = type
-        
+
         let countOfRequiredFields = type == .final ? 1 : 2
         guard components.count >= countOfRequiredFields else {
             throw ConfigurationSerializationError.failedToParseRule(reason: .missingField)
         }
-        
+
         if type != .final {
             expression = components.removeFirst().trimmingCharacters(in: .whitespaces)
         } else {
             expression = ""
         }
-        
+
         components = components.joined(separator: ",").components(separatedBy: "//")
         if components.count > 1 {
             policy = components.removeFirst().trimmingCharacters(in: .whitespaces)
@@ -158,10 +159,10 @@ public struct AnyRule: Rule {
             policy = components.removeFirst().trimmingCharacters(in: .whitespaces)
             comment = ""
         }
-        
+
         reloadData()
     }
-    
+
     public func match(_ pattern: String) -> Bool {
         switch type {
             case .domain:
@@ -172,15 +173,14 @@ public struct AnyRule: Rule {
                 return expression == pattern || ".\(pattern)".hasSuffix(expression)
             case .domainKeyword:
                 return pattern.contains(expression)
-            case .domainSet:
-                fallthrough
-            case .ruleSet:
+            case .domainSet, .ruleSet:
                 return standardRules.first {
                     $0.match(pattern)
                 } != nil
             case .geoIp:
                 do {
-                    let dictionary = try AnyRule.db?.lookup(ipAddress: pattern) as? [String : [String : Any]]
+                    let dictionary =
+                        try AnyRule.db?.lookup(ipAddress: pattern) as? [String: [String: Any]]
                     let country = dictionary?["country"]
                     let countryCode = country?["iso_code"] as? String
                     return self.expression == countryCode
@@ -191,7 +191,7 @@ public struct AnyRule: Rule {
                 return true
         }
     }
-    
+
     /// Load external resources from url resolved with expression, throws errors when failed.
     ///
     /// If expression is not a valid url string loading will finished with `.invalidExteranlResources` error.
@@ -200,29 +200,32 @@ public struct AnyRule: Rule {
         guard type.containsExternalResources, let dstURL = dstURL else {
             return
         }
-        
+
         guard let url = URL(string: expression), !url.isFileURL else {
-            throw ConfigurationSerializationError.failedToParseRule(reason: .invalidExternalResources)
+            throw ConfigurationSerializationError.failedToParseRule(
+                reason: .invalidExternalResources
+            )
         }
-        
-        let resources: (URL, URLResponse) = try await withCheckedThrowingContinuation { continuation in
+
+        let resources: (URL, URLResponse) = try await withCheckedThrowingContinuation {
+            continuation in
             URLSession.shared.downloadTask(with: url) { dst, response, error in
                 guard error == nil else {
                     continuation.resume(throwing: error!)
                     return
                 }
-                
+
                 continuation.resume(returning: (dst!, response!))
             }.resume()
         }
-        
+
         // Remove older file first if exists.
         if FileManager.default.fileExists(atPath: dstURL.path) {
             try FileManager.default.removeItem(at: dstURL)
         }
         try FileManager.default.moveItem(at: resources.0, to: dstURL)
     }
-    
+
     /// Load external resources from url resolved with expression.
     /// - Parameter completion: The completion handler.
     public func performExternalResourcesLoading(completion: @escaping (Error?) -> Void) {
@@ -230,23 +233,25 @@ public struct AnyRule: Rule {
             completion(nil)
             return
         }
-        
+
         guard let url = URL(string: expression), !url.isFileURL else {
-            completion(ConfigurationSerializationError.failedToParseRule(reason: .invalidExternalResources))
+            completion(
+                ConfigurationSerializationError.failedToParseRule(reason: .invalidExternalResources)
+            )
             return
         }
-        
+
         URLSession.shared.downloadTask(with: url) { srcURL, response, error in
             guard error == nil else {
                 completion(error!)
                 return
             }
-            
+
             guard let srcURL = srcURL else {
                 completion(nil)
                 return
             }
-            
+
             do {
                 // Remove older file first if exists.
                 if FileManager.default.fileExists(atPath: dstURL.path) {
@@ -260,13 +265,14 @@ public struct AnyRule: Rule {
             }
         }.resume()
     }
-    
+
     public func reloadData() {
         switch type {
             case .domainSet:
                 guard let dstURL = dstURL,
-                      let data = try? Data(contentsOf: dstURL),
-                      let file = String(data: data, encoding: .utf8) else {
+                    let data = try? Data(contentsOf: dstURL),
+                    let file = String(data: data, encoding: .utf8)
+                else {
                     return
                 }
                 standardRules = file.split(separator: "\n")
@@ -275,12 +281,15 @@ public struct AnyRule: Rule {
                         guard !literal.isEmpty else {
                             return nil
                         }
-                        return try? AnyRule(string: "\(RuleType.domainSuffix.rawValue),\(literal),\(policy)")
+                        return try? AnyRule(
+                            string: "\(RuleType.domainSuffix.rawValue),\(literal),\(policy)"
+                        )
                     }
             case .ruleSet:
                 guard let dstURL = dstURL,
-                      let data = try? Data(contentsOf: dstURL),
-                      let file = String(data: data, encoding: .utf8) else {
+                    let data = try? Data(contentsOf: dstURL),
+                    let file = String(data: data, encoding: .utf8)
+                else {
                     return
                 }
                 standardRules = file.split(separator: "\n")
@@ -298,15 +307,17 @@ public struct AnyRule: Rule {
 }
 
 extension AnyRule: Codable {
-    
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         try self.init(string: container.decode(String.self))
     }
-    
+
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        var string = type == .final ? "\(type.rawValue),\(policy)" : "\(type.rawValue),\(expression),\(policy)"
+        var string =
+            type == .final
+            ? "\(type.rawValue),\(policy)" : "\(type.rawValue),\(expression),\(policy)"
         if !comment.isEmpty {
             string.append(" // \(comment)")
         }

@@ -13,8 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 public protocol SOCKS5ConfigurationProtocol {
-    
-    var password: String? { get set}
-    
+
+    var password: String? { get set }
+
     var username: String? { get set }
 }

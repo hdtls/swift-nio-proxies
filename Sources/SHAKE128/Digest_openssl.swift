@@ -31,18 +31,18 @@ protocol HashFunctionImplementationDetails: HashFunction where Digest: DigestPri
 
 struct OpenSSLDigestImpl<H: HashFunctionImplementationDetails> {
     private var context: DigestContext
-    
+
     init() {
         self.context = DigestContext()
     }
-    
+
     internal mutating func update(data: UnsafeRawBufferPointer) {
         if !isKnownUniquelyReferenced(&self.context) {
             self.context = DigestContext(copying: self.context)
         }
         self.context.update(data: data)
     }
-    
+
     internal func finalize() -> H.Digest {
         // To have a non-destructive finalize operation we must allocate.
         let copyContext = DigestContext(copying: self.context)
@@ -52,7 +52,7 @@ struct OpenSSLDigestImpl<H: HashFunctionImplementationDetails> {
             H.Digest(bufferPointer: $0)!
         }
     }
-    
+
     internal func read(digestSize: Int) -> H.Digest {
         // To have a non-destructive finalize operation we must allocate.
         let copyContext = self.context
@@ -67,21 +67,25 @@ struct OpenSSLDigestImpl<H: HashFunctionImplementationDetails> {
 class DigestContext {
 
     private var contextPointer: UnsafeMutablePointer<CSHAKE128.sha3_ctx_t>
-    
+
     init() {
         // We force unwrap because we cannot recover from allocation failure.
-        self.contextPointer = UnsafeMutablePointer<CSHAKE128.sha3_ctx_t>.allocate(capacity: MemoryLayout<CSHAKE128.sha3_ctx_t>.size)
+        self.contextPointer = UnsafeMutablePointer<CSHAKE128.sha3_ctx_t>.allocate(
+            capacity: MemoryLayout<CSHAKE128.sha3_ctx_t>.size
+        )
         self.contextPointer.initialize(to: .init())
 
         CSHAKE128_shake128_init(self.contextPointer)
     }
-    
+
     init(copying original: DigestContext) {
         // We force unwrap because we cannot recover from allocation failure.
-        self.contextPointer = UnsafeMutablePointer<CSHAKE128.sha3_ctx_t>.allocate(capacity: MemoryLayout<CSHAKE128.sha3_ctx_t>.size)
+        self.contextPointer = UnsafeMutablePointer<CSHAKE128.sha3_ctx_t>.allocate(
+            capacity: MemoryLayout<CSHAKE128.sha3_ctx_t>.size
+        )
         self.contextPointer.initialize(to: original.contextPointer.pointee)
     }
-    
+
     func update(data: UnsafeRawBufferPointer) {
         guard let baseAddress = data.baseAddress else {
             return
@@ -89,31 +93,31 @@ class DigestContext {
         CSHAKE128_shake_update(self.contextPointer, baseAddress, data.count)
         CSHAKE128_shake_xof(self.contextPointer)
     }
-    
+
     func read(digestSize: Int) -> [UInt8] {
         var digestBytes = Array(repeating: UInt8(0), count: Int(digestSize))
-        
+
         digestBytes.withUnsafeMutableBytes { digestPointer in
             assert(digestPointer.count == digestSize)
             CSHAKE128_shake_read(self.contextPointer, digestPointer.baseAddress, digestSize)
         }
-        
+
         return digestBytes
     }
-    
+
     // This finalize function is _destructive_: do not call it if you want to reuse the object!
     func finalize() -> [UInt8] {
         let digestSize = 16
         var digestBytes = Array(repeating: UInt8(0), count: Int(digestSize))
-        
+
         digestBytes.withUnsafeMutableBytes { digestPointer in
             assert(digestPointer.count == digestSize)
             CSHAKE128_shake_read(self.contextPointer, digestPointer.baseAddress, digestSize)
         }
-        
+
         return digestBytes
     }
-    
+
     deinit {
         self.contextPointer.deinitialize(count: MemoryLayout<CSHAKE128.sha3_ctx_t>.size)
         self.contextPointer.deallocate()

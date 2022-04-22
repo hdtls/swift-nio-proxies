@@ -17,30 +17,30 @@ import NIOCore
 import NIOHTTP1
 
 public final class HTTPCaptureHandler<HeadT: Equatable>: ChannelInboundHandler {
-    
+
     public typealias InboundIn = HTTPPart<HeadT, ByteBuffer>
-    
+
     private var head: HeadT?
     private var body: ByteBuffer!
     private var trailers: HTTPHeaders?
-    
+
     public let logger: Logger
 
     public init(logger: Logger) {
         self.logger = logger
-        
+
         guard HeadT.self == HTTPRequestHead.self || HeadT.self == HTTPResponseHead.self else {
             preconditionFailure("unknown HTTP head part type \(HeadT.self)")
         }
     }
-    
+
     public func handlerAdded(context: ChannelHandlerContext) {
         body = context.channel.allocator.buffer(capacity: 512)
     }
 
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         context.fireChannelRead(data)
-        
+
         switch unwrapInboundIn(data) {
             case .head(let head):
                 self.head = head
@@ -50,27 +50,27 @@ public final class HTTPCaptureHandler<HeadT: Equatable>: ChannelInboundHandler {
                 body.writeBuffer(&byteBuffer)
             case .end(let trailers):
                 var msg = "\n"
-                
+
                 if let headPart = head as? HTTPRequestHead {
                     msg += headPart.prettyPrintDescription
                 } else {
                     let headPart = head as! HTTPResponseHead
                     msg += headPart.headers.prettyPrintDescription
                 }
-                
+
                 if let str = body.readString(length: body.readableBytes) {
                     msg += "\n\(String(describing: str))"
                 }
-                
+
                 msg += "\n" + (trailers?.prettyPrintDescription ?? "")
-                
+
                 logger.info("\(msg)")
         }
     }
 }
 
 extension HTTPHeaders {
-    
+
     var prettyPrintDescription: String {
         self.map { field in
             "\(field.name) \(field.value)"
@@ -79,14 +79,14 @@ extension HTTPHeaders {
 }
 
 extension HTTPRequestHead {
-    
+
     var prettyPrintDescription: String {
         "\(self.method) \(self.version) \(self.uri)\n\( self.headers.prettyPrintDescription)"
     }
 }
 
 extension HTTPResponseHead {
-    
+
     var prettyPrintDescription: String {
         "\(self.version) \(self.status)\n\(self.headers.prettyPrintDescription)"
     }

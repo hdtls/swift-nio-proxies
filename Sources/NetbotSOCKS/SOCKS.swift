@@ -14,5 +14,5 @@
 
 import Foundation
 @_exported import Logging
-@_exported import NetbotCore
 @_exported import NIOCore
+@_exported import NetbotCore

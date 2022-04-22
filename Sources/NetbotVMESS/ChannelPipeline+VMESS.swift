@@ -13,54 +13,67 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import NetbotCore
 import NIOCore
+import NetbotCore
 
 extension ChannelPipeline {
-    
-    public func addVMESSClientHandlers(logger: Logger = .init(label: "com.netbot.vmess"),
-                                       configuration: VMESSConfigurationProtocol,
-                                       destinationAddress: NetAddress,
-                                       position: Position = .last) -> EventLoopFuture<Void> {
+
+    public func addVMESSClientHandlers(
+        logger: Logger = .init(label: "com.netbot.vmess"),
+        configuration: VMESSConfigurationProtocol,
+        destinationAddress: NetAddress,
+        position: Position = .last
+    ) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
-        
+
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
-                try syncOperations.addVMESSClientHandlers(logger: logger,
-                                                          configuration: configuration,
-                                                          destinationAddress: destinationAddress,
-                                                          position: position)
+                try syncOperations.addVMESSClientHandlers(
+                    logger: logger,
+                    configuration: configuration,
+                    destinationAddress: destinationAddress,
+                    position: position
+                )
             }
             eventLoopFuture = eventLoop.makeCompletedFuture(result)
         } else {
             eventLoopFuture = eventLoop.submit({
-                try self.syncOperations.addVMESSClientHandlers(logger: logger,
-                                                               configuration: configuration,
-                                                               destinationAddress: destinationAddress,
-                                                               position: position)
+                try self.syncOperations.addVMESSClientHandlers(
+                    logger: logger,
+                    configuration: configuration,
+                    destinationAddress: destinationAddress,
+                    position: position
+                )
             })
         }
-        
+
         return eventLoopFuture
     }
 }
 
 extension ChannelPipeline.SynchronousOperations {
-    
-    public func addVMESSClientHandlers(logger: Logger = .init(label: "com.netbot.vmess"),
-                                       configuration: VMESSConfigurationProtocol,
-                                       destinationAddress: NetAddress,
-                                       position: ChannelPipeline.Position = .last) throws {
+
+    public func addVMESSClientHandlers(
+        logger: Logger = .init(label: "com.netbot.vmess"),
+        configuration: VMESSConfigurationProtocol,
+        destinationAddress: NetAddress,
+        position: ChannelPipeline.Position = .last
+    ) throws {
         eventLoop.assertInEventLoop()
-        
-        let configuration: Configuration = .init(id: configuration.user, algorithm: .aes128gcm, command: .tcp, options: .masking)
-        
+
+        let configuration: Configuration = .init(
+            id: configuration.user,
+            algorithm: .aes128gcm,
+            command: .tcp,
+            options: .masking
+        )
+
         let symmetricKey = SecureBytes(count: 16)
-        
+
         let nonce = SecureBytes(count: 16)
-        
+
         let authenticationCode = UInt8.random(in: 0...UInt8.max)
-        
+
         let outboundHandler = RequestEncodingHandler(
             logger: logger,
             authenticationCode: authenticationCode,
@@ -69,7 +82,7 @@ extension ChannelPipeline.SynchronousOperations {
             configuration: configuration,
             taskAddress: destinationAddress
         )
-                
+
         let responseDecoder = ResponseHeaderDecoder(
             logger: logger,
             authenticationCode: authenticationCode,
@@ -77,20 +90,20 @@ extension ChannelPipeline.SynchronousOperations {
             nonce: nonce,
             configuration: configuration
         )
-        
+
         let frameDecoder = LengthFieldBasedFrameDecoder(
             logger: logger,
             symmetricKey: symmetricKey,
             nonce: nonce,
             configuration: configuration
         )
-        
+
         let handlers: [ChannelHandler] = [
             ByteToMessageHandler(responseDecoder),
             ByteToMessageHandler(frameDecoder),
-            outboundHandler
+            outboundHandler,
         ]
-        
+
         try addHandlers(handlers, position: position)
     }
 }

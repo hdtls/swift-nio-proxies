@@ -13,17 +13,17 @@
 //===----------------------------------------------------------------------===//
 
 public enum SOCKS5ProxyError: Error, Equatable {
-    
+
     public enum SerializationFailureReason {
         case needMoreBytes
         case invalidInputBytes
     }
-    
+
     public enum AuthenticationFailureReason {
         case incorrectUsernameOrPassword
         case noMethodImpl
     }
-    
+
     case disconnected
     case serializeFailed(reason: SerializationFailureReason)
     case authenticationFailed(reason: AuthenticationFailureReason)
@@ -42,30 +42,30 @@ extension SOCKS5ProxyError.SerializationFailureReason {
 
 /// Wrapper for SOCKS protcol error.
 public enum SOCKSError: Error, Equatable {
-    
+
     /// The SOCKS client was in a different state to that required.
     case invalidClientState
-    
+
     /// The SOCKS server was in a different state to that required.
     case invalidServerState
-    
+
     /// The protocol version was something other than *5*. Note that
     /// we currently only supported SOCKv5.
     case invalidProtocolVersion(actual: UInt8)
-    
+
     /// Reserved bytes should always be the `NULL` byte *0x00*. Something
     /// else was encountered.
     case invalidReservedByte(actual: UInt8)
-    
+
     /// SOCKSv5 only supports IPv4 (*0x01*), IPv6 (*0x04*), or FQDN(*0x03*).
     case invalidAddressType(actual: UInt8)
-    
+
     /// The server selected an authentication method not supported by the client.
     case invalidAuthenticationSelection(AuthenticationMethod)
-        
+
     /// Missing authentication credential.
     case missingCredential
-    
+
     ///  The SOCKS server failed to connect to the target host.
     public enum ReplyFailureReason {
         case generalSOCKSServerFailure
@@ -78,19 +78,19 @@ public enum SOCKSError: Error, Equatable {
         case addressTypeNotSupported
         case unassigned
     }
-    
+
     case replyFailed(reason: ReplyFailureReason)
 
     /// The client or server receieved data when it did not expect to.
     case unexpectedRead
-    
+
     public enum AuthenticationFailureReason {
         case incorrectUsernameOrPassword
         case noMethodImpl
         /// The client and server were unable to agree on an authentication method.
         case noValidAuthenticationMethod
     }
-    
+
     case authenticationFailed(reason: AuthenticationFailureReason)
 
 }
@@ -175,9 +175,9 @@ extension SOCKSError: CustomStringConvertible {
                 return "Invalid authentication selection."
             case .missingCredential:
                 return "Missing authentication credential."
-            case .replyFailed(reason: let reason):
+            case .replyFailed(let reason):
                 return reason.localizedDescription
-            case .authenticationFailed(reason: let reason):
+            case .authenticationFailed(let reason):
                 return reason.localizedDescription
             case .unexpectedRead:
                 return "Unexpected read data."

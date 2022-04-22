@@ -13,16 +13,16 @@
 //===----------------------------------------------------------------------===//
 
 public protocol HTTPProxyConfigurationProtocol {
-    
+
     var username: String? { get set }
-    
+
     var password: String? { get set }
-    
+
     var prefererHttpTunneling: Bool { get set }
 }
 
 extension HTTPProxyConfigurationProtocol {
-    
+
     var authorization: BasicAuthorization? {
         guard let username = username, let password = password else {
             return nil

@@ -15,15 +15,15 @@
 import Foundation
 
 struct DocumentParser {
-    
+
     private var byteBuffer: ByteBuffer
-    
+
     private var previous: UInt8?
-    
+
     init(byteBuffer: ByteBuffer) {
         self.byteBuffer = byteBuffer
     }
-    
+
     enum LineValue {
         case comment(String)
         case blank
@@ -31,24 +31,24 @@ struct DocumentParser {
         case string(String)
         case object((String, String))
     }
-    
+
     mutating func parse() throws -> [LineValue] {
         var lines: [LineValue] = []
-        
+
         while let next = try parseLine() {
             lines.append(next)
         }
-        
+
         return lines
     }
-    
+
     private mutating func parseLine() throws -> LineValue? {
         consumeWhitespace()
-        
+
         guard let ascii = peek() else {
             return nil
         }
-        
+
         switch (ascii, previous) {
             case (.octothorpe, _), (.semicolon, _):
                 self.previous = ascii
@@ -72,23 +72,25 @@ struct DocumentParser {
                 return parseLine0()
         }
     }
-    
+
     private mutating func parseLine0() -> LineValue {
         let keyLength = self.byteBuffer.countDistance(to: .equal)
         let maxLength = self.byteBuffer.countDistance(to: .newLine) ?? self.byteBuffer.readableBytes
-        
+
         // Ensure that have equal mark and the equal is in current line.
         guard let keyLength = keyLength, keyLength <= maxLength else {
             return .string(readStringTillNextLine())
         }
-        
-        let key = self.byteBuffer.readString(length: keyLength)!.trimmingCharacters(in: .whitespaces)
-        
-        self.pop() // =
-        
+
+        let key = self.byteBuffer.readString(length: keyLength)!.trimmingCharacters(
+            in: .whitespaces
+        )
+
+        self.pop()  // =
+
         return .object((key, readStringTillNextLine()))
     }
-    
+
     private mutating func consumeWhitespace() {
         while let ascii = self.peek() {
             guard case .space = ascii else {
@@ -97,20 +99,21 @@ struct DocumentParser {
             self.pop()
         }
     }
-    
+
     private mutating func peek() -> UInt8? {
         self.byteBuffer.getInteger(at: self.byteBuffer.readerIndex)
     }
-    
+
     private mutating func pop() {
         self.byteBuffer.moveReaderIndex(forwardBy: 1)
     }
-    
+
     private mutating func readStringTillNextLine() -> String {
-        let readLength = self.byteBuffer.countDistance(to: .newLine) ?? self.byteBuffer.readableBytes
-        
+        let readLength =
+            self.byteBuffer.countDistance(to: .newLine) ?? self.byteBuffer.readableBytes
+
         let output = self.byteBuffer.readString(length: readLength)!
-        
+
         guard let first = output.first, let last = output.last else {
             return output.trimmingCharacters(in: .whitespaces)
         }
@@ -130,7 +133,7 @@ struct DocumentParser {
 }
 
 extension ByteBuffer {
-    
+
     fileprivate func countDistance(to byte: UInt8) -> Int? {
         var copy = self
         var found = false
@@ -152,25 +155,25 @@ extension ByteBuffer {
 }
 
 extension UInt8 {
-    
+
     internal static let space = UInt8(ascii: " ")
     internal static let `return` = UInt8(ascii: "\r")
     internal static let newLine = UInt8(ascii: "\n")
     internal static let tab = UInt8(ascii: "\t")
-    
+
     internal static let octothorpe = UInt8(ascii: "#")
     internal static let semicolon = UInt8(ascii: ";")
     internal static let colon = UInt8(ascii: ":")
     internal static let comma = UInt8(ascii: ",")
-    
+
     internal static let openbrace = UInt8(ascii: "{")
     internal static let closebrace = UInt8(ascii: "}")
-    
+
     internal static let openbracket = UInt8(ascii: "[")
     internal static let closebracket = UInt8(ascii: "]")
-    
+
     internal static let quote = UInt8(ascii: "\"")
     internal static let backslash = UInt8(ascii: "\\")
-    
+
     internal static let equal = UInt8(ascii: "=")
 }

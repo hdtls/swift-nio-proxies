@@ -17,7 +17,7 @@ import NIOCore
 
 /// Source of new connections for `ConnectionPool`.
 public protocol ConnectionPoolSource {
-    
+
     /// Creates a new connection.
     func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel>
 }

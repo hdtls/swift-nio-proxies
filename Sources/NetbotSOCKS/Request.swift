@@ -26,22 +26,22 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NetbotCore
 import NIOCore
+import NetbotCore
 
 /// Instructs the SOCKS proxy server of the target host,
 /// and how to connect.
 public struct Request: Hashable {
-    
+
     /// The SOCKS protocol version - we currently only support v5.
     public let version: ProtocolVersion = .v5
-    
+
     /// How to connect to the host.
     public var command: Command
-    
+
     /// The target host address.
     public var address: NetAddress
-    
+
     /// Creates a new `Request`.
     /// - parameter command: How to connect to the host.
     /// - parameter address: The target host address.
@@ -52,7 +52,7 @@ public struct Request: Hashable {
 }
 
 extension ByteBuffer {
-    
+
     @discardableResult mutating func writeClientRequest(_ request: Request) -> Int {
         var written = writeInteger(request.version.rawValue)
         written += writeInteger(request.command.value)
@@ -60,7 +60,7 @@ extension ByteBuffer {
         written += applying(request.address)
         return written
     }
-    
+
     @discardableResult mutating func readClientRequestIfPossible() throws -> Request? {
         return try parseUnwindingIfNeeded { buffer -> Request? in
             guard
@@ -74,26 +74,26 @@ extension ByteBuffer {
             return .init(command: .init(value: command), address: address)
         }
     }
-    
+
 }
 
 /// What type of connection the SOCKS server should establish with
 /// the target host.
 public struct Command: Hashable {
-    
+
     /// Typically the primary connection type, suitable for HTTP.
     public static let connect = Command(value: 0x01)
-    
+
     /// Used in protocols that require the client to accept connections
     /// from the server, e.g. FTP.
     public static let bind = Command(value: 0x02)
-    
+
     /// Used to establish an association within the UDP relay process to
     /// handle UDP datagrams.
     public static let udpAssociate = Command(value: 0x03)
-    
+
     public var value: UInt8
-    
+
     public init(value: UInt8) {
         self.value = value
     }

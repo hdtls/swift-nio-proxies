@@ -38,28 +38,28 @@ extension HTTPHeaders {
         public func hash(into hasher: inout Hasher) {
             self.lowercased.hash(into: &hasher)
         }
-        
+
         /// Lowercased-ASCII version of the header.
         internal let lowercased: String
-        
+
         /// Create a HTTP header name with the provided String.
         public init(_ name: String) {
             self.lowercased = name.lowercased()
         }
-        
+
         /// `ExpressibleByStringLiteral` conformance.
         public init(stringLiteral: String) {
             self.init(stringLiteral)
         }
-        
+
         /// See `CustomStringConvertible.description`
         public var description: String {
             return lowercased
         }
-        
+
         // https://www.iana.org/assignments/message-headers/message-headers.xhtml
         // Permanent Message Header Field Names
-        
+
         /// A-IM header.
         public static let aIM = Name("A-IM")
         /// Accept header.
@@ -372,8 +372,7 @@ extension HTTPHeaders {
         public static let xFrameOptions = Name("X-Frame-Options")
         /// X-XSS-Protection header
         public static let xssProtection = Name("X-XSS-Protection")
-        
-        
+
         // https://www.iana.org/assignments/message-headers/message-headers.xhtml
         // Provisional Message Header Field Names
         /// Access-Control header.
@@ -455,7 +454,7 @@ extension HTTPHeaders {
         /// X-Forwarded-Proto header.
         public static let xForwardedProto = Name("X-Forwarded-Proto")
     }
-    
+
     /// Add a header name/value pair to the block.
     ///
     /// This method is strictly additive: if there are other values for the given header name
@@ -469,7 +468,7 @@ extension HTTPHeaders {
     public mutating func add(name: Name, value: String) {
         self.add(name: name.lowercased, value: value)
     }
-    
+
     /// Add a header name/value pair to the block, replacing any previous values for the
     /// same header name that are already in the block.
     ///
@@ -486,7 +485,7 @@ extension HTTPHeaders {
     public mutating func replaceOrAdd(name: Name, value: String) {
         self.replaceOrAdd(name: name.lowercased, value: value)
     }
-    
+
     /// Remove all values for a given header name from the block.
     ///
     /// This method uses case-insensitive comparisons for the header field name.
@@ -495,7 +494,7 @@ extension HTTPHeaders {
     public mutating func remove(name: Name) {
         self.remove(name: name.lowercased)
     }
-    
+
     /// Retrieve all of the values for a given header field name from the block.
     ///
     /// This method uses case-insensitive comparisons for the header field name. It
@@ -510,19 +509,19 @@ extension HTTPHeaders {
     public subscript(name: Name) -> [String] {
         self[name.lowercased]
     }
-    
+
     /// Returns `true` if the `HTTPHeaders` contains a value for the supplied name.
     /// - Parameter name: The header field name to check.
     public func contains(name: Name) -> Bool {
         self.contains(name: name.lowercased)
     }
-    
+
     /// Returns the first header value with the supplied name.
     /// - Parameter name: The header field name whose values are to be retrieved.
     public func first(name: Name) -> String? {
         self.first(name: name.lowercased)
     }
-    
+
     public subscript(canonicalForm name: Name) -> [Substring] {
         self[canonicalForm: name.lowercased]
     }
@@ -538,4 +537,3 @@ extension HTTPHeaders: CustomDebugStringConvertible {
         return desc.joined(separator: "\n")
     }
 }
-

@@ -19,10 +19,10 @@ import Foundation
 /// We don't care about rawValue is uppercase or lowercase for example:
 ///     CryptoAlgorithm(rawValue: "aes-128-gcm") == CryptoAlgorithm(rawValue: "AES-128-GCM") // true
 public enum CryptoAlgorithm: String, CaseIterable, Equatable {
-    
+
     case aes128Gcm = "AES-128-GCM"
     case chaCha20Poly1305 = "ChaCha20-Poly1305"
-    
+
     public init?(rawValue: String) {
         switch rawValue.uppercased() {
             case CryptoAlgorithm.aes128Gcm.rawValue:
@@ -35,10 +35,9 @@ public enum CryptoAlgorithm: String, CaseIterable, Equatable {
     }
 }
 
-
 public protocol ShadowsocksConfigurationProtocol {
-    
+
     var algorithm: CryptoAlgorithm { get }
-    
+
     var passwordReference: String { get }
 }

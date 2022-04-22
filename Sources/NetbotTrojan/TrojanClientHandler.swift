@@ -17,33 +17,37 @@ import NIOCore
 import NetbotCore
 
 final public class TrojanClientHandler: ChannelOutboundHandler {
-        
+
     public typealias OutboundIn = ByteBuffer
-    
+
     public var logger: Logger
     public let password: String
     public let taskAddress: NetAddress
-    
+
     private var isTunneling: Bool = false
-    
+
     public init(logger: Logger, password: String, taskAddress: NetAddress) {
         self.logger = logger
         self.password = password
         self.taskAddress = taskAddress
     }
-    
-    public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
+
+    public func write(
+        context: ChannelHandlerContext,
+        data: NIOAny,
+        promise: EventLoopPromise<Void>?
+    ) {
         guard !self.isTunneling else {
             context.write(data, promise: promise)
             return
         }
-        
+
         let crlf = "\r\n"
-        
+
         var data = unwrapOutboundIn(data)
-        
+
         var out = context.channel.allocator.buffer(capacity: data.readableBytes)
-        
+
         let hashValue = SHA224.hash(data: Array(self.password.utf8))
 
         out.writeString(Array(hashValue).hexString)
@@ -52,7 +56,7 @@ final public class TrojanClientHandler: ChannelOutboundHandler {
         out.writeAddress(taskAddress)
         out.writeString(crlf)
         out.writeBuffer(&data)
-        
+
         context.write(NIOAny(out), promise: promise)
     }
 }

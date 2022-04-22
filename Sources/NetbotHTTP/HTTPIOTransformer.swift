@@ -17,10 +17,10 @@ import NIOHTTP1
 
 /// Transfer inbound from `HTTPPart<HeadT, ByteBuffer>` to `HTTPPart<HeadT, IOData>`.
 public final class HTTPIOTransformer<HeadT: Equatable>: ChannelInboundHandler {
-    
+
     public typealias InboundIn = HTTPPart<HeadT, ByteBuffer>
     public typealias InboundOut = HTTPPart<HeadT, IOData>
-        
+
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         switch unwrapInboundIn(data) {
             case .head(let head):

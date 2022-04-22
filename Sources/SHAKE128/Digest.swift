@@ -26,13 +26,15 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+
 #if canImport(Crypto)
 @_exported import Crypto
 #endif
 
 #if !canImport(Crypto)
 /// A protocol defining requirements for digests
-public protocol Digest: Hashable, ContiguousBytes, CustomStringConvertible, Sequence where Element == UInt8 {
+public protocol Digest: Hashable, ContiguousBytes, CustomStringConvertible, Sequence
+where Element == UInt8 {
     static var byteCount: Int { get }
 }
 #endif
@@ -47,7 +49,7 @@ extension DigestPrivate {
         let some = bytes.withUnsafeBytes { bufferPointer in
             return Self(bufferPointer: bufferPointer)
         }
-        
+
         if some != nil {
             self = some!
         } else {
@@ -69,7 +71,7 @@ extension Digest {
     public static func == (lhs: Self, rhs: Self) -> Bool {
         return openSSLSafeCompare(lhs, rhs)
     }
-    
+
     public static func == <D: DataProtocol>(lhs: Self, rhs: D) -> Bool {
         if rhs.regions.count != 1 {
             let rhsContiguous = Data(rhs)
@@ -78,7 +80,7 @@ extension Digest {
             return openSSLSafeCompare(lhs, rhs.regions.first!)
         }
     }
-    
+
     public var description: String {
         return "\(Self.self): \(Array(self).hexString)"
     }

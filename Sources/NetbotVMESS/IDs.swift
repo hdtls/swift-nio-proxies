@@ -23,4 +23,6 @@ let KDFSaltConstVMessAEADKDF = "VMess AEAD KDF".data(using: .utf8)!
 let KDFSaltConstVMessHeaderPayloadAEADKey = "VMess Header AEAD Key".data(using: .utf8)!
 let KDFSaltConstVMessHeaderPayloadAEADIV = "VMess Header AEAD Nonce".data(using: .utf8)!
 let KDFSaltConstVMessHeaderPayloadLengthAEADKey = "VMess Header AEAD Key_Length".data(using: .utf8)!
-let KDFSaltConstVMessHeaderPayloadLengthAEADIV = "VMess Header AEAD Nonce_Length".data(using: .utf8)!
+let KDFSaltConstVMessHeaderPayloadLengthAEADIV = "VMess Header AEAD Nonce_Length".data(
+    using: .utf8
+)!

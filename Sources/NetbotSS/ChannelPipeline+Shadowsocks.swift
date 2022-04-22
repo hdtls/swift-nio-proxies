@@ -14,48 +14,62 @@
 
 import Foundation
 import Logging
-import NetbotCore
 import NIOCore
+import NetbotCore
 
 extension ChannelPipeline {
-    
-    public func addSSClientHandlers(logger: Logger,
-                                    configuration: ShadowsocksConfigurationProtocol,
-                                    taskAddress: NetAddress,
-                                    position: Position = .last) -> EventLoopFuture<Void> {
+
+    public func addSSClientHandlers(
+        logger: Logger,
+        configuration: ShadowsocksConfigurationProtocol,
+        taskAddress: NetAddress,
+        position: Position = .last
+    ) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
-        
+
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
-                try syncOperations.addSSClientHandlers(logger: logger,
-                                                       configuration: configuration,
-                                                       taskAddress: taskAddress,
-                                                       position: position)
+                try syncOperations.addSSClientHandlers(
+                    logger: logger,
+                    configuration: configuration,
+                    taskAddress: taskAddress,
+                    position: position
+                )
             }
             eventLoopFuture = eventLoop.makeCompletedFuture(result)
         } else {
             eventLoopFuture = eventLoop.submit {
-                try self.syncOperations.addSSClientHandlers(logger: logger,
-                                                            configuration: configuration,
-                                                            taskAddress: taskAddress,
-                                                            position: position)
+                try self.syncOperations.addSSClientHandlers(
+                    logger: logger,
+                    configuration: configuration,
+                    taskAddress: taskAddress,
+                    position: position
+                )
             }
         }
-        
+
         return eventLoopFuture
     }
 }
 
 extension ChannelPipeline.SynchronousOperations {
-    
-    public func addSSClientHandlers(logger: Logger,
-                                    configuration: ShadowsocksConfigurationProtocol,
-                                    taskAddress: NetAddress,
-                                    position: ChannelPipeline.Position = .last) throws {
+
+    public func addSSClientHandlers(
+        logger: Logger,
+        configuration: ShadowsocksConfigurationProtocol,
+        taskAddress: NetAddress,
+        position: ChannelPipeline.Position = .last
+    ) throws {
         eventLoop.assertInEventLoop()
         let inboundDecoder = ResponseDecoder(configuration: configuration)
-        let outboundEncoder = RequestEncoder(logger: logger, configuration: configuration, taskAddress: taskAddress)
-        let handlers: [ChannelHandler] = [ByteToMessageHandler(inboundDecoder), MessageToByteHandler(outboundEncoder)]
+        let outboundEncoder = RequestEncoder(
+            logger: logger,
+            configuration: configuration,
+            taskAddress: taskAddress
+        )
+        let handlers: [ChannelHandler] = [
+            ByteToMessageHandler(inboundDecoder), MessageToByteHandler(outboundEncoder),
+        ]
         try addHandlers(handlers, position: position)
     }
 }

@@ -46,21 +46,23 @@ import NIOCore
 ///
 
 public class ResponseDecoder: ByteToMessageDecoder {
-    
+
     public typealias InboundOut = ByteBuffer
-    
+
     public let configuration: ShadowsocksConfigurationProtocol
-    
+
     private var symmetricKey: SymmetricKey!
-    
+
     private var nonce: [UInt8]
-    
+
     public init(configuration: ShadowsocksConfigurationProtocol) {
         self.configuration = configuration
         self.nonce = .init(repeating: 0, count: 12)
     }
-    
-    public func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws -> DecodingState {
+
+    public func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws
+        -> DecodingState
+    {
         if symmetricKey == nil {
             let saltByteCount = 32
             let keyByteCount = 32
@@ -68,22 +70,26 @@ public class ResponseDecoder: ByteToMessageDecoder {
                 return .needMoreData
             }
             let salt = buffer.readBytes(length: saltByteCount)!
-            symmetricKey = hkdfDerivedSymmetricKey(secretKey: configuration.passwordReference, salt: salt, outputByteCount: keyByteCount)
+            symmetricKey = hkdfDerivedSymmetricKey(
+                secretKey: configuration.passwordReference,
+                salt: salt,
+                outputByteCount: keyByteCount
+            )
         }
-        
+
         let tagByteCount = 16
         let trunkSize = 2
-        
+
         var copyLength = trunkSize + tagByteCount
-        
+
         guard buffer.readableBytes > copyLength else {
             return .needMoreData
         }
-        
+
         var combined = nonce + buffer.readBytes(length: copyLength)!
-        
+
         var bytes: Data
-        
+
         switch configuration.algorithm {
             case .aes128Gcm:
                 let sealedBox = try AES.GCM.SealedBox.init(combined: combined)
@@ -92,20 +98,20 @@ public class ResponseDecoder: ByteToMessageDecoder {
                 let sealedBox = try ChaChaPoly.SealedBox.init(combined: combined)
                 bytes = try ChaChaPoly.open(sealedBox, using: symmetricKey)
         }
-        
+
         copyLength = bytes.withUnsafeBytes {
             Int($0.bindMemory(to: UInt16.self).baseAddress!.pointee.bigEndian) + tagByteCount
         }
-        
+
         guard buffer.readableBytes >= copyLength else {
             buffer.moveReaderIndex(to: buffer.readerIndex - trunkSize - tagByteCount)
             return .needMoreData
         }
-        
+
         nonce.increment(nonce.count)
-        
+
         combined = nonce + buffer.readBytes(length: copyLength)!
-        
+
         switch configuration.algorithm {
             case .aes128Gcm:
                 let sealedBox = try AES.GCM.SealedBox.init(combined: combined)
@@ -116,12 +122,12 @@ public class ResponseDecoder: ByteToMessageDecoder {
         }
 
         nonce.increment(nonce.count)
-        
+
         context.fireChannelRead(wrapInboundOut(ByteBuffer(bytes: bytes)))
-        
+
         return .continue
     }
-    
+
 }
 
 enum Packet {
@@ -130,21 +136,23 @@ enum Packet {
 }
 
 public class RequestDecoder: ByteToMessageDecoder {
-    
+
     public typealias InboundOut = ByteBuffer
-    
+
     public let secretKey: String
-    
+
     private var symmetricKey: SymmetricKey!
-    
+
     private var nonce: [UInt8]
-    
+
     public init(secretKey: String) {
         self.secretKey = secretKey
         self.nonce = .init(repeating: 0, count: 12)
     }
-    
-    public func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws -> DecodingState {
+
+    public func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws
+        -> DecodingState
+    {
         var symmetricKey = symmetricKey
         if symmetricKey == nil {
             let saltByteCount = 32
@@ -153,38 +161,42 @@ public class RequestDecoder: ByteToMessageDecoder {
                 return .needMoreData
             }
             let salt = buffer.readBytes(length: saltByteCount)!
-            symmetricKey = hkdfDerivedSymmetricKey(secretKey: secretKey, salt: salt, outputByteCount: keyByteCount)
+            symmetricKey = hkdfDerivedSymmetricKey(
+                secretKey: secretKey,
+                salt: salt,
+                outputByteCount: keyByteCount
+            )
         }
-        
+
         let tagByteCount = 16
         let trunkSize = 2
-        
+
         var copyLength = trunkSize + tagByteCount
-        
+
         guard buffer.readableBytes > copyLength else {
             return .needMoreData
         }
-        
+
         var combined = nonce + buffer.readBytes(length: copyLength)!
         var sealedBox = try ChaChaPoly.SealedBox.init(combined: combined)
         var bytes = try ChaChaPoly.open(sealedBox, using: symmetricKey!)
         copyLength = bytes.withUnsafeBytes {
             Int($0.bindMemory(to: UInt16.self).baseAddress!.pointee.bigEndian) + tagByteCount
         }
-        
+
         guard buffer.readableBytes >= copyLength else {
             buffer.moveReaderIndex(to: buffer.readerIndex - trunkSize - tagByteCount)
             return .needMoreData
         }
-        
+
         nonce.increment(nonce.count)
-        
+
         combined = nonce + buffer.readBytes(length: copyLength)!
         sealedBox = try ChaChaPoly.SealedBox.init(combined: combined)
         bytes = try ChaChaPoly.open(sealedBox, using: symmetricKey!)
-        
+
         nonce.increment(nonce.count)
-        
+
         if self.symmetricKey == nil {
             self.symmetricKey = symmetricKey
             context.fireChannelRead(NIOAny(Packet.address(try! bytes.readAddressIfPossible()!)))
@@ -193,5 +205,5 @@ public class RequestDecoder: ByteToMessageDecoder {
         }
         return .needMoreData
     }
-    
+
 }

@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Dispatch
 import NIOCore
 import NIOPosix
 
@@ -25,8 +26,6 @@ import NIOPosix
 /// needed to implement it.
 ///
 /// This resolver is a single-use object: it can only be used to perform a single host resolution.
-
-import Dispatch
 
 #if os(Linux) || os(FreeBSD) || os(Android)
 import CNIOLinux
@@ -61,23 +60,23 @@ extension NIOBSDSocket {
 extension NIOBSDSocket.SocketType {
     /// Supports datagrams, which are connectionless, unreliable messages of a
     /// fixed (typically small) maximum length.
-#if os(Linux)
+    #if os(Linux)
     internal static let datagram: NIOBSDSocket.SocketType =
-    NIOBSDSocket.SocketType(rawValue: CInt(SOCK_DGRAM.rawValue))
-#else
+        NIOBSDSocket.SocketType(rawValue: CInt(SOCK_DGRAM.rawValue))
+    #else
     internal static let datagram: NIOBSDSocket.SocketType =
-    NIOBSDSocket.SocketType(rawValue: SOCK_DGRAM)
-#endif
-    
+        NIOBSDSocket.SocketType(rawValue: SOCK_DGRAM)
+    #endif
+
     /// Supports reliable, two-way, connection-based byte streams without
     /// duplication of data and without preservation of boundaries.
-#if os(Linux)
+    #if os(Linux)
     internal static let stream: NIOBSDSocket.SocketType =
-    NIOBSDSocket.SocketType(rawValue: CInt(SOCK_STREAM.rawValue))
-#else
+        NIOBSDSocket.SocketType(rawValue: CInt(SOCK_STREAM.rawValue))
+    #else
     internal static let stream: NIOBSDSocket.SocketType =
-    NIOBSDSocket.SocketType(rawValue: SOCK_STREAM)
-#endif
+        NIOBSDSocket.SocketType(rawValue: SOCK_STREAM)
+    #endif
 }
 
 // A thread-specific variable where we store the offload queue if we're on an `SelectableEventLoop`.
@@ -88,7 +87,7 @@ public class GetaddrinfoResolver: Resolver {
     private let v6Future: EventLoopPromise<[SocketAddress]>
     private let aiSocktype: NIOBSDSocket.SocketType
     private let aiProtocol: CInt
-    
+
     /// Create a new resolver.
     ///
     /// - Parameter eventLoop: The `EventLoop` whose thread this resolver will block.
@@ -98,7 +97,7 @@ public class GetaddrinfoResolver: Resolver {
         self.aiSocktype = .stream
         self.aiProtocol = CInt(IPPROTO_TCP)
     }
-    
+
     /// Initiate a DNS A query for a given host.
     ///
     /// Due to the nature of `getaddrinfo`, we only actually call the function once, in the AAAA query.
@@ -112,7 +111,7 @@ public class GetaddrinfoResolver: Resolver {
     public func initiateAQuery(host: String, port: Int) -> EventLoopFuture<[SocketAddress]> {
         return v4Future.futureResult
     }
-    
+
     /// Initiate a DNS AAAA query for a given host.
     ///
     /// Due to the nature of `getaddrinfo`, we only actually call the function once, in this function.
@@ -128,14 +127,16 @@ public class GetaddrinfoResolver: Resolver {
         }
         return v6Future.futureResult
     }
-    
+
     private func offloadQueue() -> DispatchQueue {
         if let offloadQueue = offloadQueueTSV.currentValue {
             return offloadQueue
         } else {
             if MultiThreadedEventLoopGroup.currentEventLoop != nil {
                 // Okay, we're on an SelectableEL thread. Let's stuff our queue into the thread local.
-                let offloadQueue = DispatchQueue(label: "io.swiftnio.GetaddrinfoResolver.offloadQueue")
+                let offloadQueue = DispatchQueue(
+                    label: "io.swiftnio.GetaddrinfoResolver.offloadQueue"
+                )
                 offloadQueueTSV.currentValue = offloadQueue
                 return offloadQueue
             } else {
@@ -143,7 +144,7 @@ public class GetaddrinfoResolver: Resolver {
             }
         }
     }
-    
+
     /// Cancel all outstanding DNS queries.
     ///
     /// This method is called whenever queries that have not completed no longer have their
@@ -151,29 +152,29 @@ public class GetaddrinfoResolver: Resolver {
     /// clean up their state.
     ///
     /// In the getaddrinfo case this is a no-op, as the resolver blocks.
-    public func cancelQueries() { }
-    
+    public func cancelQueries() {}
+
     /// Perform the DNS queries and record the result.
     ///
     /// - parameters:
     ///     - host: The hostname to do the DNS queries on.
     ///     - port: The port we'll be connecting to.
     private func resolveBlocking(host: String, port: Int) {
-#if os(Windows)
+        #if os(Windows)
         host.withCString(encodedAs: UTF16.self) { wszHost in
             String(port).withCString(encodedAs: UTF16.self) { wszPort in
                 var pResult: UnsafeMutablePointer<ADDRINFOW>?
-                
+
                 var aiHints: ADDRINFOW = ADDRINFOW()
                 aiHints.ai_socktype = self.aiSocktype.rawValue
                 aiHints.ai_protocol = self.aiProtocol
-                
+
                 let iResult = GetAddrInfoW(wszHost, wszPort, &aiHints, &pResult)
                 guard iResult == 0 else {
                     self.fail(SocketAddressError.unknown(host: host, port: port))
                     return
                 }
-                
+
                 if let pResult = pResult {
                     self.parseAndPublishResults(pResult, host: host)
                     FreeAddrInfoW(pResult)
@@ -182,9 +183,9 @@ public class GetaddrinfoResolver: Resolver {
                 }
             }
         }
-#else
+        #else
         var info: UnsafeMutablePointer<addrinfo>?
-        
+
         var hint = addrinfo()
         hint.ai_socktype = self.aiSocktype.rawValue
         hint.ai_protocol = self.aiProtocol
@@ -192,7 +193,7 @@ public class GetaddrinfoResolver: Resolver {
             self.fail(SocketAddressError.unknown(host: host, port: port))
             return
         }
-        
+
         if let info = info {
             self.parseAndPublishResults(info, host: host)
             freeaddrinfo(info)
@@ -200,51 +201,53 @@ public class GetaddrinfoResolver: Resolver {
             /* this is odd, getaddrinfo returned NULL */
             self.fail(SocketAddressError.unsupported)
         }
-#endif
+        #endif
     }
-    
+
     /// Parses the DNS results from the `addrinfo` linked list.
     ///
     /// - parameters:
     ///     - info: The pointer to the first of the `addrinfo` structures in the list.
     ///     - host: The hostname we resolved.
-#if os(Windows)
+    #if os(Windows)
     internal typealias CAddrInfo = ADDRINFOW
-#else
+    #else
     internal typealias CAddrInfo = addrinfo
-#endif
-    
+    #endif
+
     private func parseAndPublishResults(_ info: UnsafeMutablePointer<CAddrInfo>, host: String) {
         var v4Results: [SocketAddress] = []
         var v6Results: [SocketAddress] = []
-        
+
         var info: UnsafeMutablePointer<CAddrInfo> = info
         while true {
             switch NIOBSDSocket.AddressFamily(rawValue: info.pointee.ai_family) {
                 case .inet:
-                    info.pointee.ai_addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { ptr in
+                    info.pointee.ai_addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
+                        ptr in
                         v4Results.append(.init(ptr.pointee, host: host))
                     }
                 case .inet6:
-                    info.pointee.ai_addr.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { ptr in
+                    info.pointee.ai_addr.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) {
+                        ptr in
                         v6Results.append(.init(ptr.pointee, host: host))
                     }
                 default:
                     self.fail(SocketAddressError.unsupported)
                     return
             }
-            
+
             guard let nextInfo = info.pointee.ai_next else {
                 break
             }
-            
+
             info = nextInfo
         }
-        
+
         v6Future.succeed(v6Results)
         v4Future.succeed(v4Results)
     }
-    
+
     /// Record an error and fail the lookup process.
     ///
     /// - parameters:

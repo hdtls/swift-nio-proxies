@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import XCTest
+
 @testable import NetbotHTTP
 
 class ConnectionStateTests: XCTestCase {
@@ -20,39 +21,39 @@ class ConnectionStateTests: XCTestCase {
     func testShouldThrowErrorForExecuteEvaluatingIfStateIsNotIdle() {
         var state = ConnectionState.evaluating
         XCTAssertThrowsError(try state.evaluating())
-        
+
         state = .active
         XCTAssertThrowsError(try state.evaluating())
-        
+
         state = .failed
         XCTAssertThrowsError(try state.evaluating())
-        
+
         state = .idle
         XCTAssertNoThrow(try state.evaluating())
         XCTAssertEqual(state, .evaluating)
     }
-    
+
     func testStateShouldBeEvaluatingAfterPerformEvaluating() {
         var state = ConnectionState.idle
         try! state.evaluating()
-        
+
         XCTAssertEqual(state, .evaluating)
     }
-    
+
     func testShouldThrowErrorForExecuteEstablishedWhenStateIsNotEvaluating() {
         var state = ConnectionState.idle
         XCTAssertThrowsError(try state.established())
-        
+
         state = .active
         XCTAssertThrowsError(try state.established())
-        
+
         state = .failed
         XCTAssertThrowsError(try state.established())
-        
+
         state = .evaluating
         XCTAssertNoThrow(try state.established())
     }
-    
+
     func testStateShouldBeActiveAfterPerformEstablished() {
         var state = ConnectionState.evaluating
         try! state.established()

@@ -42,7 +42,7 @@ extension DataProtocol {
         let hexLen = self.count * 2
         let ptr = UnsafeMutablePointer<UInt8>.allocate(capacity: hexLen)
         var offset = 0
-        
+
         self.regions.forEach { (_) in
             for i in self {
                 ptr[Int(offset * 2)] = itoh((i >> 4) & 0xF)
@@ -50,31 +50,34 @@ extension DataProtocol {
                 offset += 1
             }
         }
-        
+
         return String(bytesNoCopy: ptr, length: hexLen, encoding: .utf8, freeWhenDone: true)!
     }
 }
 
 extension MutableDataProtocol {
     mutating func appendByte(_ byte: UInt64) {
-        withUnsafePointer(to: byte.littleEndian, { self.append(contentsOf: UnsafeRawBufferPointer(start: $0, count: 8)) })
+        withUnsafePointer(
+            to: byte.littleEndian,
+            { self.append(contentsOf: UnsafeRawBufferPointer(start: $0, count: 8)) }
+        )
     }
 }
 
 extension Data {
     init(hexString: String) throws {
         self.init()
-        
+
         if hexString.count % 2 != 0 || hexString.count == 0 {
             throw ByteHexEncodingErrors.incorrectString
         }
-        
+
         let stringBytes: [UInt8] = Array(hexString.data(using: String.Encoding.utf8)!)
-        
+
         for i in 0...((hexString.count / 2) - 1) {
             let char1 = stringBytes[2 * i]
             let char2 = stringBytes[2 * i + 1]
-            
+
             try self.append(htoi(char1) << 4 + htoi(char2))
         }
     }

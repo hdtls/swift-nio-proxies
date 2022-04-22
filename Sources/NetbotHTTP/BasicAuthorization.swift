@@ -19,10 +19,10 @@ import NIOHTTP1
 public struct BasicAuthorization: Equatable {
     /// The username, sometimes an email address
     public let username: String
-    
+
     /// The plaintext password
     public let password: String
-    
+
     /// Create a new `BasicAuthorization`.
     public init(username: String, password: String) {
         self.username = username
@@ -37,7 +37,7 @@ extension HTTPHeaders {
             guard let string = self.first(name: .authorization) else {
                 return nil
             }
-            
+
             let headerParts = string.components(separatedBy: "Basic ")
             guard headerParts.count == 2 else {
                 return nil
@@ -47,12 +47,15 @@ extension HTTPHeaders {
                 return nil
             }
 
-            let parts = String.init(decoding: decodedToken, as: UTF8.self).split(separator: ":", maxSplits: 1)
-            
+            let parts = String.init(decoding: decodedToken, as: UTF8.self).split(
+                separator: ":",
+                maxSplits: 1
+            )
+
             guard parts.count == 2 else {
                 return nil
             }
-            
+
             return .init(username: .init(parts[0]), password: .init(parts[1]))
         }
         set {

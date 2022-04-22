@@ -20,46 +20,46 @@ enum HandshakeState: Equatable {
     case establish
     case active
     case failed
-    
+
     var isActive: Bool {
         self == .active
     }
-    
+
     mutating func idle() throws {
         guard self == .idle else {
             throw SOCKSError.invalidServerState
         }
         self = .greeting
     }
-    
+
     mutating func greeting(_ method: AuthenticationMethod) throws {
         guard self == .greeting else {
             throw SOCKSError.invalidServerState
         }
         self = method == .noRequired ? .addressing : .authorizing
     }
-    
+
     mutating func authorizing() throws {
         guard self == .authorizing else {
             throw SOCKSError.invalidServerState
         }
         self = .addressing
     }
-    
+
     mutating func addressing() throws {
         guard self == .addressing else {
             throw SOCKSError.invalidServerState
         }
         self = .establish
     }
-    
+
     mutating func establish() throws {
         guard self == .establish else {
             throw SOCKSError.invalidServerState
         }
         self = .active
     }
-    
+
     mutating func failure() {
         self = .failed
     }

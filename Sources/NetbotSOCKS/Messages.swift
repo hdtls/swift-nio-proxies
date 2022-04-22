@@ -30,41 +30,41 @@ import NIOCore
 
 /// Sent by the client and received by the server.
 public enum ClientMessage: Hashable {
-    
+
     /// Contains the proposed authentication methods.
     case greeting(ClientGreeting)
-    
+
     /// Instructs the server of the target host, and the type of connection.
     case request(Request)
-    
+
     /// Used to respond to server authentication challenges
     case authenticationData(ByteBuffer)
 }
 
 /// Sent by the server and received by the client.
 public enum ServerMessage: Hashable {
-    
+
     /// Used by the server to instruct the client of the authentication method to use.
     case selectedAuthenticationMethod(SelectedAuthenticationMethod)
-    
+
     /// Sent by the server to inform the client that establishing the proxy to the target
     /// host succeeded or failed.
     case response(Response)
-    
+
     /// Used when authenticating to send server challenges to the client.
     case authenticationData(ByteBuffer, complete: Bool)
 }
 
 extension ByteBuffer {
-    
+
     @discardableResult mutating func writeServerMessage(_ message: ServerMessage) -> Int {
         switch message {
-        case .selectedAuthenticationMethod(let method):
-            return writeMethodSelection(method)
-        case .response(let response):
-            return writeServerResponse(response)
-        case .authenticationData(var buffer, _):
-            return writeBuffer(&buffer)
+            case .selectedAuthenticationMethod(let method):
+                return writeMethodSelection(method)
+            case .response(let response):
+                return writeServerResponse(response)
+            case .authenticationData(var buffer, _):
+                return writeBuffer(&buffer)
         }
     }
 }

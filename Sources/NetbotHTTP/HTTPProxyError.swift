@@ -20,6 +20,6 @@ public enum HTTPProxyError: Error {
     case invalidProxyResponse(HTTPResponseHead)
     case invalidHTTPOrdering
     case invalidURL(url: String)
-    
+
     case unacceptable(code: HTTPResponseStatus)
 }

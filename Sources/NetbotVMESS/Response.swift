@@ -17,19 +17,19 @@ import NIOCore
 
 /// `Response` object defines VMESS response data object.
 public struct Response {
-    
+
     /// Authentication code.
     public var authenticationCode: UInt8
-    
+
     /// Stream options.
     public var options: StreamOptions
-    
+
     /// Command code.
     public var commandCode: UInt8
-    
+
     /// Command.
     public var command: ResponseCommand?
-    
+
     /// Plain response body data.
     public var body: ByteBuffer?
 }
@@ -37,13 +37,13 @@ public struct Response {
 public protocol ResponseCommand {}
 
 public struct SwitchAccountCommand: ResponseCommand {
-        
+
     var id: UUID
-    
+
     var level: UInt32
-    
+
     var countOfAlterIDs: UInt16
-    
+
     var address: NetAddress?
 
     var validMin: UInt8

@@ -12,51 +12,63 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIOCore
 import Logging
-import NetbotCore
+import NIOCore
 import NIOSSL
+import NetbotCore
 
 extension ChannelPipeline {
-    
-    public func addTrojanClientHandlers(position: ChannelPipeline.Position = .last,
-                                           logger: Logger,
-                                           password: String,
-                                           taskAddress: NetAddress) -> EventLoopFuture<Void> {
+
+    public func addTrojanClientHandlers(
+        position: ChannelPipeline.Position = .last,
+        logger: Logger,
+        password: String,
+        taskAddress: NetAddress
+    ) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
-        
+
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
-                try self.syncOperations.addTrojanClientHandlers(position: position,
-                                                                logger: logger,
-                                                                password: password,
-                                                                taskAddress: taskAddress)
+                try self.syncOperations.addTrojanClientHandlers(
+                    position: position,
+                    logger: logger,
+                    password: password,
+                    taskAddress: taskAddress
+                )
             }
             eventLoopFuture = eventLoop.makeCompletedFuture(result)
         } else {
             eventLoopFuture = eventLoop.submit {
-                try self.syncOperations.addTrojanClientHandlers(position: position,
-                                                                logger: logger,
-                                                                password: password,
-                                                                taskAddress: taskAddress)
+                try self.syncOperations.addTrojanClientHandlers(
+                    position: position,
+                    logger: logger,
+                    password: password,
+                    taskAddress: taskAddress
+                )
             }
         }
-        
+
         return eventLoopFuture
     }
 }
 
 extension ChannelPipeline.SynchronousOperations {
-    
-    public func addTrojanClientHandlers(position: ChannelPipeline.Position = .last,
-                                        logger: Logger,
-                                        password: String,
-                                        taskAddress: NetAddress) throws {
+
+    public func addTrojanClientHandlers(
+        position: ChannelPipeline.Position = .last,
+        logger: Logger,
+        password: String,
+        taskAddress: NetAddress
+    ) throws {
         let sslContext = try NIOSSLContext(configuration: .makeClientConfiguration())
         let sslHandler = try NIOSSLClientHandler(context: sslContext, serverHostname: nil)
-        let clientHandler = TrojanClientHandler(logger: logger, password: password, taskAddress: taskAddress)
+        let clientHandler = TrojanClientHandler(
+            logger: logger,
+            password: password,
+            taskAddress: taskAddress
+        )
         let handlers: [ChannelHandler] = [sslHandler, clientHandler]
-        
+
         try self.addHandlers(handlers)
     }
 }

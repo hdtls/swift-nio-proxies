@@ -32,14 +32,14 @@ import NIOCore
 /// by providing an array of suggested authentication
 /// methods.
 public struct ClientGreeting: Hashable {
-    
+
     /// The protocol version.
     public let version: ProtocolVersion = .v5
-    
+
     /// The client-supported authentication methods.
     /// The SOCKS server will select one to use.
     public var methods: [AuthenticationMethod]
-    
+
     /// Creates a new `ClientGreeting`
     /// - parameter methods: The client-supported authentication methods.
     public init(methods: [AuthenticationMethod]) {
@@ -48,7 +48,7 @@ public struct ClientGreeting: Hashable {
 }
 
 extension ByteBuffer {
-    
+
     mutating func readClientGreetingIfPossible() throws -> ClientGreeting? {
         return try parseUnwindingIfNeeded { buffer in
             guard
@@ -58,23 +58,25 @@ extension ByteBuffer {
             else {
                 return nil
             }
-            
+
             // safe to bang as we've already checked the buffer size
-            let methods = buffer.readBytes(length: Int(numMethods))!.map { AuthenticationMethod(value: $0) }
+            let methods = buffer.readBytes(length: Int(numMethods))!.map {
+                AuthenticationMethod(value: $0)
+            }
             return .init(methods: methods)
         }
     }
-    
+
     @discardableResult
     mutating func writeClientGreeting(_ greeting: ClientGreeting) -> Int {
         var written = 0
         written += writeInteger(greeting.version.rawValue)
         written += writeInteger(UInt8(greeting.methods.count))
-        
+
         for method in greeting.methods {
             written += writeInteger(method.value)
         }
-        
+
         return written
     }
 }

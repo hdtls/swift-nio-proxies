@@ -16,20 +16,20 @@
 import Foundation
 
 public protocol HashFunction {
-    
+
     /// The block size of the hash function. It is different from the output size that can be retrieved from Digest.byteCount.
     static var blockByteCount: Int { get }
-    
+
     associatedtype Digest: Digest
-    
+
     /// Initializes the hasher instance.
     init()
-    
+
     /// Updates the hasher with the buffer.
     ///
     /// - Parameter bufferPointer: The buffer to update the hash
     mutating func update(bufferPointer: UnsafeRawBufferPointer)
-    
+
     /// Returns the digest from the input in the hash function instance.
     ///
     /// - Returns: The digest of the data
@@ -47,7 +47,7 @@ extension HashFunction {
         hasher.update(bufferPointer: bufferPointer)
         return hasher.finalize()
     }
-    
+
     /// Computes a digest of the data.
     ///
     /// - Parameter data: The data to be hashed
@@ -58,7 +58,7 @@ extension HashFunction {
         hasher.update(data: data)
         return hasher.finalize()
     }
-    
+
     /// Updates the hasher with the data.
     ///
     /// - Parameter data: The data to update the hash

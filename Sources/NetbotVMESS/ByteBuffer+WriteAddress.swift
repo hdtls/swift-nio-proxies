@@ -16,27 +16,27 @@ import Foundation
 import NIOCore
 
 extension ByteBuffer {
-    
+
     @discardableResult
     mutating func writeAddress(_ address: NetAddress) -> Int {
         switch address {
             case .domainPort(let domain, let port):
                 return writeInteger(in_port_t(port))
-                + writeInteger(UInt8(2))
-                + writeInteger(UInt8(domain.utf8.count))
-                + writeString(domain)
+                    + writeInteger(UInt8(2))
+                    + writeInteger(UInt8(domain.utf8.count))
+                    + writeString(domain)
             case .socketAddress(.v4(let addr)):
                 return writeInteger(addr.address.sin_port.bigEndian)
-                + writeInteger(UInt8(1))
-                + withUnsafeBytes(of: addr.address.sin_addr) { ptr in
-                    writeBytes(ptr)
-                }
+                    + writeInteger(UInt8(1))
+                    + withUnsafeBytes(of: addr.address.sin_addr) { ptr in
+                        writeBytes(ptr)
+                    }
             case .socketAddress(.v6(let addr)):
                 return writeInteger(addr.address.sin6_port.bigEndian)
-                + writeInteger(UInt8(3))
-                + withUnsafeBytes(of: addr.address.sin6_addr) { ptr in
-                    writeBytes(ptr)
-                }
+                    + writeInteger(UInt8(3))
+                    + withUnsafeBytes(of: addr.address.sin6_addr) { ptr in
+                        writeBytes(ptr)
+                    }
             case .socketAddress(.unixDomainSocket):
                 // enforced in the channel initalisers.
                 fatalError("UNIX domain sockets are not supported")

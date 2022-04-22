@@ -23,7 +23,7 @@ typealias errno_t = CInt
 func memset_s(_ s: UnsafeMutableRawPointer!, _ smax: Int, _ byte: CInt, _ n: Int) -> errno_t {
     assert(smax == n, "memset_s invariant not met")
     assert(byte == 0, "memset_s used to not zero anything")
-    
+
     #if os(Windows)
     SecureZeroMemory(s, smax)
     #else
@@ -38,37 +38,42 @@ func memset_s(_ s: UnsafeMutableRawPointer!, _ smax: Int, _ byte: CInt, _ n: Int
 public struct SecureBytes {
     @usableFromInline
     var backing: Backing
-    
+
     @inlinable
     public init() {
         self = .init(count: 0)
     }
-    
+
     public init(count: Int) {
         self.backing = SecureBytes.Backing.create(randomBytes: count)
     }
-    
+
     public init<D: ContiguousBytes>(bytes: D) {
         self.backing = Backing.create(bytes: bytes)
     }
-    
+
     /// Allows initializing a SecureBytes object with a closure that will initialize the memory.
     @usableFromInline
-    init(unsafeUninitializedCapacity: Int, initializingWith callback: (inout UnsafeMutableRawBufferPointer, inout Int) throws -> Void) rethrows {
+    init(
+        unsafeUninitializedCapacity: Int,
+        initializingWith callback: (inout UnsafeMutableRawBufferPointer, inout Int) throws -> Void
+    ) rethrows {
         self.backing = Backing.create(capacity: unsafeUninitializedCapacity)
         try self.backing._withVeryUnsafeMutableBytes { veryUnsafePointer in
             // As Array does, we want to truncate the initializing pointer to only have the requested size.
-            var veryUnsafePointer = UnsafeMutableRawBufferPointer(rebasing: veryUnsafePointer.prefix(unsafeUninitializedCapacity))
+            var veryUnsafePointer = UnsafeMutableRawBufferPointer(
+                rebasing: veryUnsafePointer.prefix(unsafeUninitializedCapacity)
+            )
             var initializedCount = 0
             try callback(&veryUnsafePointer, &initializedCount)
-            
+
             self.backing.count = initializedCount
         }
     }
 }
 
 extension SecureBytes {
-    
+
     public mutating func append<C: Collection>(_ data: C) where C.Element == UInt8 {
         let requiredCapacity = self.count + data.count
         if !isKnownUniquelyReferenced(&self.backing) || requiredCapacity > self.backing.capacity {
@@ -78,12 +83,12 @@ extension SecureBytes {
         }
         self.backing._appendBytes(data)
     }
-    
+
     public mutating func reserveCapacity(_ n: Int) {
         if self.backing.capacity >= n {
             return
         }
-        
+
         let newBacking = Backing.create(capacity: n)
         newBacking._appendBytes(self.backing, inRange: 0..<self.count)
         self.backing = newBacking
@@ -92,7 +97,7 @@ extension SecureBytes {
 
 // MARK: - Equatable conformance, constant-time
 extension SecureBytes: Equatable {
-    
+
     public static func == (lhs: SecureBytes, rhs: SecureBytes) -> Bool {
         return safeCompare(lhs, rhs)
     }
@@ -100,30 +105,30 @@ extension SecureBytes: Equatable {
 
 // MARK: - Collection conformance
 extension SecureBytes: Collection {
-    
+
     public struct Index {
         /* fileprivate but usableFromInline */ @usableFromInline var offset: Int
-        
+
         /*@inlinable*/ @usableFromInline internal init(offset: Int) {
             self.offset = offset
         }
     }
-    
+
     @inlinable
     public var startIndex: Index {
         return Index(offset: 0)
     }
-    
+
     @inlinable
     public var endIndex: Index {
         return Index(offset: self.count)
     }
-    
+
     @inlinable
     public var count: Int {
         return self.backing.count
     }
-    
+
     @inlinable
     public subscript(_ index: Index) -> UInt8 {
         get {
@@ -133,7 +138,7 @@ extension SecureBytes: Collection {
             self.backing[offset: index.offset] = newValue
         }
     }
-    
+
     @inlinable
     public func index(after index: Index) -> Index {
         return index.advanced(by: 1)
@@ -149,28 +154,31 @@ extension SecureBytes: BidirectionalCollection {
 }
 
 // MARK: - RandomAccessCollection conformance
-extension SecureBytes: RandomAccessCollection { }
+extension SecureBytes: RandomAccessCollection {}
 
 // MARK: - MutableCollection conformance
-extension SecureBytes: MutableCollection { }
+extension SecureBytes: MutableCollection {}
 
 // MARK: - RangeReplaceableCollection conformance
 extension SecureBytes: RangeReplaceableCollection {
     @inlinable
-    public mutating func replaceSubrange<C: Collection>(_ subrange: Range<Index>, with newElements: C) where C.Element == UInt8 {
+    public mutating func replaceSubrange<C: Collection>(
+        _ subrange: Range<Index>,
+        with newElements: C
+    ) where C.Element == UInt8 {
         let requiredCapacity = self.backing.count - subrange.count + newElements.count
-        
+
         if !isKnownUniquelyReferenced(&self.backing) || requiredCapacity > self.backing.capacity {
             // We have to allocate anyway, so let's use a nice straightforward copy.
             let newBacking = Backing.create(capacity: requiredCapacity)
-            
+
             let lowerSlice = 0..<subrange.lowerBound.offset
             let upperSlice = subrange.upperBound.offset..<self.count
-            
+
             newBacking._appendBytes(self.backing, inRange: lowerSlice)
             newBacking._appendBytes(newElements)
             newBacking._appendBytes(self.backing, inRange: upperSlice)
-            
+
             self.backing = newBacking
             return
         } else {
@@ -183,18 +191,20 @@ extension SecureBytes: RangeReplaceableCollection {
 
 // MARK: - ContiguousBytes conformance
 extension SecureBytes: ContiguousBytes {
-    
+
     @inlinable
     public func withUnsafeBytes<T>(_ body: (UnsafeRawBufferPointer) throws -> T) rethrows -> T {
         return try self.backing.withUnsafeBytes(body)
     }
-    
+
     @inlinable
-    public mutating func withUnsafeMutableBytes<T>(_ body: (UnsafeMutableRawBufferPointer) throws -> T) rethrows -> T {
+    public mutating func withUnsafeMutableBytes<T>(
+        _ body: (UnsafeMutableRawBufferPointer) throws -> T
+    ) rethrows -> T {
         if !isKnownUniquelyReferenced(&self.backing) {
             self.backing = Backing.create(copying: self.backing)
         }
-        
+
         return try self.backing.withUnsafeMutableBytes(body)
     }
 }
@@ -208,13 +218,13 @@ extension SecureBytes: DataProtocol {
 }
 
 // MARK: - MutableDataProtocol conformance
-extension SecureBytes: MutableDataProtocol { }
+extension SecureBytes: MutableDataProtocol {}
 
 // MARK: - Index conformances
-extension SecureBytes.Index: Hashable { }
+extension SecureBytes.Index: Hashable {}
 
 extension SecureBytes.Index: Comparable {
-    public static func <(lhs: SecureBytes.Index, rhs: SecureBytes.Index) -> Bool {
+    public static func < (lhs: SecureBytes.Index, rhs: SecureBytes.Index) -> Bool {
         return lhs.offset < rhs.offset
     }
 }
@@ -223,7 +233,7 @@ extension SecureBytes.Index: Strideable {
     public func advanced(by n: Int) -> SecureBytes.Index {
         return SecureBytes.Index(offset: self.offset + n)
     }
-    
+
     public func distance(to other: SecureBytes.Index) -> Int {
         return other.offset - self.offset
     }
@@ -235,24 +245,27 @@ extension SecureBytes {
     internal struct BackingHeader {
         @usableFromInline
         internal var count: Int
-        
+
         @usableFromInline
         internal var capacity: Int
     }
-    
+
     @usableFromInline
     internal class Backing: ManagedBuffer<BackingHeader, UInt8> {
         @usableFromInline
         class func create(capacity: Int) -> Backing {
             let capacity = Int(UInt32(capacity).nextPowerOf2ClampedToMax())
-            return Backing.create(minimumCapacity: capacity, makingHeaderWith: { _ in BackingHeader(count: 0, capacity: capacity) }) as! Backing
+            return Backing.create(
+                minimumCapacity: capacity,
+                makingHeaderWith: { _ in BackingHeader(count: 0, capacity: capacity) }
+            ) as! Backing
         }
-        
+
         @usableFromInline
         class func create(copying original: Backing) -> Backing {
             return Backing.create(bytes: original)
         }
-        
+
         @inlinable
         class func create<D: ContiguousBytes>(bytes: D) -> Backing {
             return bytes.withUnsafeBytes { bytesPtr in
@@ -265,7 +278,7 @@ extension SecureBytes {
                 return backing
             }
         }
-        
+
         @usableFromInline
         class func create(randomBytes: Int) -> Backing {
             let backing = Backing.create(capacity: randomBytes)
@@ -276,16 +289,16 @@ extension SecureBytes {
             backing.count = randomBytes
             return backing
         }
-        
+
         deinit {
             // We always clear the whole capacity, even if we don't think we used it all.
             let bytesToClear = self.header.capacity
-            
+
             _ = self.withUnsafeMutablePointerToElements { elementsPtr in
                 memset_s(elementsPtr, bytesToClear, 0, bytesToClear)
             }
         }
-        
+
         @usableFromInline
         var count: Int {
             get {
@@ -295,7 +308,7 @@ extension SecureBytes {
                 self.header.count = newValue
             }
         }
-        
+
         @usableFromInline
         subscript(offset offset: Int) -> UInt8 {
             get {
@@ -311,9 +324,12 @@ extension SecureBytes {
 }
 
 extension SecureBytes.Backing {
-    
+
     @usableFromInline
-    func replaceSubrangeFittingWithinCapacity<C: Collection>(_ subrange: Range<Int>, with newElements: C) where C.Element == UInt8 {
+    func replaceSubrangeFittingWithinCapacity<C: Collection>(
+        _ subrange: Range<Int>,
+        with newElements: C
+    ) where C.Element == UInt8 {
         // This function is called when have a unique reference to the backing storage, and we have enough room to store these bytes without
         // any problem. We have one pre-existing buffer made up of 4 regions: a prefix set of bytes that are
         // before the range "subrange", a range of bytes to be replaced (R1), a suffix set of bytes that are after
@@ -332,22 +348,29 @@ extension SecureBytes.Backing {
         // for R1 and then move the suffix, as if R2 is larger than R1 we'll have thrown some suffix bytes away. So we have
         // to move suffix first. What we do is take the bytes in suffix, and move them (via memmove). We can then copy
         // R2 in, and feel confident that the space in memory is right.
-        precondition(self.count - subrange.count + newElements.count <= self.capacity, "Insufficient capacity")
-        
+        precondition(
+            self.count - subrange.count + newElements.count <= self.capacity,
+            "Insufficient capacity"
+        )
+
         let moveDistance = newElements.count - subrange.count
         let suffixRange = subrange.upperBound..<self.count
         self._moveBytes(range: suffixRange, by: moveDistance)
         self._copyBytes(newElements, at: subrange.lowerBound)
         self.count += newElements.count - subrange.count
     }
-    
+
     /// Appends the bytes of a collection to this storage, crashing if there is not enough room.
     @usableFromInline
-    /* private but inlinable */ func _appendBytes<C: Collection>(_ bytes: C) where C.Element == UInt8 {
+    /* private but inlinable */ func _appendBytes<C: Collection>(_ bytes: C)
+    where C.Element == UInt8 {
         let byteCount = bytes.count
-        
-        precondition(self.capacity - self.count - byteCount >= 0, "Insufficient space for byte copying, must have reallocated!")
-        
+
+        precondition(
+            self.capacity - self.count - byteCount >= 0,
+            "Insufficient space for byte copying, must have reallocated!"
+        )
+
         let lowerOffset = self.count
         self._withVeryUnsafeMutableBytes { bytesPtr in
             let innerPtrSlice = UnsafeMutableRawBufferPointer(rebasing: bytesPtr[lowerOffset...])
@@ -355,27 +378,35 @@ extension SecureBytes.Backing {
         }
         self.count += byteCount
     }
-    
+
     /// Appends the bytes of a slice of another backing buffer to this storage, crashing if there
     /// is not enough room.
     @usableFromInline
-    /* private but inlinable */ func _appendBytes(_ backing: SecureBytes.Backing, inRange range: Range<Int>) {
+    /* private but inlinable */ func _appendBytes(
+        _ backing: SecureBytes.Backing,
+        inRange range: Range<Int>
+    ) {
         precondition(range.lowerBound >= 0)
         precondition(range.upperBound <= backing.capacity)
-        precondition(self.capacity - self.count - range.count >= 0, "Insufficient space for byte copying, must have reallocated!")
-        
+        precondition(
+            self.capacity - self.count - range.count >= 0,
+            "Insufficient space for byte copying, must have reallocated!"
+        )
+
         backing.withUnsafeBytes { backingPtr in
             let ptrSlice = UnsafeRawBufferPointer(rebasing: backingPtr[range])
-            
+
             let lowerOffset = self.count
             self._withVeryUnsafeMutableBytes { bytesPtr in
-                let innerPtrSlice = UnsafeMutableRawBufferPointer(rebasing: bytesPtr[lowerOffset...])
+                let innerPtrSlice = UnsafeMutableRawBufferPointer(
+                    rebasing: bytesPtr[lowerOffset...]
+                )
                 innerPtrSlice.copyMemory(from: ptrSlice)
             }
             self.count += ptrSlice.count
         }
     }
-    
+
     /// Moves the range of bytes identified by the slice by the delta, crashing if the move would
     /// place the bytes out of the storage. Note that this does not update the count: external code
     /// must ensure that that happens.
@@ -384,26 +415,27 @@ extension SecureBytes.Backing {
         // We have to check that the range is within the delta, as is the new location.
         precondition(range.lowerBound >= 0)
         precondition(range.upperBound <= self.capacity)
-        
+
         let shiftedRange = (range.lowerBound + delta)..<(range.upperBound + delta)
         precondition(shiftedRange.lowerBound > 0)
         precondition(shiftedRange.upperBound <= self.capacity)
-        
+
         self._withVeryUnsafeMutableBytes { backingPtr in
             let source = UnsafeRawBufferPointer(rebasing: backingPtr[range])
             let dest = UnsafeMutableRawBufferPointer(rebasing: backingPtr[shiftedRange])
             dest.copyMemory(from: source)  // copy memory uses memmove under the hood.
         }
     }
-    
+
     // Copies some bytes into the buffer at the appropriate place. Does not update count: external code must do so.
     @inlinable
-    /* private but inlinable */ func _copyBytes<C: Collection>(_ bytes: C, at offset: Int) where C.Element == UInt8 {
+    /* private but inlinable */ func _copyBytes<C: Collection>(_ bytes: C, at offset: Int)
+    where C.Element == UInt8 {
         precondition(offset >= 0)
         precondition(offset + bytes.count <= self.capacity)
-        
+
         let byteRange = offset..<(offset + bytes.count)
-        
+
         self._withVeryUnsafeMutableBytes { backingPtr in
             let dest = UnsafeMutableRawBufferPointer(rebasing: backingPtr[byteRange])
             dest.copyBytes(from: bytes)
@@ -412,30 +444,34 @@ extension SecureBytes.Backing {
 }
 
 extension SecureBytes.Backing: ContiguousBytes {
-    
+
     @usableFromInline
     func withUnsafeBytes<T>(_ body: (UnsafeRawBufferPointer) throws -> T) rethrows -> T {
         let count = self.count
-        
+
         return try self.withUnsafeMutablePointerToElements { elementsPtr in
             return try body(UnsafeRawBufferPointer(start: elementsPtr, count: count))
         }
     }
-    
+
     @usableFromInline
-    func withUnsafeMutableBytes<T>(_ body: (UnsafeMutableRawBufferPointer) throws -> T) rethrows -> T {
+    func withUnsafeMutableBytes<T>(_ body: (UnsafeMutableRawBufferPointer) throws -> T) rethrows
+        -> T
+    {
         let count = self.count
-        
+
         return try self.withUnsafeMutablePointerToElements { elementsPtr in
             return try body(UnsafeMutableRawBufferPointer(start: elementsPtr, count: count))
         }
     }
-    
+
     /// Very unsafe in the sense that this points to uninitialized memory. Used only for implementations within this file.
     @inlinable
-    /* private but inlinable */ func _withVeryUnsafeMutableBytes<T>(_ body: (UnsafeMutableRawBufferPointer) throws -> T) rethrows -> T {
+    /* private but inlinable */ func _withVeryUnsafeMutableBytes<T>(
+        _ body: (UnsafeMutableRawBufferPointer) throws -> T
+    ) rethrows -> T {
         let capacity = self.capacity
-        
+
         return try self.withUnsafeMutablePointerToElements { elementsPtr in
             return try body(UnsafeMutableRawBufferPointer(start: elementsPtr, count: capacity))
         }
@@ -447,17 +483,17 @@ extension UnsafeMutableRawBufferPointer {
         guard count > 0 else {
             return
         }
-        
+
         precondition(count <= self.count)
         var rng = SystemRandomNumberGenerator()
-        
+
         // We store bytes 64-bits at a time until we can't anymore.
         var targetPtr = self
         while targetPtr.count > 8 {
             targetPtr.storeBytes(of: rng.next(), as: UInt64.self)
             targetPtr = UnsafeMutableRawBufferPointer(rebasing: targetPtr[8...])
         }
-        
+
         // Now we're down to having to store things an integer at a time. We do this by shifting and
         // masking.
         var remainingWord: UInt64 = rng.next()
@@ -472,7 +508,9 @@ extension UnsafeMutableRawBufferPointer {
 /// This function performs a safe comparison between two buffers of bytes. It exists as a temporary shim until we refactor
 /// some of the usage sites to pass better data structures to us.
 @inlinable
-internal func safeCompare<LHS: ContiguousBytes, RHS: ContiguousBytes>(_ lhs: LHS, _ rhs: RHS) -> Bool {
+internal func safeCompare<LHS: ContiguousBytes, RHS: ContiguousBytes>(_ lhs: LHS, _ rhs: RHS)
+    -> Bool
+{
     return lhs.withUnsafeBytes { lhsPtr in
         rhs.withUnsafeBytes { rhsPtr in
             constantTimeCompare(lhsPtr, rhsPtr)
@@ -482,11 +520,12 @@ internal func safeCompare<LHS: ContiguousBytes, RHS: ContiguousBytes>(_ lhs: LHS
 
 /// A straightforward constant-time comparison function for any two collections of bytes.
 @inlinable
-internal func constantTimeCompare<LHS: Collection, RHS: Collection>(_ lhs: LHS, _ rhs: RHS) -> Bool where LHS.Element == UInt8, RHS.Element == UInt8 {
+internal func constantTimeCompare<LHS: Collection, RHS: Collection>(_ lhs: LHS, _ rhs: RHS) -> Bool
+where LHS.Element == UInt8, RHS.Element == UInt8 {
     guard lhs.count == rhs.count else {
         return false
     }
-    
+
     return zip(lhs, rhs).reduce(into: 0) { $0 |= $1.0 ^ $1.1 } == 0
 }
 
@@ -498,17 +537,17 @@ extension UInt32 {
         guard self > 0 else {
             return 1
         }
-        
+
         var n = self
-        
-#if arch(arm) || arch(i386)
+
+        #if arch(arm) || arch(i386)
         // on 32-bit platforms we can't make use of a whole UInt32.max (as it doesn't fit in an Int)
         let max = UInt32(Int.max)
-#else
+        #else
         // on 64-bit platforms we're good
         let max = UInt32.max
-#endif
-        
+        #endif
+
         n -= 1
         n |= n >> 1
         n |= n >> 2
@@ -518,7 +557,7 @@ extension UInt32 {
         if n != max {
             n += 1
         }
-        
+
         return n
     }
 }
@@ -530,15 +569,21 @@ extension Data {
     public init(_ secureBytes: SecureBytes) {
         // We need to escape into unmanaged land here in order to keep the backing storage alive.
         let unmanagedBacking = Unmanaged.passRetained(secureBytes.backing)
-        
+
         // We can now exfiltrate the storage pointer: this particular layout will be locked forever. Please never do this
         // yourself unless you're really sure!
         self = secureBytes.withUnsafeBytes {
             // We make a mutable copy of this pointer here because we know Data won't write through it.
-            return Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: $0.baseAddress!), count: $0.count, deallocator: .custom { (_: UnsafeMutableRawPointer, _: Int) in unmanagedBacking.release() })
+            return Data(
+                bytesNoCopy: UnsafeMutableRawPointer(mutating: $0.baseAddress!),
+                count: $0.count,
+                deallocator: .custom { (_: UnsafeMutableRawPointer, _: Int) in
+                    unmanagedBacking.release()
+                }
+            )
         }
     }
-    
+
     /// A custom initializer for Data that attempts to share the same storage as the current SecureBytes instance.
     /// This is our best-effort attempt to expose the data in an auto-zeroing fashion. Any mutating function called on the
     /// constructed `Data` object will cause the bytes to be copied out: we can't avoid that.
@@ -548,18 +593,24 @@ extension Data {
         let base = secureByteSlice.base
         let baseOffset = secureByteSlice.startIndex.offset
         let endOffset = secureByteSlice.endIndex.offset
-        
+
         // We need to escape into unmanaged land here in order to keep the backing storage alive.
         let unmanagedBacking = Unmanaged.passRetained(base.backing)
-        
+
         // We can now exfiltrate the storage pointer: this particular layout will be locked forever. Please never do this
         // yourself unless you're really sure!
         self = base.withUnsafeBytes {
             // Slice the base pointer down to just the range we want.
             let slicedPointer = UnsafeRawBufferPointer(rebasing: $0[baseOffset..<endOffset])
-            
+
             // We make a mutable copy of this pointer here because we know Data won't write through it.
-            return Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: slicedPointer.baseAddress!), count: slicedPointer.count, deallocator: .custom { (_: UnsafeMutableRawPointer, _: Int) in unmanagedBacking.release() })
+            return Data(
+                bytesNoCopy: UnsafeMutableRawPointer(mutating: slicedPointer.baseAddress!),
+                count: slicedPointer.count,
+                deallocator: .custom { (_: UnsafeMutableRawPointer, _: Int) in
+                    unmanagedBacking.release()
+                }
+            )
         }
     }
 }

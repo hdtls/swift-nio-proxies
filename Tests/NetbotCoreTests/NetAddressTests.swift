@@ -13,10 +13,11 @@
 //===----------------------------------------------------------------------===//
 
 import XCTest
+
 @testable import NetbotCore
 
 class NetAddressTests: XCTestCase {
-    
+
     func testEquatableWorks() {
         let first = NetAddress.domainPort("localhost", 80)
         let second = NetAddress.domainPort("localhost", 80)
@@ -26,7 +27,7 @@ class NetAddressTests: XCTestCase {
         XCTAssertEqual(third, fourth)
         XCTAssertNotEqual(first, third)
     }
-    
+
     func testNetAddressErrorEqutable() {
         let first = NetAddressError.invalidAddressType(actual: 0x01)
         let second = NetAddressError.invalidAddressType(actual: 0x01)
@@ -34,20 +35,22 @@ class NetAddressTests: XCTestCase {
         XCTAssertEqual(first, second)
         XCTAssertNotEqual(first, third)
     }
-    
+
     func testApplyingDomainPortAddress() {
         var packet = Data()
         var buffer = ByteBuffer()
         let address = NetAddress.domainPort("localhost", 80)
-        let expectedAddress: [UInt8] = [0x03, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74, 0x00, 0x50]
+        let expectedAddress: [UInt8] = [
+            0x03, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74, 0x00, 0x50,
+        ]
         XCTAssertEqual(packet.applying(address), expectedAddress.count)
         XCTAssertEqual(buffer.applying(address), expectedAddress.count)
         XCTAssertEqual(packet.count, 13)
         XCTAssertEqual(buffer.readableBytes, 13)
-        XCTAssertEqual(Array<UInt8>(packet), expectedAddress)
+        XCTAssertEqual([UInt8](packet), expectedAddress)
         XCTAssertEqual(buffer.readBytes(length: buffer.readableBytes), expectedAddress)
     }
-    
+
     func testApplyingIPv4SocketAddress() {
         var packet = Data()
         var buffer = ByteBuffer()
@@ -69,7 +72,7 @@ class NetAddressTests: XCTestCase {
         XCTAssertEqual(packet.count, 0)
         XCTAssertEqual(buffer.readableBytes, 0)
     }
-    
+
     func testApplyingIPv6SocketAddress() {
         var packet = Data()
         var buffer = ByteBuffer()
@@ -80,9 +83,21 @@ class NetAddressTests: XCTestCase {
         XCTAssertEqual(buffer.readableBytes, 19)
         XCTAssertEqual(packet.removeFirst(), 0x04)
         XCTAssertEqual(buffer.readInteger(as: UInt8.self), 0x04)
-        XCTAssertEqual(Array(packet.prefix(16)), [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01])
+        XCTAssertEqual(
+            Array(packet.prefix(16)),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x01,
+            ]
+        )
         packet.removeFirst(16)
-        XCTAssertEqual(buffer.readBytes(length: 16), [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01])
+        XCTAssertEqual(
+            buffer.readBytes(length: 16),
+            [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x01,
+            ]
+        )
         packet.prefix(MemoryLayout<in_port_t>.size).withUnsafeBytes {
             XCTAssertEqual($0.bindMemory(to: in_port_t.self).baseAddress?.pointee.bigEndian, 80)
         }
@@ -91,7 +106,7 @@ class NetAddressTests: XCTestCase {
         XCTAssertEqual(packet.count, 0)
         XCTAssertEqual(buffer.readableBytes, 0)
     }
-    
+
     func testRejectWrongAddressType() {
         let expectedAddress: [UInt8] = [0x02, 0x7F, 0x00, 0x00, 0x01, 0x00, 0x50]
         var packet = Data(expectedAddress)
@@ -99,19 +114,25 @@ class NetAddressTests: XCTestCase {
         do {
             _ = try packet.readAddressIfPossible()
         } catch {
-            XCTAssertEqual(error as! NetAddressError, NetAddressError.invalidAddressType(actual: 0x02))
+            XCTAssertEqual(
+                error as! NetAddressError,
+                NetAddressError.invalidAddressType(actual: 0x02)
+            )
         }
         do {
             _ = try buffer.readAddressIfPossible()
         } catch {
-            XCTAssertEqual(error as! NetAddressError, NetAddressError.invalidAddressType(actual: 0x02))
+            XCTAssertEqual(
+                error as! NetAddressError,
+                NetAddressError.invalidAddressType(actual: 0x02)
+            )
         }
         XCTAssertEqual(packet.count, expectedAddress.count)
         XCTAssertEqual(buffer.readableBytes, expectedAddress.count)
         XCTAssertEqual(Array(packet.prefix(expectedAddress.count)), expectedAddress)
         XCTAssertEqual(buffer.readBytes(length: expectedAddress.count), expectedAddress)
     }
-    
+
     func testReadAddressButBufferIsNotEnoughToReadAsNetAddress() {
         let expectedAddress: [UInt8] = [0x01, 0x7F, 0x00, 0x00, 0x01, 0x00]
         var packet = Data(expectedAddress)
@@ -129,7 +150,7 @@ class NetAddressTests: XCTestCase {
             XCTFail()
         }
     }
-    
+
     func testReadAddressButBufferIsEmpty() {
         let expectedAddress: [UInt8] = []
         var packet = Data(expectedAddress)
@@ -163,9 +184,12 @@ class NetAddressTests: XCTestCase {
         XCTAssertEqual(packet.count, 0)
         XCTAssertEqual(buffer.readableBytes, 0)
     }
-    
+
     func testReadIPv6Address() {
-        let expectedAddress: [UInt8] = [0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x50]
+        let expectedAddress: [UInt8] = [
+            0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x01, 0x00, 0x50,
+        ]
         var packet = Data(expectedAddress)
         var buffer = ByteBuffer(bytes: expectedAddress)
         var addr1: NetAddress?
@@ -179,9 +203,11 @@ class NetAddressTests: XCTestCase {
         XCTAssertEqual(packet.count, 0)
         XCTAssertEqual(buffer.readableBytes, 0)
     }
-    
+
     func testReadDomain() {
-        let expectedAddress: [UInt8] = [0x03, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74, 0x00, 0x50]
+        let expectedAddress: [UInt8] = [
+            0x03, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74, 0x00, 0x50,
+        ]
         var packet = Data(expectedAddress)
         var buffer = ByteBuffer(bytes: expectedAddress)
         var addr1: NetAddress?

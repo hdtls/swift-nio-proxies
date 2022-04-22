@@ -15,30 +15,30 @@
 import Foundation
 
 public protocol VMESSConfigurationProtocol {
-    
+
     var user: UUID { get }
 }
 
 /// `Configuration` object defines VMESS request infomation.
 public struct Configuration {
-    
+
     /// The VMESS protocol version.
     public let version: ProtocolVersion = .v1
-    
+
     /// ID
     public let id: UUID
-    
+
     /// The encryption method.
     public let algorithm: Algorithm
-    
+
     /// Request command.
     public let command: Command
-    
+
     /// Current request stream options.
     ///
     /// This value is will updated by algorithm.
     public let options: StreamOptions
-    
+
     /// Initialize an instance of `Configuration` with specified id, algorithm, command, and options.
     /// - Parameters:
     ///   - id: The id identifier current user.
@@ -54,11 +54,11 @@ public struct Configuration {
         if algorithm == .aes128gcm || algorithm == .chacha20poly1305 || algorithm == .none {
             options.insert(.masking)
         }
-        
+
         if algorithm.shouldEnablePadding && options.contains(.masking) {
             options.insert(.padding)
         }
-        
+
         if algorithm == .zero {
             options.remove(.chunked)
             options.remove(.masking)

@@ -15,23 +15,23 @@
 import Crypto
 import Foundation
 
-fileprivate protocol Updatable {
-    
+private protocol Updatable {
+
     static var blockSize: Int { get }
-    
+
     mutating func update(bufferPointer: UnsafeRawBufferPointer)
-    
+
     mutating func update<D: DataProtocol>(data: D)
-    
+
     func get() -> [UInt8]
 }
 
 extension SHA256: Updatable {
-    
+
     static var blockSize: Int {
         64
     }
-    
+
     fileprivate func get() -> [UInt8] {
         finalize().withUnsafeBytes { ptr in
             Array(ptr)
@@ -40,15 +40,15 @@ extension SHA256: Updatable {
 }
 
 struct KDF {
-    
+
     private struct __HMAC: Updatable {
-        
+
         static var blockSize: Int { 64 }
-        
+
         mutating func update(bufferPointer: UnsafeRawBufferPointer) {
             innerHasher.update(bufferPointer: bufferPointer)
         }
-        
+
         mutating func update<D: DataProtocol>(data: D) {
             data.regions.forEach { (regionData) in
                 regionData.withUnsafeBytes({ (dataPtr) in
@@ -56,7 +56,7 @@ struct KDF {
                 })
             }
         }
-        
+
         func get() -> [UInt8] {
             let buffer = innerHasher.get()
             var outerHashForFinalization = outerHasher
@@ -65,17 +65,17 @@ struct KDF {
             }
             return outerHashForFinalization.get()
         }
-        
+
         var outerHasher: Updatable
         var innerHasher: Updatable
-        
+
         init<U: Updatable>(H: () -> U, key: SymmetricKey) {
             var K: ContiguousBytes
-            
+
             if key.withUnsafeBytes({ $0.count }) == U.blockSize {
                 K = key
             } else if key.withUnsafeBytes({ $0.count }) > U.blockSize {
-                K = key.withUnsafeBytes { (keyBytes)  in
+                K = key.withUnsafeBytes { (keyBytes) in
                     var hash = H()
                     hash.update(bufferPointer: keyBytes)
                     return hash.get()
@@ -85,7 +85,7 @@ struct KDF {
                 key.withUnsafeBytes { keyArray.replaceSubrange(0..<$0.count, with: $0) }
                 K = keyArray
             }
-            
+
             self.innerHasher = H()
             let innerKey = K.withUnsafeBytes {
                 return $0.map({ (keyByte) in
@@ -93,7 +93,7 @@ struct KDF {
                 })
             }
             innerHasher.update(data: innerKey)
-            
+
             self.outerHasher = H()
             let outerKey = K.withUnsafeBytes {
                 return $0.map({ (keyByte) in
@@ -103,7 +103,7 @@ struct KDF {
             outerHasher.update(data: outerKey)
         }
     }
-    
+
     /// Derives a symmetric key using the KDF algorithm.
     ///
     /// - Parameters:
@@ -111,18 +111,28 @@ struct KDF {
     ///   - paths: path list.
     ///   - outputByteCount: The desired number of output bytes, if nill output all bytes, default is nil.
     /// - Returns: The derived key
-    static func deriveKey<Info>(inputKeyMaterial: SymmetricKey, info: [Info], outputByteCount: Int? = nil) -> SymmetricKey where Info: DataProtocol {
-        var updatable: __HMAC = __HMAC.init(H: { SHA256() }, key: .init(data: KDFSaltConstVMessAEADKDF))
+    static func deriveKey<Info>(
+        inputKeyMaterial: SymmetricKey,
+        info: [Info],
+        outputByteCount: Int? = nil
+    ) -> SymmetricKey where Info: DataProtocol {
+        var updatable: __HMAC = __HMAC.init(
+            H: { SHA256() },
+            key: .init(data: KDFSaltConstVMessAEADKDF)
+        )
         for path in info {
-            updatable = __HMAC.init(H: {
-                updatable
-            }, key: .init(data: Array(path)))
+            updatable = __HMAC.init(
+                H: {
+                    updatable
+                },
+                key: .init(data: Array(path))
+            )
         }
-        
+
         inputKeyMaterial.withUnsafeBytes {
             updatable.update(bufferPointer: $0)
         }
-        
+
         guard let maxLength = outputByteCount else {
             return .init(data: updatable.get())
         }
@@ -131,7 +141,7 @@ struct KDF {
 }
 
 struct KDF12 {
-    
+
     /// Derives a 12 byte symmetric key using the KDF algorithm.
     ///
     /// - Parameters:
@@ -139,7 +149,8 @@ struct KDF12 {
     ///   - paths: path list.
     ///   - outputByteCount: The desired number of output bytes, if nill output all bytes, default is nil.
     /// - Returns: The derived key
-    static func deriveKey<Info>(inputKeyMaterial: SymmetricKey, info: [Info]) -> SymmetricKey where Info: DataProtocol {
+    static func deriveKey<Info>(inputKeyMaterial: SymmetricKey, info: [Info]) -> SymmetricKey
+    where Info: DataProtocol {
         KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info, outputByteCount: 12)
     }
 }
@@ -152,7 +163,8 @@ struct KDF16 {
     ///   - paths: path list.
     ///   - outputByteCount: The desired number of output bytes, if nill output all bytes, default is nil.
     /// - Returns: The derived key
-    static func deriveKey<Info>(inputKeyMaterial: SymmetricKey, info: [Info]) -> SymmetricKey where Info: DataProtocol {
+    static func deriveKey<Info>(inputKeyMaterial: SymmetricKey, info: [Info]) -> SymmetricKey
+    where Info: DataProtocol {
         KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info, outputByteCount: 16)
     }
 }
@@ -166,7 +178,8 @@ func generateCmdKey(_ id: UUID) -> SymmetricKey {
     }
 }
 
-func generateChaChaPolySymmetricKey<Key>(inputKeyMaterial: Key) -> SymmetricKey where Key: DataProtocol {
+func generateChaChaPolySymmetricKey<Key>(inputKeyMaterial: Key) -> SymmetricKey
+where Key: DataProtocol {
     var md5 = Insecure.MD5()
     md5.update(data: inputKeyMaterial)
     return md5.finalize().withUnsafeBytes { ptr in

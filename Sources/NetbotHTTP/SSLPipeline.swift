@@ -18,81 +18,144 @@ import NIOSSL
 import NIOTLS
 
 extension ChannelPipeline {
-    
-    func addSSLClientHandlers(tlsConfiguration: TLSConfiguration = .makeClientConfiguration(), serverHostname: String? = nil, position: ChannelPipeline.Position = .last) -> EventLoopFuture<Void> {
+
+    func addSSLClientHandlers(
+        tlsConfiguration: TLSConfiguration = .makeClientConfiguration(),
+        serverHostname: String? = nil,
+        position: ChannelPipeline.Position = .last
+    ) -> EventLoopFuture<Void> {
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
-                try syncOperations.addSSLClientHandlers(tlsConfiguration: tlsConfiguration, serverHostname: serverHostname, position: position)
+                try syncOperations.addSSLClientHandlers(
+                    tlsConfiguration: tlsConfiguration,
+                    serverHostname: serverHostname,
+                    position: position
+                )
             }
             return eventLoop.makeCompletedFuture(result)
         } else {
             return eventLoop.submit({
-                try self.syncOperations.addSSLClientHandlers(tlsConfiguration: tlsConfiguration, serverHostname: serverHostname, position: position)
+                try self.syncOperations.addSSLClientHandlers(
+                    tlsConfiguration: tlsConfiguration,
+                    serverHostname: serverHostname,
+                    position: position
+                )
             })
         }
     }
-    
-    func configureSSLServerHandlers(pkcs12Bundle: NIOSSLPKCS12Bundle, position: ChannelPipeline.Position = .last) -> EventLoopFuture<Void> {
-        configureSSLServerHandlers(certificateChain: pkcs12Bundle.certificateChain.reduce(into: [], { partialResult, certificate in
-            partialResult.append(.certificate(certificate))
-        }), privateKey: .privateKey(pkcs12Bundle.privateKey))
+
+    func configureSSLServerHandlers(
+        pkcs12Bundle: NIOSSLPKCS12Bundle,
+        position: ChannelPipeline.Position = .last
+    ) -> EventLoopFuture<Void> {
+        configureSSLServerHandlers(
+            certificateChain: pkcs12Bundle.certificateChain.reduce(
+                into: [],
+                { partialResult, certificate in
+                    partialResult.append(.certificate(certificate))
+                }
+            ),
+            privateKey: .privateKey(pkcs12Bundle.privateKey)
+        )
     }
 
-    func configureSSLServerHandlers(certificateChain: [NIOSSLCertificateSource], privateKey: NIOSSLPrivateKeySource, position: ChannelPipeline.Position = .last) -> EventLoopFuture<Void> {
-        let tlsConfiguration = TLSConfiguration.makeServerConfiguration(certificateChain: certificateChain, privateKey: privateKey)
+    func configureSSLServerHandlers(
+        certificateChain: [NIOSSLCertificateSource],
+        privateKey: NIOSSLPrivateKeySource,
+        position: ChannelPipeline.Position = .last
+    ) -> EventLoopFuture<Void> {
+        let tlsConfiguration = TLSConfiguration.makeServerConfiguration(
+            certificateChain: certificateChain,
+            privateKey: privateKey
+        )
         return configureSSLServerHandlers(tlsConfiguration: tlsConfiguration, position: position)
     }
-    
-    func configureSSLServerHandlers(tlsConfiguration: TLSConfiguration, position: ChannelPipeline.Position = .last) -> EventLoopFuture<Void> {
+
+    func configureSSLServerHandlers(
+        tlsConfiguration: TLSConfiguration,
+        position: ChannelPipeline.Position = .last
+    ) -> EventLoopFuture<Void> {
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
-                try syncOperations.configureSSLServerHandlers(tlsConfiguration: tlsConfiguration, position: position)
+                try syncOperations.configureSSLServerHandlers(
+                    tlsConfiguration: tlsConfiguration,
+                    position: position
+                )
             }
             return eventLoop.makeCompletedFuture(result)
         } else {
             return eventLoop.submit {
-                try self.syncOperations.configureSSLServerHandlers(tlsConfiguration: tlsConfiguration, position: position)
+                try self.syncOperations.configureSSLServerHandlers(
+                    tlsConfiguration: tlsConfiguration,
+                    position: position
+                )
             }
         }
     }
 }
 
 extension ChannelPipeline.SynchronousOperations {
-            
-    func addSSLClientHandlers(tlsConfiguration: TLSConfiguration = .makeClientConfiguration(), serverHostname: String? = nil, position: ChannelPipeline.Position = .last) throws {
+
+    func addSSLClientHandlers(
+        tlsConfiguration: TLSConfiguration = .makeClientConfiguration(),
+        serverHostname: String? = nil,
+        position: ChannelPipeline.Position = .last
+    ) throws {
         eventLoop.assertInEventLoop()
-        
+
         let sslContext = try NIOSSLContext(configuration: tlsConfiguration)
-        let sslHandler = try NIOSSLClientHandler(context: sslContext, serverHostname: serverHostname)
+        let sslHandler = try NIOSSLClientHandler(
+            context: sslContext,
+            serverHostname: serverHostname
+        )
         let apnHandler = ApplicationProtocolNegotiationHandler { result, channel in
             channel.pipeline.eventLoop.makeSucceededVoidFuture()
         }
         let handlers: [ChannelHandler] = [sslHandler, apnHandler]
-        
+
         try addHandlers(handlers, position: position)
     }
-    
-    func configureSSLServerHandlers(pkcs12Bundle: NIOSSLPKCS12Bundle, position: ChannelPipeline.Position = .last) throws {
-        try configureSSLServerHandlers(certificateChain: pkcs12Bundle.certificateChain.reduce(into: [], { partialResult, certificate in
-            partialResult.append(.certificate(certificate))
-        }), privateKey: .privateKey(pkcs12Bundle.privateKey))
+
+    func configureSSLServerHandlers(
+        pkcs12Bundle: NIOSSLPKCS12Bundle,
+        position: ChannelPipeline.Position = .last
+    ) throws {
+        try configureSSLServerHandlers(
+            certificateChain: pkcs12Bundle.certificateChain.reduce(
+                into: [],
+                { partialResult, certificate in
+                    partialResult.append(.certificate(certificate))
+                }
+            ),
+            privateKey: .privateKey(pkcs12Bundle.privateKey)
+        )
     }
-    
-    func configureSSLServerHandlers(certificateChain: [NIOSSLCertificateSource], privateKey: NIOSSLPrivateKeySource, position: ChannelPipeline.Position = .last) throws {
-        let tlsConfiguration = TLSConfiguration.makeServerConfiguration(certificateChain: certificateChain, privateKey: privateKey)
+
+    func configureSSLServerHandlers(
+        certificateChain: [NIOSSLCertificateSource],
+        privateKey: NIOSSLPrivateKeySource,
+        position: ChannelPipeline.Position = .last
+    ) throws {
+        let tlsConfiguration = TLSConfiguration.makeServerConfiguration(
+            certificateChain: certificateChain,
+            privateKey: privateKey
+        )
         try configureSSLServerHandlers(tlsConfiguration: tlsConfiguration, position: position)
     }
-    
-    func configureSSLServerHandlers(tlsConfiguration: TLSConfiguration, position: ChannelPipeline.Position = .last) throws {
+
+    func configureSSLServerHandlers(
+        tlsConfiguration: TLSConfiguration,
+        position: ChannelPipeline.Position = .last
+    ) throws {
         eventLoop.assertInEventLoop()
-        
+
         let sslContext = try NIOSSLContext(configuration: tlsConfiguration)
         let sslHandler = NIOSSLServerHandler(context: sslContext)
         let apnHandler = ApplicationProtocolNegotiationHandler { result, channel in
             channel.pipeline.eventLoop.makeSucceededVoidFuture()
         }
         let handlers: [ChannelHandler] = [sslHandler, apnHandler]
-        
+
         try addHandlers(handlers, position: position)
     }
 }
