@@ -17,6 +17,15 @@ import XCTest
 
 @testable import NetbotHTTP
 
+struct HTTPProxyConfiguration: HTTPProxyConfigurationProtocol {
+
+    var username: String?
+
+    var password: String?
+
+    var prefererHttpTunneling: Bool = false
+}
+
 class HTTPProxyClientHandlerTests: XCTestCase {
 
     var channel: EmbeddedChannel!
@@ -31,6 +40,7 @@ class HTTPProxyClientHandlerTests: XCTestCase {
 
         self.handler = .init(
             logger: .init(label: ""),
+            configuration: HTTPProxyConfiguration.init(),
             destinationAddress: .socketAddress(try .init(ipAddress: "127.0.0.1", port: 8080))
         )
         self.channel = EmbeddedChannel(handler: self.handler)
