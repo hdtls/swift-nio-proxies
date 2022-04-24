@@ -17,17 +17,36 @@ import NetbotCore
 
 public enum ProxyProtocol: String, CaseIterable, Equatable {
 
-    case http
+    case http = "HTTP"
 
-    case https
+    case https = "HTTPS"
 
-    case socks5
+    case socks5 = "SOCKS5"
 
-    case socks5OverTLS = "socks5-tls"
+    case socks5OverTLS = "SOCKS over TLS"
 
-    case shadowsocks = "ss"
+    case shadowsocks = "Shadowsocks"
 
-    case vmess
+    case vmess = "VMESS"
+
+    public init?(rawValue: String) {
+        switch rawValue {
+            case "HTTP", "http":
+                self = .http
+            case "HTTPS", "https":
+                self = .https
+            case "SOCKS5", "socks5":
+                self = .socks5
+            case "SOCKS5 over TLS", "socks5 over tls", "socks5-tls":
+                self = .socks5OverTLS
+            case "Shadowsocks", "shadowsocks", "SS", "ss":
+                self = .shadowsocks
+            case "VMESS", "vmess":
+                self = .vmess
+            default:
+                return nil
+        }
+    }
 }
 
 public enum PolicyType: Equatable {
