@@ -12,20 +12,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import ConnectionPool
 import Foundation
-@_exported import Logging
-@_exported import MaxMindDB
-@_exported import NIOCore
-@_exported import NIOExtras
-@_exported import NIOHTTP1
-@_exported import NIOPosix
-@_exported import NetbotCore
-@_exported import NetbotHTTP
-@_exported import NetbotSOCKS
-@_exported import NetbotSS
-@_exported import NetbotTrojan
-@_exported import NetbotVMESS
+import Logging
+import MaxMindDB
+import NIOCore
+import NIOExtras
+import NIOPosix
+import NetbotCore
+import NetbotHTTP
 
 public class Netbot {
 
@@ -100,10 +94,10 @@ public class Netbot {
             let httpListenPort = configuration.general.httpListenPort
         {
             let bootstrap = ServerBootstrap(group: eventLoopGroup)
-                .serverChannelOption(ChannelOptions.backlog, value: Int32(256))
+                .serverChannelOption(ChannelOptions.backlog, value: 256)
                 .serverChannelOption(
-                    ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR),
-                    value: SocketOptionValue(1)
+                    ChannelOptions.socketOption(.so_reuseaddr),
+                    value: 1
                 )
                 .serverChannelInitializer { channel in
                     channel.pipeline.addHandler(
@@ -201,7 +195,7 @@ public class Netbot {
 
                                 // Fetch rule from LRU cache.
                                 for pattern in patterns {
-                                    savedFinalRule = self.cache[pattern]
+                                    savedFinalRule = self.cache.value(forKey: pattern)
                                     if savedFinalRule != nil {
                                         return savedFinalRule!
                                     }
@@ -220,7 +214,7 @@ public class Netbot {
 
                                 // Cache rule evaluating result.
                                 patterns.forEach { pattern in
-                                    self.cache[pattern] = savedFinalRule
+                                    self.cache.setValue(savedFinalRule, forKey: pattern)
                                 }
                                 precondition(
                                     savedFinalRule != nil,
