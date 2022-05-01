@@ -14,6 +14,11 @@
 
 import EraseNilDecoding
 import Foundation
+import NIOSSL
+import NetbotHTTP
+import NetbotSOCKS
+import NetbotSS
+import NetbotVMESS
 
 public struct DefaultAlgo: EraseNilDecodable {
     public static let erasedValue: CryptoAlgorithm = .aes128Gcm

@@ -17,8 +17,10 @@ import EraseNilDecoding
 import Foundation
 import NIOSSL
 import NetbotCore
+import NetbotHTTP
 import NetbotSOCKS
 import NetbotSS
+import NetbotVMESS
 
 public protocol SocketConfigurationProtocol {
 

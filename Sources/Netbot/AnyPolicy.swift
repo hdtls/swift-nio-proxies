@@ -67,7 +67,7 @@ public protocol PolicyConvertible {
 
 public struct AnyPolicy {
 
-    public var id: UUID = UUID()
+    public var id: UUID
 
     public var name: String
 
@@ -76,6 +76,18 @@ public struct AnyPolicy {
     public var configuration: ProxyConfiguration
 
     public var destinationAddress: NetAddress?
+
+    public init(
+        id: UUID = UUID(),
+        name: String,
+        type: PolicyType,
+        configuration: ProxyConfiguration
+    ) {
+        self.id = id
+        self.name = name
+        self.type = type
+        self.configuration = configuration
+    }
 }
 
 extension AnyPolicy {
@@ -130,6 +142,7 @@ extension AnyPolicy: Codable {
                 type = .proxy(via: `protocol`)
         }
 
+        id = UUID()
         name = try container.decode(String.self, forKey: .name)
         configuration = try container.decode(ProxyConfiguration.self, forKey: .configuration)
     }
