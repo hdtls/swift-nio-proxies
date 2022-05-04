@@ -272,7 +272,7 @@ final class ConfigurationCodingTests: XCTestCase {
     func testSOCKS5OverTLSPolicySerializationAndDecoding() throws {
         let policiesString = """
             [Proxy Policy]
-            SOCKS5OverTLS = socks5-tls, server-address=127.0.0.1, port=8310, username=username, password=password, sni=sni, skip-certificate-verification=true
+            SOCKS5OverTLS = socks5-over-tls, server-address=127.0.0.1, port=8310, username=username, password=password, sni=sni, skip-certificate-verification=true
             """
         let jsonObject = try ConfigurationSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
@@ -303,7 +303,7 @@ final class ConfigurationCodingTests: XCTestCase {
     func testSOCKS5OverTLSPolicyDefaultValueSerializationAndDecoding() throws {
         let policiesString = """
             [Proxy Policy]
-            SOCKS5OverTLS = socks5-tls, server-address=127.0.0.1, port=8310
+            SOCKS5OverTLS = socks5-over-tls, server-address=127.0.0.1, port=8310
             """
         let jsonObject = try ConfigurationSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!

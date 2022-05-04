@@ -40,16 +40,17 @@ public protocol TLSConfigurationProtocol {
     var certificatePinning: String? { get set }
 }
 
-/// Capable of being authenticated.
-public protocol AuthenticationCredentialConvertible {}
-
+/// Policy protocol representation a policy object.
 public protocol Policy: ConnectionPoolSource {
 
+    /// The name of the policy.
     var name: String { get set }
 
+    /// Destination address.
     var destinationAddress: NetAddress? { get set }
 }
 
+/// DirectPolicy will tunnel connection derectly.
 public struct DirectPolicy: Policy {
 
     public var name: String = "DIRECT"
@@ -57,6 +58,7 @@ public struct DirectPolicy: Policy {
     public var destinationAddress: NetAddress?
 }
 
+/// RejectPolicy will reject connection to the destination.
 public struct RejectPolicy: Policy {
 
     public var name: String = "REJECT"
@@ -64,6 +66,7 @@ public struct RejectPolicy: Policy {
     public var destinationAddress: NetAddress?
 }
 
+/// RejectTinyGifPolicy will reject connection and response a tiny gif.
 public struct RejectTinyGifPolicy: Policy {
 
     public var name: String = "REJECT-TINYGIF"
@@ -71,34 +74,7 @@ public struct RejectTinyGifPolicy: Policy {
     public var destinationAddress: NetAddress?
 }
 
-public struct ShadowsocksPolicy: Policy {
-
-    public var name: String
-
-    public var configuration: SocketConfigurationProtocol & ShadowsocksConfigurationProtocol
-
-    public var destinationAddress: NetAddress?
-}
-
-public struct SOCKS5Policy: Policy {
-
-    public var name: String
-
-    public var configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol
-
-    public var destinationAddress: NetAddress?
-}
-
-public struct SOCKS5OverTLSPolicy: Policy {
-
-    public var name: String
-
-    public var configuration:
-        SocketConfigurationProtocol & SOCKS5ConfigurationProtocol & TLSConfigurationProtocol
-
-    public var destinationAddress: NetAddress?
-}
-
+/// HTTPProxyPolicy will tunning connection to the destination via HTTP proxy.
 public struct HTTPProxyPolicy: Policy {
 
     public var name: String
@@ -108,6 +84,7 @@ public struct HTTPProxyPolicy: Policy {
     public var destinationAddress: NetAddress?
 }
 
+/// HTTPSProxyPolicy will tunning connection to the destination via HTTPS proxy.
 public struct HTTPSProxyPolicy: Policy {
 
     public var name: String
@@ -118,6 +95,38 @@ public struct HTTPSProxyPolicy: Policy {
     public var destinationAddress: NetAddress?
 }
 
+/// SOCKS5Policy will tunning connection to the destination via SOCKS5 proxy.
+public struct SOCKS5Policy: Policy {
+
+    public var name: String
+
+    public var configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol
+
+    public var destinationAddress: NetAddress?
+}
+
+/// SOCKS5OverTLSPolicy will tunning connection to the destination via SOCKS5 proxy.
+public struct SOCKS5OverTLSPolicy: Policy {
+
+    public var name: String
+
+    public var configuration:
+        SocketConfigurationProtocol & SOCKS5ConfigurationProtocol & TLSConfigurationProtocol
+
+    public var destinationAddress: NetAddress?
+}
+
+/// ShadowsocksPolicy will tunning connection to the destination via Shadowsocks proxy.
+public struct ShadowsocksPolicy: Policy {
+
+    public var name: String
+
+    public var configuration: SocketConfigurationProtocol & ShadowsocksConfigurationProtocol
+
+    public var destinationAddress: NetAddress?
+}
+
+/// VMESSPolicy will tunning connection to the destination via VMESS proxy.
 public struct VMESSPolicy: Policy {
 
     public var name: String

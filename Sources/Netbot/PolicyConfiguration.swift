@@ -18,31 +18,42 @@ import NetbotSOCKS
 import NetbotSS
 import NetbotVMESS
 
-struct AnyProxyConfiguration {
+/// Policy configuration object.
+public struct PolicyConfiguration {
 
-    var serverAddress: String
+    /// Proxy server address.
+    public var serverAddress: String
 
-    var port: Int
+    /// Proxy server port.
+    public var port: Int
 
-    var username: String?
+    /// Username for HTTP basic authentication and SOCKS5 username password authentication.
+    public var username: String?
 
-    var password: String?
+    /// Password for HTTP basic authentication and SOCKS5 username password authentication.
+    public var password: String?
 
-    var prefererHttpTunneling: Bool
+    /// A boolean value determinse whether HTTP proxy should prefer using CONNECT tunnel.
+    public var prefererHttpTunneling: Bool
 
-    var skipCertificateVerification: Bool
+    /// A boolean value determinse whether SSL should skip certification verification.
+    public var skipCertificateVerification: Bool
 
-    var sni: String?
+    /// SSL sni.
+    public var sni: String?
 
-    var certificatePinning: String?
+    /// SSL certificate pinning.
+    public var certificatePinning: String?
 
-    var algo: CryptoAlgorithm?
+    private var algo: CryptoAlgorithm?
 
-    init(
-        serverAddress: String = "",
-        port: Int = 8080,
-        username: String? = "",
-        password: String? = "",
+    /// Initialize an instance of `PolicyConfiguration` object with specified serverAddress, port, username, password,
+    /// prefererHttpTunneling, skipCertificationVerification, sni, certificatePinning and algorithm.
+    public init(
+        serverAddress: String,
+        port: Int,
+        username: String? = nil,
+        password: String? = nil,
         prefererHttpTunneling: Bool = false,
         skipCertificateVerification: Bool = false,
         sni: String? = nil,
@@ -59,9 +70,32 @@ struct AnyProxyConfiguration {
         self.certificatePinning = certificatePinning
         self.algo = algorithm
     }
+
+    /// Initialize an instance of `PolicyConfiguration`.
+    ///
+    /// Calling this method is equivalent to calling
+    /// ```swift
+    /// init(
+    ///     serverAddress: "",
+    ///     port: 8080,
+    ///     username: nil,
+    ///     password: nil,
+    ///     prefererHttpTunneling: false,
+    ///     skipCertificateVerification: false,
+    ///     sni: nil,
+    ///     certificatePinning: nil,
+    ///     algorithm: nil
+    /// )
+    /// ```
+    public init() {
+        serverAddress = ""
+        port = 8080
+        prefererHttpTunneling = false
+        skipCertificateVerification = false
+    }
 }
 
-extension AnyProxyConfiguration: Codable {
+extension PolicyConfiguration: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case serverAddress
@@ -75,7 +109,7 @@ extension AnyProxyConfiguration: Codable {
         case algo = "algorithm"
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         serverAddress = try container.decode(String.self, forKey: .serverAddress)
         port = try container.decode(Int.self, forKey: .port)
@@ -92,7 +126,7 @@ extension AnyProxyConfiguration: Codable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(serverAddress, forKey: .serverAddress)
         try container.encode(port, forKey: .port)
@@ -112,29 +146,33 @@ extension AnyProxyConfiguration: Codable {
     }
 }
 
-extension AnyProxyConfiguration: SocketConfigurationProtocol {}
+extension PolicyConfiguration: SocketConfigurationProtocol {}
 
-extension AnyProxyConfiguration: HTTPProxyConfigurationProtocol {}
+extension PolicyConfiguration: HTTPProxyConfigurationProtocol {}
 
-extension AnyProxyConfiguration: TLSConfigurationProtocol {}
+extension PolicyConfiguration: TLSConfigurationProtocol {}
 
-extension AnyProxyConfiguration: ShadowsocksConfigurationProtocol {
+extension PolicyConfiguration: ShadowsocksConfigurationProtocol {
 
-    var algorithm: CryptoAlgorithm {
-        algo ?? .aes128Gcm
+    /// Shadowsocks encryption algorithm.
+    public var algorithm: CryptoAlgorithm {
+        get { algo ?? .aes128Gcm }
+        set { algo = newValue }
     }
 
-    var passwordReference: String {
+    /// Shadowsocks encryption password.
+    public var passwordReference: String {
         assert(password != nil, "Shadowsocks MUST provide password to secure connection.")
         return password ?? ""
     }
 }
 
-extension AnyProxyConfiguration: SOCKS5ConfigurationProtocol {}
+extension PolicyConfiguration: SOCKS5ConfigurationProtocol {}
 
-extension AnyProxyConfiguration: VMESSConfigurationProtocol {
+extension PolicyConfiguration: VMESSConfigurationProtocol {
 
-    var user: UUID {
+    /// VMESS user object.
+    public var user: UUID {
         guard let uuidString = username, let uuid = UUID(uuidString: uuidString) else {
             assertionFailure("VMESS MUST provide valid UUID string as username.")
             return UUID()

@@ -32,6 +32,9 @@ public struct AnyPolicy {
 
 extension AnyPolicy {
 
+    /// Builtin policies.
+    ///
+    /// For current version this array contains three element `DirectPolicy`, `RejectPolicy` and `RejectTinyGifPolicy`.
     public static let builtin: [Policy] = [DirectPolicy(), RejectPolicy(), RejectTinyGifPolicy()]
 }
 
@@ -48,11 +51,6 @@ extension AnyPolicy: Codable {
 
         let name = try container.decode(String.self, forKey: .name)
 
-        let configuration = try container.decodeIfPresent(
-            AnyProxyConfiguration.self,
-            forKey: .configuration
-        )
-
         let rawValue = try container.decode(String.self, forKey: .type)
 
         switch rawValue {
@@ -63,34 +61,40 @@ extension AnyPolicy: Codable {
             case "reject-tinygif":
                 base = RejectTinyGifPolicy()
             case "http":
-                guard let configuration = configuration else {
-                    throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
-                }
+                let configuration = try container.decode(
+                    PolicyConfiguration.self,
+                    forKey: .configuration
+                )
                 base = HTTPProxyPolicy(name: name, configuration: configuration)
             case "https":
-                guard let configuration = configuration else {
-                    throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
-                }
+                let configuration = try container.decode(
+                    PolicyConfiguration.self,
+                    forKey: .configuration
+                )
                 base = HTTPSProxyPolicy(name: name, configuration: configuration)
             case "socks5":
-                guard let configuration = configuration else {
-                    throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
-                }
+                let configuration = try container.decode(
+                    PolicyConfiguration.self,
+                    forKey: .configuration
+                )
                 base = SOCKS5Policy(name: name, configuration: configuration)
             case "socks5-over-tls":
-                guard let configuration = configuration else {
-                    throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
-                }
+                let configuration = try container.decode(
+                    PolicyConfiguration.self,
+                    forKey: .configuration
+                )
                 base = SOCKS5OverTLSPolicy(name: name, configuration: configuration)
             case "ss":
-                guard let configuration = configuration else {
-                    throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
-                }
+                let configuration = try container.decode(
+                    PolicyConfiguration.self,
+                    forKey: .configuration
+                )
                 base = ShadowsocksPolicy(name: name, configuration: configuration)
             case "vmess":
-                guard let configuration = configuration else {
-                    throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
-                }
+                let configuration = try container.decode(
+                    PolicyConfiguration.self,
+                    forKey: .configuration
+                )
                 base = VMESSPolicy(name: name, configuration: configuration)
             default:
                 throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
@@ -102,7 +106,7 @@ extension AnyPolicy: Codable {
 
         try container.encode(base.name, forKey: .name)
 
-        var configuration: AnyProxyConfiguration?
+        var configuration: PolicyConfiguration?
 
         switch base {
             case is DirectPolicy:
