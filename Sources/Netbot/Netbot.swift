@@ -121,12 +121,8 @@ public class Netbot {
                         }
 
                         guard self.outboundMode != .direct else {
-                            do {
-                                return try AnyPolicy.direct.asPolicy()
-                                    .makeConnection(logger: self.logger, on: eventLoop)
-                            } catch {
-                                return eventLoop.makeFailedFuture(error)
-                            }
+                            return DirectPolicy()
+                                .makeConnection(logger: self.logger, on: eventLoop)
                         }
 
                         // DNS lookup for taskAddress.
@@ -222,9 +218,9 @@ public class Netbot {
                                 )
                                 return savedFinalRule!
                             }
-                            .map { rule -> AnyPolicy in
+                            .map { rule -> Policy in
                                 // Policy evaluating.
-                                let fallback = AnyPolicy.direct
+                                let fallback = DirectPolicy()
 
                                 var preferred: String?
 
@@ -248,10 +244,11 @@ public class Netbot {
                                     return fallback
                                 }
 
-                                let policy = (self.configuration.policies + AnyPolicy.builtin).first
-                                {
-                                    $0.name == preferred
-                                }
+                                let policy =
+                                    (self.configuration.policies.map { $0.base } + AnyPolicy.builtin)
+                                    .first {
+                                        $0.name == preferred
+                                    }
 
                                 assert(
                                     policy != nil,
@@ -267,14 +264,7 @@ public class Netbot {
                                 var policy = $0
                                 policy.destinationAddress = taskAddress
 
-                                do {
-                                    return try policy.asPolicy().makeConnection(
-                                        logger: self.logger,
-                                        on: eventLoop
-                                    )
-                                } catch {
-                                    return eventLoop.makeFailedFuture(error)
-                                }
+                                return policy.makeConnection(logger: self.logger, on: eventLoop)
                             }
                     }
                 }

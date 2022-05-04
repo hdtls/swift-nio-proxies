@@ -145,7 +145,7 @@ final class ConfigurationCodingTests: XCTestCase {
 
         XCTAssertFalse(configuration.policies.isEmpty)
         let policy = configuration.policies.first!
-        guard case .proxy(via: let p) = policy.type, p == .http else {
+        guard let policy = policy.base as? HTTPProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
@@ -175,7 +175,7 @@ final class ConfigurationCodingTests: XCTestCase {
         XCTAssertFalse(configuration.policies.isEmpty)
         let policy = configuration.policies.first!
 
-        guard case .proxy(via: let p) = policy.type, p == .http else {
+        guard let policy = policy.base as? HTTPProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
@@ -199,7 +199,7 @@ final class ConfigurationCodingTests: XCTestCase {
         XCTAssertFalse(configuration.policies.isEmpty)
         let policy = configuration.policies.first!
 
-        guard case .proxy(via: let p) = policy.type, p == .https else {
+        guard let policy = policy.base as? HTTPSProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
@@ -231,7 +231,7 @@ final class ConfigurationCodingTests: XCTestCase {
         XCTAssertFalse(configuration.policies.isEmpty)
         let policy = configuration.policies.first!
 
-        guard case .proxy(via: let p) = policy.type, p == .https else {
+        guard let policy = policy.base as? HTTPSProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
@@ -256,7 +256,7 @@ final class ConfigurationCodingTests: XCTestCase {
         XCTAssertFalse(configuration.policies.isEmpty)
         let policy = configuration.policies.first!
 
-        guard case .proxy(via: let p) = policy.type, p == .socks5 else {
+        guard let policy = policy.base as? SOCKS5Policy else {
             XCTFail("should decoded as SOCKS5 proxy policy.")
             return
         }
@@ -285,7 +285,7 @@ final class ConfigurationCodingTests: XCTestCase {
         XCTAssertFalse(configuration.policies.isEmpty)
         let policy = configuration.policies.first!
 
-        guard case .proxy(via: let p) = policy.type, p == .socks5OverTLS else {
+        guard let policy = policy.base as? SOCKS5OverTLSPolicy else {
             XCTFail("should decoded as SOCKS5 over TLS proxy policy.")
             return
         }
@@ -316,7 +316,7 @@ final class ConfigurationCodingTests: XCTestCase {
         XCTAssertFalse(configuration.policies.isEmpty)
         let policy = configuration.policies.first!
 
-        guard case .proxy(via: let p) = policy.type, p == .socks5OverTLS else {
+        guard let policy = policy.base as? SOCKS5OverTLSPolicy else {
             XCTFail("should decoded as SOCKS5 over TLS proxy policy.")
             return
         }
@@ -340,14 +340,14 @@ final class ConfigurationCodingTests: XCTestCase {
         XCTAssertFalse(configuration.policies.isEmpty)
         let policy = configuration.policies.first!
 
-        guard case .proxy(via: let p) = policy.type, p == .shadowsocks else {
+        guard let policy = policy.base as? ShadowsocksPolicy else {
             XCTFail("should decoded as shadowsocks proxy policy.")
             return
         }
 
         XCTAssertEqual(policy.configuration.serverAddress, "127.0.0.1")
         XCTAssertEqual(policy.configuration.port, 8310)
-        XCTAssertEqual(policy.configuration.password, "password")
+        XCTAssertEqual(policy.configuration.passwordReference, "password")
         XCTAssertEqual(policy.name, "SHADOWSOCKS")
         XCTAssertEqual(policy.configuration.algorithm, .aes128Gcm)
         XCTAssertNil(policy.destinationAddress)
@@ -369,7 +369,7 @@ final class ConfigurationCodingTests: XCTestCase {
         XCTAssertFalse(configuration.policies.isEmpty)
         let policy = configuration.policies.first!
 
-        guard case .proxy(via: let p) = policy.type, p == .shadowsocks else {
+        guard let _ = policy.base as? ShadowsocksPolicy else {
             XCTFail("should decoded as shadowsocks proxy policy.")
             return
         }
@@ -392,7 +392,7 @@ final class ConfigurationCodingTests: XCTestCase {
         XCTAssertFalse(configuration.policies.isEmpty)
         let policy = configuration.policies.first!
 
-        guard case .proxy(via: let p) = policy.type, p == .vmess else {
+        guard let policy = policy.base as? VMESSPolicy else {
             XCTFail("should decoded as VMESS proxy policy.")
             return
         }

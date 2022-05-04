@@ -31,58 +31,58 @@ public protocol SocketConfigurationProtocol {
     var port: Int { get set }
 }
 
-public protocol TLSConfigurationConvertible {
+public protocol TLSConfigurationProtocol {
 
-    func asTLSClientConfiguration() -> TLSConfiguration
+    var skipCertificateVerification: Bool { get set }
+
+    var sni: String? { get set }
+
+    var certificatePinning: String? { get set }
 }
 
 /// Capable of being authenticated.
 public protocol AuthenticationCredentialConvertible {}
 
-public protocol Policy: ConnectionPoolSource {}
+public protocol Policy: ConnectionPoolSource {
 
-public struct NoopConfiguration: SocketConfigurationProtocol {
+    var name: String { get set }
 
-    public var serverAddress: String = ""
-
-    public var port: Int = 0
+    var destinationAddress: NetAddress? { get set }
 }
-
-extension NoopConfiguration: Codable {}
-
-extension NoopConfiguration: Equatable {}
 
 public struct DirectPolicy: Policy {
 
-    public var configuration: NoopConfiguration = .init()
+    public var name: String = "DIRECT"
 
     public var destinationAddress: NetAddress?
 }
 
 public struct RejectPolicy: Policy {
 
-    public var configuration: NoopConfiguration = .init()
+    public var name: String = "REJECT"
 
     public var destinationAddress: NetAddress?
 }
 
 public struct RejectTinyGifPolicy: Policy {
 
-    public var configuration: NoopConfiguration = .init()
+    public var name: String = "REJECT-TINYGIF"
 
     public var destinationAddress: NetAddress?
 }
 
 public struct ShadowsocksPolicy: Policy {
 
+    public var name: String
+
     public var configuration: SocketConfigurationProtocol & ShadowsocksConfigurationProtocol
 
     public var destinationAddress: NetAddress?
 }
 
-extension NetbotSS.CryptoAlgorithm: Codable {}
-
 public struct SOCKS5Policy: Policy {
+
+    public var name: String
 
     public var configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol
 
@@ -91,13 +91,17 @@ public struct SOCKS5Policy: Policy {
 
 public struct SOCKS5OverTLSPolicy: Policy {
 
+    public var name: String
+
     public var configuration:
-        SocketConfigurationProtocol & SOCKS5ConfigurationProtocol & TLSConfigurationConvertible
+        SocketConfigurationProtocol & SOCKS5ConfigurationProtocol & TLSConfigurationProtocol
 
     public var destinationAddress: NetAddress?
 }
 
 public struct HTTPProxyPolicy: Policy {
+
+    public var name: String
 
     public var configuration: SocketConfigurationProtocol & HTTPProxyConfigurationProtocol
 
@@ -106,13 +110,17 @@ public struct HTTPProxyPolicy: Policy {
 
 public struct HTTPSProxyPolicy: Policy {
 
+    public var name: String
+
     public var configuration:
-        SocketConfigurationProtocol & HTTPProxyConfigurationProtocol & TLSConfigurationConvertible
+        SocketConfigurationProtocol & HTTPProxyConfigurationProtocol & TLSConfigurationProtocol
 
     public var destinationAddress: NetAddress?
 }
 
 public struct VMESSPolicy: Policy {
+
+    public var name: String
 
     public var configuration: SocketConfigurationProtocol & VMESSConfigurationProtocol
 

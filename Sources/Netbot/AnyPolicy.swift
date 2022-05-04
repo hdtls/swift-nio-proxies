@@ -15,102 +15,24 @@
 import Foundation
 import NetbotCore
 
-public enum ProxyProtocol: String, CaseIterable, Equatable {
-
-    case http = "HTTP"
-
-    case https = "HTTPS"
-
-    case socks5 = "SOCKS5"
-
-    case socks5OverTLS = "SOCKS over TLS"
-
-    case shadowsocks = "Shadowsocks"
-
-    case vmess = "VMESS"
-
-    public init?(rawValue: String) {
-        switch rawValue {
-            case "HTTP", "http":
-                self = .http
-            case "HTTPS", "https":
-                self = .https
-            case "SOCKS5", "socks5":
-                self = .socks5
-            case "SOCKS5 over TLS", "socks5 over tls", "socks5-tls":
-                self = .socks5OverTLS
-            case "Shadowsocks", "shadowsocks", "SS", "ss":
-                self = .shadowsocks
-            case "VMESS", "vmess":
-                self = .vmess
-            default:
-                return nil
-        }
-    }
-}
-
-public enum PolicyType: Equatable {
-
-    case direct
-
-    case reject
-
-    case rejectTinyGif
-
-    case proxy(via: ProxyProtocol)
-}
-
-public protocol PolicyConvertible {
-
-    func asPolicy() throws -> Policy
-}
-
+/// A type-erased policy value.
 public struct AnyPolicy {
 
-    public var id: UUID
+    /// Identifier for this policy.
+    public var id: UUID = .init()
 
-    public var name: String
+    /// The actual policy value.
+    public internal(set) var base: Policy
 
-    public var type: PolicyType
-
-    public var configuration: ProxyConfiguration
-
-    public var destinationAddress: NetAddress?
-
-    public init(
-        id: UUID = UUID(),
-        name: String,
-        type: PolicyType,
-        configuration: ProxyConfiguration
-    ) {
-        self.id = id
-        self.name = name
-        self.type = type
-        self.configuration = configuration
+    /// Initialize an instance of `AnyPolicy` with specified base value.
+    public init<P>(_ base: P) where P: Policy {
+        self.base = base
     }
 }
 
 extension AnyPolicy {
 
-    public static let direct: AnyPolicy = .init(
-        name: "DIRECT",
-        type: .direct,
-        configuration: .init()
-    )
-
-    public static let reject: AnyPolicy = .init(
-        name: "REJECT",
-        type: .reject,
-        configuration: .init()
-    )
-
-    public static let rejectTinyGif: AnyPolicy = .init(
-        name: "REJECT-TINYGIF",
-        type: .rejectTinyGif,
-        configuration: .init()
-    )
-
-    public static let builtin: [AnyPolicy] = [.direct, .reject, .rejectTinyGif]
+    public static let builtin: [Policy] = [DirectPolicy(), RejectPolicy(), RejectTinyGifPolicy()]
 }
 
 extension AnyPolicy: Codable {
@@ -124,91 +46,130 @@ extension AnyPolicy: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
+        let name = try container.decode(String.self, forKey: .name)
+
+        let configuration = try container.decodeIfPresent(
+            AnyProxyConfiguration.self,
+            forKey: .configuration
+        )
+
         let rawValue = try container.decode(String.self, forKey: .type)
+
         switch rawValue {
-            case "DIRECT", "direct":
-                self = .direct
-                return
-            case "REJECT", "reject":
-                self = .reject
-                return
-            case "REJECT-TINYGIF", "reject-tinygif":
-                self = .rejectTinyGif
-                return
-            default:
-                guard let `protocol` = ProxyProtocol.init(rawValue: rawValue) else {
+            case "direct":
+                base = DirectPolicy()
+            case "reject":
+                base = RejectPolicy()
+            case "reject-tinygif":
+                base = RejectTinyGifPolicy()
+            case "http":
+                guard let configuration = configuration else {
                     throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
                 }
-                type = .proxy(via: `protocol`)
+                base = HTTPProxyPolicy(name: name, configuration: configuration)
+            case "https":
+                guard let configuration = configuration else {
+                    throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
+                }
+                base = HTTPSProxyPolicy(name: name, configuration: configuration)
+            case "socks5":
+                guard let configuration = configuration else {
+                    throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
+                }
+                base = SOCKS5Policy(name: name, configuration: configuration)
+            case "socks5-over-tls":
+                guard let configuration = configuration else {
+                    throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
+                }
+                base = SOCKS5OverTLSPolicy(name: name, configuration: configuration)
+            case "ss":
+                guard let configuration = configuration else {
+                    throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
+                }
+                base = ShadowsocksPolicy(name: name, configuration: configuration)
+            case "vmess":
+                guard let configuration = configuration else {
+                    throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
+                }
+                base = VMESSPolicy(name: name, configuration: configuration)
+            default:
+                throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
         }
-
-        id = UUID()
-        name = try container.decode(String.self, forKey: .name)
-        configuration = try container.decode(ProxyConfiguration.self, forKey: .configuration)
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
-        try container.encode(name, forKey: .name)
-        try container.encode(configuration, forKey: .configuration)
-        switch type {
-            case .direct:
+        try container.encode(base.name, forKey: .name)
+
+        var configuration: AnyProxyConfiguration?
+
+        switch base {
+            case is DirectPolicy:
                 try container.encode("direct", forKey: .type)
-            case .reject:
+            case is RejectPolicy:
                 try container.encode("reject", forKey: .type)
-            case .rejectTinyGif:
+            case is RejectTinyGifPolicy:
                 try container.encode("reject-tinygif", forKey: .type)
-            case .proxy(via: let `protocol`):
-                try container.encode(`protocol`.rawValue, forKey: .type)
+            case let policy as HTTPProxyPolicy:
+                try container.encode("http", forKey: .type)
+                configuration = .init(
+                    serverAddress: policy.configuration.serverAddress,
+                    port: policy.configuration.port,
+                    username: policy.configuration.username,
+                    password: policy.configuration.password,
+                    prefererHttpTunneling: policy.configuration.prefererHttpTunneling
+                )
+            case let policy as HTTPSProxyPolicy:
+                try container.encode("https", forKey: .type)
+                configuration = .init(
+                    serverAddress: policy.configuration.serverAddress,
+                    port: policy.configuration.port,
+                    username: policy.configuration.username,
+                    password: policy.configuration.password,
+                    prefererHttpTunneling: policy.configuration.prefererHttpTunneling,
+                    skipCertificateVerification: policy.configuration.skipCertificateVerification,
+                    sni: policy.configuration.sni,
+                    certificatePinning: policy.configuration.certificatePinning
+                )
+            case let policy as SOCKS5Policy:
+                try container.encode("socks5", forKey: .type)
+                configuration = .init(
+                    serverAddress: policy.configuration.serverAddress,
+                    port: policy.configuration.port,
+                    username: policy.configuration.username,
+                    password: policy.configuration.password
+                )
+            case let policy as SOCKS5OverTLSPolicy:
+                try container.encode("socks5-over-tls", forKey: .type)
+                configuration = .init(
+                    serverAddress: policy.configuration.serverAddress,
+                    port: policy.configuration.port,
+                    username: policy.configuration.username,
+                    password: policy.configuration.password,
+                    skipCertificateVerification: policy.configuration.skipCertificateVerification,
+                    sni: policy.configuration.sni,
+                    certificatePinning: policy.configuration.certificatePinning
+                )
+            case let policy as ShadowsocksPolicy:
+                try container.encode("ss", forKey: .type)
+                configuration = .init(
+                    serverAddress: policy.configuration.serverAddress,
+                    port: policy.configuration.port,
+                    password: policy.configuration.passwordReference,
+                    algorithm: policy.configuration.algorithm
+                )
+            case let policy as VMESSPolicy:
+                try container.encode("vmess", forKey: .type)
+                configuration = .init(
+                    serverAddress: policy.configuration.serverAddress,
+                    port: policy.configuration.port,
+                    username: policy.configuration.user.uuidString
+                )
+            default:
+                fatalError("Unsupported policy \(base).")
         }
-        try container.encode(configuration, forKey: .configuration)
-    }
-}
 
-extension AnyPolicy: PolicyConvertible {
-
-    public func asPolicy() throws -> Policy {
-        switch type {
-            case .direct:
-                return DirectPolicy(destinationAddress: destinationAddress)
-            case .reject:
-                return DirectPolicy(destinationAddress: destinationAddress)
-            case .rejectTinyGif:
-                return RejectTinyGifPolicy(destinationAddress: destinationAddress)
-            case .proxy(via: let `protocol`):
-                switch `protocol` {
-                    case .http:
-                        return HTTPProxyPolicy(
-                            configuration: configuration,
-                            destinationAddress: destinationAddress
-                        )
-                    case .https:
-                        return HTTPSProxyPolicy(
-                            configuration: configuration,
-                            destinationAddress: destinationAddress
-                        )
-                    case .socks5:
-                        return SOCKS5Policy(
-                            configuration: configuration,
-                            destinationAddress: destinationAddress
-                        )
-                    case .socks5OverTLS:
-                        return SOCKS5OverTLSPolicy(
-                            configuration: configuration,
-                            destinationAddress: destinationAddress
-                        )
-                    case .shadowsocks:
-                        return ShadowsocksPolicy(
-                            configuration: configuration,
-                            destinationAddress: destinationAddress
-                        )
-                    case .vmess:
-                        return VMESSPolicy(
-                            configuration: configuration,
-                            destinationAddress: destinationAddress
-                        )
-                }
-        }
+        try container.encodeIfPresent(configuration, forKey: .configuration)
     }
 }
