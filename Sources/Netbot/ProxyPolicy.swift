@@ -82,6 +82,11 @@ public struct HTTPProxyPolicy: Policy {
     public var configuration: SocketConfigurationProtocol & HTTPProxyConfigurationProtocol
 
     public var destinationAddress: NetAddress?
+
+    public init(name: String, configuration: SocketConfigurationProtocol & HTTPProxyConfigurationProtocol) {
+        self.name = name
+        self.configuration = configuration
+    }
 }
 
 /// HTTPSProxyPolicy will tunning connection to the destination via HTTPS proxy.
@@ -93,6 +98,11 @@ public struct HTTPSProxyPolicy: Policy {
         SocketConfigurationProtocol & HTTPProxyConfigurationProtocol & TLSConfigurationProtocol
 
     public var destinationAddress: NetAddress?
+
+    public init(name: String, configuration: SocketConfigurationProtocol & HTTPProxyConfigurationProtocol & TLSConfigurationProtocol) {
+        self.name = name
+        self.configuration = configuration
+    }
 }
 
 /// SOCKS5Policy will tunning connection to the destination via SOCKS5 proxy.
@@ -103,6 +113,11 @@ public struct SOCKS5Policy: Policy {
     public var configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol
 
     public var destinationAddress: NetAddress?
+
+    public init(name: String, configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol) {
+        self.name = name
+        self.configuration = configuration
+    }
 }
 
 /// SOCKS5OverTLSPolicy will tunning connection to the destination via SOCKS5 proxy.
@@ -114,6 +129,11 @@ public struct SOCKS5OverTLSPolicy: Policy {
         SocketConfigurationProtocol & SOCKS5ConfigurationProtocol & TLSConfigurationProtocol
 
     public var destinationAddress: NetAddress?
+
+    public init(name: String, configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol & TLSConfigurationProtocol) {
+        self.name = name
+        self.configuration = configuration
+    }
 }
 
 /// ShadowsocksPolicy will tunning connection to the destination via Shadowsocks proxy.
@@ -124,6 +144,11 @@ public struct ShadowsocksPolicy: Policy {
     public var configuration: SocketConfigurationProtocol & ShadowsocksConfigurationProtocol
 
     public var destinationAddress: NetAddress?
+
+    public init(name: String, configuration: SocketConfigurationProtocol & ShadowsocksConfigurationProtocol) {
+        self.name = name
+        self.configuration = configuration
+    }
 }
 
 /// VMESSPolicy will tunning connection to the destination via VMESS proxy.
@@ -134,4 +159,9 @@ public struct VMESSPolicy: Policy {
     public var configuration: SocketConfigurationProtocol & VMESSConfigurationProtocol
 
     public var destinationAddress: NetAddress?
+
+    public init(name: String, configuration: SocketConfigurationProtocol & VMESSConfigurationProtocol) {
+        self.name = name
+        self.configuration = configuration
+    }
 }
