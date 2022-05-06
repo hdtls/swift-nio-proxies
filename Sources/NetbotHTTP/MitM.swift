@@ -23,16 +23,17 @@ import CNIOBoringSSL
 /// Configuration for HTTPS traffic decraption with MitM attacks.
 public struct MitMConfiguration: Codable {
 
-    public let skipServerCertificateVerification: Bool
+    /// A boolean value determinse whether ssl should skip server cerfitication verification.
+    public var skipServerCertificateVerification: Bool
 
     /// Hostnames that should perform MitM.
-    public let hostnames: [String]
+    public var hostnames: [String]
 
     /// Base64 encoded CA P12 bundle.
-    public let base64EncodedP12String: String?
+    public var base64EncodedP12String: String?
 
     /// Passphrase for P12 bundle.
-    public let passphrase: String?
+    public var passphrase: String?
 
     /// P12 bundle pool keyed by hostname.
     var pool: [String: NIOSSLPKCS12Bundle] {
