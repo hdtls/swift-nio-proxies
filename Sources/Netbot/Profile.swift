@@ -17,8 +17,8 @@ import Foundation
 import Logging
 import NetbotHTTP
 
-/// A configuration object that defines behavior and policies for a Netbot process.
-public struct Configuration: Codable {
+/// A profile object that defines behavior and policies for a Netbot process.
+public struct Profile: Codable {
 
     /// The rules contains in this configuration.
     @EraseNilToEmpty public var rules: [AnyRule]
@@ -38,7 +38,7 @@ public struct Configuration: Codable {
     /// All selectable policy groups contains in this configuration object.
     @EraseNilToEmpty public var policyGroups: [SelectablePolicyGroup]
 
-    /// Initialize an instance of `Configuration` with the specified general, replicat, rules, mitm,
+    /// Initialize an instance of `Profile` with the specified general, replicat, rules, mitm,
     /// polcies and policyGroups.
     public init(
         general: BasicConfiguration,
@@ -56,7 +56,7 @@ public struct Configuration: Codable {
         self.policyGroups = policyGroups
     }
 
-    /// Initialize an `Configuration`.
+    /// Initialize an `Profile`.
     ///
     /// Calling this method is equivalent to calling
     /// `init(general:replica:rules:mitm:policies:policyGroups:)`
@@ -215,14 +215,6 @@ public struct SelectablePolicyGroup: Codable, Equatable {
 
     /// Policies included in this policy group.
     public var policies: [String]
-
-    /// Current selected policy.
-    public var selected: String?
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case policies
-    }
 
     /// Initialize an instance of `SelectablePolicyGroup` with specified name and policies.
     public init(name: String, policies: [String]) {

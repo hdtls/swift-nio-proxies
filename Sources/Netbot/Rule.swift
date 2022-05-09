@@ -135,14 +135,14 @@ public struct AnyRule: Rule {
 
         let rawValue = components.removeFirst().trimmingCharacters(in: .whitespaces)
         guard let type = RuleType(rawValue: rawValue) else {
-            throw ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
+            throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
         }
 
         self.type = type
 
         let countOfRequiredFields = type == .final ? 1 : 2
         guard components.count >= countOfRequiredFields else {
-            throw ConfigurationSerializationError.failedToParseRule(reason: .missingField)
+            throw ProfileSerializationError.failedToParseRule(reason: .missingField)
         }
 
         if type != .final {
@@ -202,7 +202,7 @@ public struct AnyRule: Rule {
         }
 
         guard let url = URL(string: expression), !url.isFileURL else {
-            throw ConfigurationSerializationError.failedToParseRule(
+            throw ProfileSerializationError.failedToParseRule(
                 reason: .invalidExternalResources
             )
         }
@@ -236,7 +236,7 @@ public struct AnyRule: Rule {
 
         guard let url = URL(string: expression), !url.isFileURL else {
             completion(
-                ConfigurationSerializationError.failedToParseRule(reason: .invalidExternalResources)
+                ProfileSerializationError.failedToParseRule(reason: .invalidExternalResources)
             )
             return
         }

@@ -39,7 +39,7 @@ public struct Configuration {
     /// This value is will updated by algorithm.
     public let options: StreamOptions
 
-    /// Initialize an instance of `Configuration` with specified id, algorithm, command, and options.
+    /// Initialize an instance of `Profile` with specified id, algorithm, command, and options.
     /// - Parameters:
     ///   - id: The id identifier current user.
     ///   - algorithm: The algorithm to encryption data.

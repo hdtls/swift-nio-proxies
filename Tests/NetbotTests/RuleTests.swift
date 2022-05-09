@@ -93,10 +93,10 @@ final class RuleTests: XCTestCase {
         let string = "invalidSchema,swift.org,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try AnyRule.init(string: string)) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
+                describing: ProfileSerializationError.failedToParseRule(reason: .unsupported)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -104,10 +104,10 @@ final class RuleTests: XCTestCase {
 
     func testAppropriateErrorWhenParsingDomainRuleWithMissingFieldRuleString() {
         XCTAssertThrowsError(try AnyRule.init(string: "DOMAIN,swift.org")) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField)
+                describing: ProfileSerializationError.failedToParseRule(reason: .missingField)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -166,10 +166,10 @@ final class RuleTests: XCTestCase {
         let string = "invalidSchema,swift.org,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try AnyRule.init(string: string)) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
+                describing: ProfileSerializationError.failedToParseRule(reason: .unsupported)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -177,10 +177,10 @@ final class RuleTests: XCTestCase {
 
     func testAppropriateErrorWhenParsingDomainSuffixRuleWithMissingFieldRuleString() {
         XCTAssertThrowsError(try AnyRule.init(string: "DOMAIN-SUFFIX,swift.org")) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField)
+                describing: ProfileSerializationError.failedToParseRule(reason: .missingField)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -239,10 +239,10 @@ final class RuleTests: XCTestCase {
         let string = "invalidSchema,swift.org,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try AnyRule.init(string: string)) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
+                describing: ProfileSerializationError.failedToParseRule(reason: .unsupported)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -250,10 +250,10 @@ final class RuleTests: XCTestCase {
 
     func testAppropriateErrorWhenParsingDomainKeywordRuleWithMissingFieldRuleString() {
         XCTAssertThrowsError(try AnyRule.init(string: "DOMAIN-KEYWORD,swift.org")) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField)
+                describing: ProfileSerializationError.failedToParseRule(reason: .missingField)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -312,10 +312,10 @@ final class RuleTests: XCTestCase {
         let string = "invalidSchema,http://domainset.com,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try AnyRule.init(string: string)) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
+                describing: ProfileSerializationError.failedToParseRule(reason: .unsupported)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -323,10 +323,10 @@ final class RuleTests: XCTestCase {
 
     func testAppropriateErrorWhenParsingDomainSetWithMissingFieldRuleString() {
         XCTAssertThrowsError(try AnyRule.init(string: "DOMAIN-SET,http://domainset.com")) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField)
+                describing: ProfileSerializationError.failedToParseRule(reason: .missingField)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -386,10 +386,10 @@ final class RuleTests: XCTestCase {
         let string = "invalidSchema,swift.org,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try AnyRule.init(string: string)) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
+                describing: ProfileSerializationError.failedToParseRule(reason: .unsupported)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -397,10 +397,10 @@ final class RuleTests: XCTestCase {
 
     func testAppropriateErrorWhenParsingGeoIPRuleWithMissingFieldRuleString() {
         XCTAssertThrowsError(try AnyRule.init(string: "GEOIP,swift.org")) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField)
+                describing: ProfileSerializationError.failedToParseRule(reason: .missingField)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -459,10 +459,10 @@ final class RuleTests: XCTestCase {
         let string = "invalidSchema,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try AnyRule.init(string: string)) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
+                describing: ProfileSerializationError.failedToParseRule(reason: .unsupported)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -470,10 +470,10 @@ final class RuleTests: XCTestCase {
 
     func testAppropriateErrorWhenParsingFinalRuleWithMissingFieldRuleString() {
         XCTAssertThrowsError(try AnyRule.init(string: "FINAL")) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField)
+                describing: ProfileSerializationError.failedToParseRule(reason: .missingField)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -532,10 +532,10 @@ final class RuleTests: XCTestCase {
         let string = "invalidSchema,http://ruleset.com,DIRECT // this is rule comment."
 
         XCTAssertThrowsError(try AnyRule.init(string: string)) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .unsupported)
+                describing: ProfileSerializationError.failedToParseRule(reason: .unsupported)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }
@@ -543,10 +543,10 @@ final class RuleTests: XCTestCase {
 
     func testAppropriateErrorWhenParsingRuleSetWithMissingFieldRuleString() {
         XCTAssertThrowsError(try AnyRule.init(string: "RULE-SET,http://ruleset.com")) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
-            let actualErrorString = String(describing: error as! ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
-                describing: ConfigurationSerializationError.failedToParseRule(reason: .missingField)
+                describing: ProfileSerializationError.failedToParseRule(reason: .missingField)
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
         }

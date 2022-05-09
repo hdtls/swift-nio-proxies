@@ -97,7 +97,7 @@ extension AnyPolicy: Codable {
                 )
                 base = VMESSPolicy(name: name, configuration: configuration)
             default:
-                throw ConfigurationSerializationError.invalidFile(reason: .dataCorrupted)
+                throw ProfileSerializationError.invalidFile(reason: .dataCorrupted)
         }
     }
 

@@ -15,8 +15,8 @@
 import Foundation
 import NIOCore
 
-/// Errors that can be raised while parsing configuration file.
-public enum ConfigurationSerializationError: Error {
+/// Errors that can be raised while parsing profile file.
+public enum ProfileSerializationError: Error {
 
     /// Error reason for invalid file
     public enum InvalidFileErrorReason: CustomStringConvertible {
@@ -86,7 +86,7 @@ public enum ConfigurationSerializationError: Error {
 /// You use the JSONSerialization class to convert JSON to Foundation objects and convert Foundation
 /// objects to JSON.
 /// To convert a json object to data the object must is a NSDIctionary with String keys.
-final public class ConfigurationSerialization {
+final public class ProfileSerialization {
 
     struct JSONKey: Equatable, RawRepresentable {
 
@@ -169,7 +169,7 @@ final public class ConfigurationSerialization {
         var cursor: Int = 0
 
         var json: JSONValue = .object([:])
-        var parser = DocumentParser.init(byteBuffer: data)
+        var parser = ProfileParser.init(byteBuffer: data)
 
         var currentGroup: JSONKey?
 
@@ -193,7 +193,7 @@ final public class ConfigurationSerialization {
 
                 case (.string(let l), _):
                     guard let currentGroup = currentGroup else {
-                        throw ConfigurationSerializationError.dataCorrupted
+                        throw ProfileSerializationError.dataCorrupted
                     }
 
                     guard case .array(var array) = _json[currentGroup.rawValue] ?? .array([]) else {
@@ -208,7 +208,7 @@ final public class ConfigurationSerialization {
 
                 case (.object(let o), .some(.policies)):
                     guard let currentGroup = currentGroup else {
-                        throw ConfigurationSerializationError.dataCorrupted
+                        throw ProfileSerializationError.dataCorrupted
                     }
 
                     guard case .array(var array) = _json[currentGroup.rawValue] ?? .array([]) else {
@@ -249,7 +249,7 @@ final public class ConfigurationSerialization {
 
                 case (.object(let o), .some(.policyGroups)):
                     guard let currentGroup = currentGroup else {
-                        throw ConfigurationSerializationError.dataCorrupted
+                        throw ProfileSerializationError.dataCorrupted
                     }
 
                     guard case .array(var array) = _json[currentGroup.rawValue] ?? .array([]) else {
@@ -300,7 +300,7 @@ final public class ConfigurationSerialization {
         try __groupKeyedByLine.forEach { (cursor, line) in
             try line.values.joined().forEach { name in
                 guard __policies.contains(where: { $0 == name }) else {
-                    throw ConfigurationSerializationError.invalidFile(
+                    throw ProfileSerializationError.invalidFile(
                         reason: .unknownPolicy(cursor: cursor, policy: name)
                     )
                 }
@@ -310,7 +310,7 @@ final public class ConfigurationSerialization {
         // All proxy label defined in rule should
         try __rulesKeyedByLine.forEach { (cursor, line) in
             guard let rule = try? AnyRule.init(string: line) else {
-                throw ConfigurationSerializationError.invalidFile(
+                throw ProfileSerializationError.invalidFile(
                     reason: .invalidLine(cursor: cursor, description: line)
                 )
             }
@@ -328,7 +328,7 @@ final public class ConfigurationSerialization {
                 )
 
             guard all.contains(where: { $0 == rule.policy }) else {
-                throw ConfigurationSerializationError.invalidFile(
+                throw ProfileSerializationError.invalidFile(
                     reason: .unknownPolicy(cursor: cursor, policy: rule.policy)
                 )
             }
@@ -344,13 +344,13 @@ final public class ConfigurationSerialization {
         try jsonObject(with: ByteBuffer.init(bytes: data))
     }
 
-    /// Generate Configuration data from a Foundation object. If the object will not produce valid JSON
+    /// Generate Profile data from a Foundation object. If the object will not produce valid JSON
     /// then an exception will be thrown.
     /// - Parameter obj: Foundation NSDictionary object.
     /// - Returns: Generated configuration file data.
     public static func data(withJSONObject obj: Any) throws -> Data {
         guard let json = obj as? [String: Any] else {
-            throw ConfigurationSerializationError.dataCorrupted
+            throw ProfileSerializationError.dataCorrupted
         }
 
         var components: [String] = []
@@ -382,7 +382,7 @@ final public class ConfigurationSerialization {
 
             guard key != JSONKey.policyGroups.rawValue else {
                 guard let selectablePolicyGroups = value as? [[String: Any]] else {
-                    throw ConfigurationSerializationError.dataCorrupted
+                    throw ProfileSerializationError.dataCorrupted
                 }
                 selectablePolicyGroups.forEach {
                     let policies = ($0[JSONKey.policies.rawValue] as? [String]) ?? []
@@ -393,7 +393,7 @@ final public class ConfigurationSerialization {
 
             guard key != JSONKey.policies.rawValue else {
                 guard let policies = value as? [[String: Any]] else {
-                    throw ConfigurationSerializationError.dataCorrupted
+                    throw ProfileSerializationError.dataCorrupted
                 }
 
                 components.append(
@@ -404,7 +404,7 @@ final public class ConfigurationSerialization {
                             let name = $0[AnyPolicy.CodingKeys.name.rawValue],
                             let type = $0[AnyPolicy.CodingKeys.type.rawValue]
                         else {
-                            throw ConfigurationSerializationError.dataCorrupted
+                            throw ProfileSerializationError.dataCorrupted
                         }
 
                         let configurationString = configuration.map {
@@ -428,7 +428,7 @@ final public class ConfigurationSerialization {
                     let k = k.replacingOccurrences(of: "_", with: "-")
                     if k == "exceptions" || k == "dns-servers" || k == "hostnames" {
                         guard let l = v as? [String] else {
-                            throw ConfigurationSerializationError.dataCorrupted
+                            throw ProfileSerializationError.dataCorrupted
                         }
                         components.append("\(k) = \(l.joined(separator: ","))")
                     } else {
@@ -436,7 +436,7 @@ final public class ConfigurationSerialization {
                     }
                 }
             } else {
-                throw ConfigurationSerializationError.dataCorrupted
+                throw ProfileSerializationError.dataCorrupted
             }
         }
 
@@ -447,7 +447,7 @@ final public class ConfigurationSerialization {
     }
 }
 
-extension ConfigurationSerialization.JSONValue {
+extension ProfileSerialization.JSONValue {
 
     fileprivate func toObjcRepresentation() throws -> Any {
         switch self {

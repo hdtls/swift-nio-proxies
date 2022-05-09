@@ -84,18 +84,18 @@ public struct NetbotCLITool: ParsableCommand {
     public init() {}
 
     public func run() throws {
-        var configuration: Configuration = .init()
+        var configuration: Profile = .init()
 
         if let config = configFile {
             let data = try Data(contentsOf: URL(fileURLWithPath: config))
-            let jsonObject = try ConfigurationSerialization.jsonObject(with: data)
+            let jsonObject = try ProfileSerialization.jsonObject(with: data)
             let jsonData = try JSONSerialization.data(
                 withJSONObject: jsonObject,
                 options: .fragmentsAllowed
             )
             let jsonDecoder = JSONDecoder()
             jsonDecoder.keyDecodingStrategy = .convertFromSnakeCase
-            configuration = try jsonDecoder.decode(Configuration.self, from: jsonData)
+            configuration = try jsonDecoder.decode(Profile.self, from: jsonData)
         }
 
         #if canImport(SystemConfiguration)

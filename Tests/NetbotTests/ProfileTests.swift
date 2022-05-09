@@ -16,7 +16,7 @@ import XCTest
 
 @testable import Netbot
 
-final class ConfigurationCodingTests: XCTestCase {
+final class ProfileTests: XCTestCase {
 
     let generalString = """
         [General]
@@ -78,15 +78,15 @@ final class ConfigurationCodingTests: XCTestCase {
     }()
 
     func testGeneralDecoding() throws {
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: generalString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profle = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
         )
 
-        let result = configuration.general
+        let result = profle.general
 
         XCTAssertEqual(result.logLevel, .trace)
         XCTAssertEqual(result.dnsServers, ["223.5.5.5", "114.114.114.114", "system"])
@@ -99,15 +99,15 @@ final class ConfigurationCodingTests: XCTestCase {
     }
 
     func testReplicaDecoding() throws {
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: replicaString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
         )
 
-        let result = configuration.replica
+        let result = profile.replica
 
         XCTAssertTrue(result.hideAppleRequests)
         XCTAssertTrue(result.hideCrashlyticsRequests)
@@ -118,15 +118,15 @@ final class ConfigurationCodingTests: XCTestCase {
     }
 
     func testPoliciesDecoding() throws {
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
         )
 
-        let result = configuration.policies
+        let result = profile.policies
         XCTAssertEqual(result.count, 5)
     }
 
@@ -135,16 +135,16 @@ final class ConfigurationCodingTests: XCTestCase {
             [Proxy Policy]
             HTTP = http, server-address=127.0.0.1, port=8310, username=username, password=password, preferer-http-tunneling=true
             """
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
         )
 
-        XCTAssertFalse(configuration.policies.isEmpty)
-        let policy = configuration.policies.first!
+        XCTAssertFalse(profile.policies.isEmpty)
+        let policy = profile.policies.first!
         guard let policy = policy.base as? HTTPProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
@@ -164,16 +164,16 @@ final class ConfigurationCodingTests: XCTestCase {
             [Proxy Policy]
             HTTP = http, server-address=127.0.0.1, port=8310
             """
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
         )
 
-        XCTAssertFalse(configuration.policies.isEmpty)
-        let policy = configuration.policies.first!
+        XCTAssertFalse(profile.policies.isEmpty)
+        let policy = profile.policies.first!
 
         guard let policy = policy.base as? HTTPProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
@@ -188,16 +188,16 @@ final class ConfigurationCodingTests: XCTestCase {
             [Proxy Policy]
             HTTPS = https, server-address=127.0.0.1, port=8310, username=username, password=password, sni=sni, preferer-http-tunneling=true, skip-certificate-verification=true
             """
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject)
         )
 
-        XCTAssertFalse(configuration.policies.isEmpty)
-        let policy = configuration.policies.first!
+        XCTAssertFalse(profile.policies.isEmpty)
+        let policy = profile.policies.first!
 
         guard let policy = policy.base as? HTTPSProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
@@ -220,16 +220,16 @@ final class ConfigurationCodingTests: XCTestCase {
             [Proxy Policy]
             HTTPS = https, server-address=127.0.0.1, port=8310
             """
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject)
         )
 
-        XCTAssertFalse(configuration.policies.isEmpty)
-        let policy = configuration.policies.first!
+        XCTAssertFalse(profile.policies.isEmpty)
+        let policy = profile.policies.first!
 
         guard let policy = policy.base as? HTTPSProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
@@ -245,16 +245,16 @@ final class ConfigurationCodingTests: XCTestCase {
             [Proxy Policy]
             SOCKS5 = socks5, server-address=127.0.0.1, port=8310, username=username, password=password
             """
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject)
         )
 
-        XCTAssertFalse(configuration.policies.isEmpty)
-        let policy = configuration.policies.first!
+        XCTAssertFalse(profile.policies.isEmpty)
+        let policy = profile.policies.first!
 
         guard let policy = policy.base as? SOCKS5Policy else {
             XCTFail("should decoded as SOCKS5 proxy policy.")
@@ -274,16 +274,16 @@ final class ConfigurationCodingTests: XCTestCase {
             [Proxy Policy]
             SOCKS5OverTLS = socks5-over-tls, server-address=127.0.0.1, port=8310, username=username, password=password, sni=sni, skip-certificate-verification=true
             """
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject)
         )
 
-        XCTAssertFalse(configuration.policies.isEmpty)
-        let policy = configuration.policies.first!
+        XCTAssertFalse(profile.policies.isEmpty)
+        let policy = profile.policies.first!
 
         guard let policy = policy.base as? SOCKS5OverTLSPolicy else {
             XCTFail("should decoded as SOCKS5 over TLS proxy policy.")
@@ -305,16 +305,16 @@ final class ConfigurationCodingTests: XCTestCase {
             [Proxy Policy]
             SOCKS5OverTLS = socks5-over-tls, server-address=127.0.0.1, port=8310
             """
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject)
         )
 
-        XCTAssertFalse(configuration.policies.isEmpty)
-        let policy = configuration.policies.first!
+        XCTAssertFalse(profile.policies.isEmpty)
+        let policy = profile.policies.first!
 
         guard let policy = policy.base as? SOCKS5OverTLSPolicy else {
             XCTFail("should decoded as SOCKS5 over TLS proxy policy.")
@@ -329,16 +329,16 @@ final class ConfigurationCodingTests: XCTestCase {
             [Proxy Policy]
             SHADOWSOCKS = ss, server-address=127.0.0.1, port=8310, algorithm=aes-128-gcm, password=password, enable-udp-relay=true, enable-tfo=true
             """
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject)
         )
 
-        XCTAssertFalse(configuration.policies.isEmpty)
-        let policy = configuration.policies.first!
+        XCTAssertFalse(profile.policies.isEmpty)
+        let policy = profile.policies.first!
 
         guard let policy = policy.base as? ShadowsocksPolicy else {
             XCTFail("should decoded as shadowsocks proxy policy.")
@@ -358,16 +358,16 @@ final class ConfigurationCodingTests: XCTestCase {
             [Proxy Policy]
             SHADOWSOCKS = ss, server-address=127.0.0.1, port=8310, algorithm=aes-128-gcm, password=password
             """
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject)
         )
 
-        XCTAssertFalse(configuration.policies.isEmpty)
-        let policy = configuration.policies.first!
+        XCTAssertFalse(profile.policies.isEmpty)
+        let policy = profile.policies.first!
 
         guard let _ = policy.base as? ShadowsocksPolicy else {
             XCTFail("should decoded as shadowsocks proxy policy.")
@@ -381,16 +381,16 @@ final class ConfigurationCodingTests: XCTestCase {
             [Proxy Policy]
             VMESS = vmess, server-address=127.0.0.1, port=8310, username=\(uuid)
             """
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject)
         )
 
-        XCTAssertFalse(configuration.policies.isEmpty)
-        let policy = configuration.policies.first!
+        XCTAssertFalse(profile.policies.isEmpty)
+        let policy = profile.policies.first!
 
         guard let policy = policy.base as? VMESSPolicy else {
             XCTFail("should decoded as VMESS proxy policy.")
@@ -408,17 +408,17 @@ final class ConfigurationCodingTests: XCTestCase {
             [Proxy Policy]
             HTTP = IKEv2, server-address=127.0.0.1, port=8310
             """
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
 
         XCTAssertThrowsError(
             try jsonDecoder.decode(
-                Configuration.self,
+                Profile.self,
                 from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
             )
         ) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
         }
     }
 
@@ -426,15 +426,15 @@ final class ConfigurationCodingTests: XCTestCase {
         let policyGroupsString = [self.policiesString, self.policyGroupsString].joined(
             separator: "\n"
         )
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: policyGroupsString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
         )
 
-        let result = configuration.policyGroups
+        let result = profile.policyGroups
         XCTAssertEqual(result.count, 2)
         XCTAssertEqual(result.first, .init(name: "PROXY", policies: ["HTTP"]))
         XCTAssertEqual(
@@ -445,11 +445,11 @@ final class ConfigurationCodingTests: XCTestCase {
 
     func testDecodingPolicyGroupsWhichContainsPoliciesNoDefinedInPolicies() {
         XCTAssertThrowsError(
-            try ConfigurationSerialization.jsonObject(with: policyGroupsString.data(using: .utf8)!)
+            try ProfileSerialization.jsonObject(with: policyGroupsString.data(using: .utf8)!)
         ) { error in
-            XCTAssertTrue(error is ConfigurationSerializationError)
+            XCTAssertTrue(error is ProfileSerializationError)
 
-            let err = error as! ConfigurationSerializationError
+            let err = error as! ProfileSerializationError
 
             guard case .invalidFile(let reason) = err,
                 case .unknownPolicy(cursor: let cursor, policy: let policy) = reason
@@ -467,15 +467,15 @@ final class ConfigurationCodingTests: XCTestCase {
         let ruleString = [self.policiesString, self.policyGroupsString, self.ruleString].joined(
             separator: "\n"
         )
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: ruleString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
         )
 
-        let result = configuration.rules
+        let result = profile.rules
         XCTAssertEqual(result.count, 4)
 
         XCTAssertTrue(result.first?.type == .domainSuffix)
@@ -485,15 +485,15 @@ final class ConfigurationCodingTests: XCTestCase {
     }
 
     func testMitMDecoding() throws {
-        let jsonObject = try ConfigurationSerialization.jsonObject(
+        let jsonObject = try ProfileSerialization.jsonObject(
             with: mitmString.data(using: .utf8)!
         )
-        let configuration = try jsonDecoder.decode(
-            Configuration.self,
+        let profile = try jsonDecoder.decode(
+            Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
         )
 
-        let result = configuration.mitm
+        let result = profile.mitm
 
         XCTAssertTrue(result.skipServerCertificateVerification)
         XCTAssertEqual(result.hostnames, ["*.google.com", "*.ietf.org"])

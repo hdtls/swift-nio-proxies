@@ -25,7 +25,7 @@ public class Netbot {
 
     public let logger: Logger
 
-    public var configuration: Configuration
+    public var configuration: Profile
 
     public var outboundMode: OutboundMode
 
@@ -49,7 +49,7 @@ public class Netbot {
     private var cache: LRUCache<String, AnyRule> = .init(capacity: 100)
 
     public init(
-        configuration: Configuration,
+        configuration: Profile,
         outboundMode: OutboundMode = .direct,
         enableHTTPCapture: Bool = false,
         enableMitm: Bool = false,

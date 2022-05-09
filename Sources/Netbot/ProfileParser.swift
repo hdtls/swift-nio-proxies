@@ -14,7 +14,7 @@
 
 import Foundation
 
-struct DocumentParser {
+struct ProfileParser {
 
     private var byteBuffer: ByteBuffer
 
