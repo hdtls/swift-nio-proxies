@@ -61,8 +61,8 @@ public struct NetbotCLITool: ParsableCommand {
     public var httpListenPort: Int?
 
     /// The proxy configuration file path.
-    @Option(name: .shortAndLong, help: "The proxy configuration file.")
-    public var configFile: String?
+    @Option(name: .shortAndLong, help: "The proxy profile file.")
+    public var profileFile: String?
 
     /// The proxy outbound mode.
     @Option(help: "The proxy outbound mode.")
@@ -84,10 +84,10 @@ public struct NetbotCLITool: ParsableCommand {
     public init() {}
 
     public func run() throws {
-        var configuration: Profile = .init()
+        var profile: Profile = .init()
 
-        if let config = configFile {
-            let data = try Data(contentsOf: URL(fileURLWithPath: config))
+        if let path = profileFile {
+            let data = try Data(contentsOf: URL(fileURLWithPath: path))
             let jsonObject = try ProfileSerialization.jsonObject(with: data)
             let jsonData = try JSONSerialization.data(
                 withJSONObject: jsonObject,
@@ -95,47 +95,47 @@ public struct NetbotCLITool: ParsableCommand {
             )
             let jsonDecoder = JSONDecoder()
             jsonDecoder.keyDecodingStrategy = .convertFromSnakeCase
-            configuration = try jsonDecoder.decode(Profile.self, from: jsonData)
+            profile = try jsonDecoder.decode(Profile.self, from: jsonData)
         }
 
         #if canImport(SystemConfiguration)
         var proxyctl: [String] = []
 
-        configuration.general.socksListenAddress =
-            socksListenAddress ?? configuration.general.socksListenAddress
-        if let socksListenAddress = configuration.general.socksListenAddress {
+        profile.general.socksListenAddress =
+            socksListenAddress ?? profile.general.socksListenAddress
+        if let socksListenAddress = profile.general.socksListenAddress {
             proxyctl.append("--socks-listen-address")
             proxyctl.append(socksListenAddress)
         }
 
-        configuration.general.socksListenPort =
-            socksListenPort ?? configuration.general.socksListenPort
-        if let socksListenPort = configuration.general.socksListenPort {
+        profile.general.socksListenPort =
+            socksListenPort ?? profile.general.socksListenPort
+        if let socksListenPort = profile.general.socksListenPort {
             proxyctl.append("--socks-listen-port")
             proxyctl.append("\(socksListenPort)")
         }
 
-        configuration.general.httpListenAddress =
-            httpListenAddress ?? configuration.general.httpListenAddress
-        if let httpListenAddress = configuration.general.httpListenAddress {
+        profile.general.httpListenAddress =
+            httpListenAddress ?? profile.general.httpListenAddress
+        if let httpListenAddress = profile.general.httpListenAddress {
             proxyctl.append("--http-listen-address")
             proxyctl.append("\(httpListenAddress)")
         }
 
-        configuration.general.httpListenPort =
-            httpListenPort ?? configuration.general.httpListenPort
-        if let httpListenPort = configuration.general.httpListenPort {
+        profile.general.httpListenPort =
+            httpListenPort ?? profile.general.httpListenPort
+        if let httpListenPort = profile.general.httpListenPort {
             proxyctl.append("--http-listen-port")
             proxyctl.append("\(httpListenPort)")
         }
 
-        if configuration.general.excludeSimpleHostnames {
+        if profile.general.excludeSimpleHostnames {
             proxyctl.append("--exclude-simple-hostnames")
         }
 
-        if !configuration.general.exceptions.isEmpty {
+        if !profile.general.exceptions.isEmpty {
             proxyctl.append("--exceptions")
-            proxyctl.append(configuration.general.exceptions.joined(separator: ","))
+            proxyctl.append(profile.general.exceptions.joined(separator: ","))
         }
 
         if !proxyctl.isEmpty {
@@ -146,7 +146,7 @@ public struct NetbotCLITool: ParsableCommand {
         #endif
 
         if let reqMsgFilter = reqMsgFilter {
-            configuration.replica.reqMsgFilter = reqMsgFilter
+            profile.replica.reqMsgFilter = reqMsgFilter
         }
 
         /// Default GeoLite2 database file url.
@@ -221,7 +221,7 @@ public struct NetbotCLITool: ParsableCommand {
         }
 
         let netbot = Netbot.init(
-            configuration: configuration,
+            profile: profile,
             outboundMode: outboundMode,
             enableHTTPCapture: enableHTTPCapture,
             enableMitm: enableMitm,

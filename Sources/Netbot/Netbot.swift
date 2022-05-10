@@ -25,7 +25,7 @@ public class Netbot {
 
     public let logger: Logger
 
-    public var configuration: Profile
+    public var profile: Profile
 
     public var outboundMode: OutboundMode
 
@@ -49,7 +49,7 @@ public class Netbot {
     private var cache: LRUCache<String, AnyRule> = .init(capacity: 100)
 
     public init(
-        configuration: Profile,
+        profile: Profile,
         outboundMode: OutboundMode = .direct,
         enableHTTPCapture: Bool = false,
         enableMitm: Bool = false,
@@ -58,12 +58,12 @@ public class Netbot {
 
         LoggingSystem.bootstrap { label in
             var handler = StreamLogHandler.standardOutput(label: label)
-            handler.logLevel = configuration.general.logLevel
+            handler.logLevel = profile.general.logLevel
             return handler
         }
 
         self.logger = .init(label: "io.tenbits.Netbot")
-        self.configuration = configuration
+        self.profile = profile
         self.outboundMode = outboundMode
         self.isHTTPCaptureEnabled = enableHTTPCapture
         self.isMitmEnabled = enableMitm
@@ -90,8 +90,8 @@ public class Netbot {
         signal(SIGINT, SIG_IGN)
         signalSource.resume()
 
-        if let httpListenAddress = configuration.general.httpListenAddress,
-            let httpListenPort = configuration.general.httpListenPort
+        if let httpListenAddress = profile.general.httpListenAddress,
+            let httpListenPort = profile.general.httpListenPort
         {
             let bootstrap = ServerBootstrap(group: eventLoopGroup)
                 .serverChannelOption(ChannelOptions.backlog, value: 256)
@@ -109,7 +109,7 @@ public class Netbot {
                         logger: self.logger,
                         enableHTTPCapture: self.isHTTPCaptureEnabled,
                         enableMitM: self.isMitmEnabled,
-                        mitmConfig: self.configuration.mitm
+                        mitmConfig: self.profile.mitm
                     ) { req in
                         let eventLoop = channel.eventLoop.next()
 
@@ -197,7 +197,7 @@ public class Netbot {
                                     }
                                 }
 
-                                for rule in self.configuration.rules {
+                                for rule in self.profile.rules {
                                     guard patterns.first(where: rule.match) == nil else {
                                         savedFinalRule = rule
                                         break
@@ -214,7 +214,7 @@ public class Netbot {
                                 }
                                 precondition(
                                     savedFinalRule != nil,
-                                    "Rules defined in configuration MUST contain one and only one FinalRule."
+                                    "Rules defined in profile MUST contain one and only one FinalRule."
                                 )
                                 return savedFinalRule!
                             }
@@ -229,7 +229,7 @@ public class Netbot {
                                 // `policyGroups`, if group exists use group's
                                 // `selected` as policy ID else use rule's policy as ID.
                                 if let policyGroup =
-                                    (self.configuration.policyGroups.first {
+                                    (self.profile.policyGroups.first {
                                         $0.name == rule.policy
                                     })
                                 {
@@ -245,14 +245,14 @@ public class Netbot {
                                 }
 
                                 let policy =
-                                    (self.configuration.policies.map { $0.base } + AnyPolicy.builtin)
+                                    (self.profile.policies.map { $0.base } + AnyPolicy.builtin)
                                     .first {
                                         $0.name == preferred
                                     }
 
                                 assert(
                                     policy != nil,
-                                    "Illegal selectable policy groups, all policies group should be one of the policies in same configuration."
+                                    "Illegal selectable policy groups, all policies group should be one of the policies in same profile."
                                 )
                                 return policy!
                             }
