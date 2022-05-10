@@ -18,84 +18,87 @@ import NetbotSOCKS
 import NetbotSS
 import NetbotVMESS
 
-/// Policy configuration object.
-public struct PolicyConfiguration {
+extension AnyPolicy {
 
-    /// Proxy server address.
-    public var serverAddress: String
+    /// Policy configuration object.
+    public struct Configuration {
 
-    /// Proxy server port.
-    public var port: Int
+        /// Proxy server address.
+        public var serverAddress: String
 
-    /// Username for HTTP basic authentication and SOCKS5 username password authentication.
-    public var username: String?
+        /// Proxy server port.
+        public var port: Int
 
-    /// Password for HTTP basic authentication and SOCKS5 username password authentication.
-    public var password: String?
+        /// Username for HTTP basic authentication and SOCKS5 username password authentication.
+        public var username: String?
 
-    /// A boolean value determinse whether HTTP proxy should prefer using CONNECT tunnel.
-    public var prefererHttpTunneling: Bool
+        /// Password for HTTP basic authentication and SOCKS5 username password authentication.
+        public var password: String?
 
-    /// A boolean value determinse whether SSL should skip certification verification.
-    public var skipCertificateVerification: Bool
+        /// A boolean value determinse whether HTTP proxy should prefer using CONNECT tunnel.
+        public var prefererHttpTunneling: Bool
 
-    /// SSL sni.
-    public var sni: String?
+        /// A boolean value determinse whether SSL should skip certification verification.
+        public var skipCertificateVerification: Bool
 
-    /// SSL certificate pinning.
-    public var certificatePinning: String?
+        /// SSL sni.
+        public var sni: String?
 
-    private var algo: CryptoAlgorithm?
+        /// SSL certificate pinning.
+        public var certificatePinning: String?
 
-    /// Initialize an instance of `PolicyConfiguration` object with specified serverAddress, port, username, password,
-    /// prefererHttpTunneling, skipCertificationVerification, sni, certificatePinning and algorithm.
-    public init(
-        serverAddress: String,
-        port: Int,
-        username: String? = nil,
-        password: String? = nil,
-        prefererHttpTunneling: Bool = false,
-        skipCertificateVerification: Bool = false,
-        sni: String? = nil,
-        certificatePinning: String? = nil,
-        algorithm: CryptoAlgorithm? = nil
-    ) {
-        self.serverAddress = serverAddress
-        self.port = port
-        self.username = username
-        self.password = password
-        self.prefererHttpTunneling = prefererHttpTunneling
-        self.skipCertificateVerification = skipCertificateVerification
-        self.sni = sni
-        self.certificatePinning = certificatePinning
-        self.algo = algorithm
-    }
+        private var algo: CryptoAlgorithm?
 
-    /// Initialize an instance of `PolicyConfiguration`.
-    ///
-    /// Calling this method is equivalent to calling
-    /// ```swift
-    /// init(
-    ///     serverAddress: "",
-    ///     port: 8080,
-    ///     username: nil,
-    ///     password: nil,
-    ///     prefererHttpTunneling: false,
-    ///     skipCertificateVerification: false,
-    ///     sni: nil,
-    ///     certificatePinning: nil,
-    ///     algorithm: nil
-    /// )
-    /// ```
-    public init() {
-        serverAddress = ""
-        port = 8080
-        prefererHttpTunneling = false
-        skipCertificateVerification = false
+        /// Initialize an instance of `Configuration` object with specified serverAddress, port, username, password,
+        /// prefererHttpTunneling, skipCertificationVerification, sni, certificatePinning and algorithm.
+        public init(
+            serverAddress: String,
+            port: Int,
+            username: String? = nil,
+            password: String? = nil,
+            prefererHttpTunneling: Bool = false,
+            skipCertificateVerification: Bool = false,
+            sni: String? = nil,
+            certificatePinning: String? = nil,
+            algorithm: CryptoAlgorithm? = nil
+        ) {
+            self.serverAddress = serverAddress
+            self.port = port
+            self.username = username
+            self.password = password
+            self.prefererHttpTunneling = prefererHttpTunneling
+            self.skipCertificateVerification = skipCertificateVerification
+            self.sni = sni
+            self.certificatePinning = certificatePinning
+            self.algo = algorithm
+        }
+
+        /// Initialize an instance of `Configuration`.
+        ///
+        /// Calling this method is equivalent to calling
+        /// ```swift
+        /// init(
+        ///     serverAddress: "",
+        ///     port: 8080,
+        ///     username: nil,
+        ///     password: nil,
+        ///     prefererHttpTunneling: false,
+        ///     skipCertificateVerification: false,
+        ///     sni: nil,
+        ///     certificatePinning: nil,
+        ///     algorithm: nil
+        /// )
+        /// ```
+        public init() {
+            serverAddress = ""
+            port = 8080
+            prefererHttpTunneling = false
+            skipCertificateVerification = false
+        }
     }
 }
 
-extension PolicyConfiguration: Codable {
+extension AnyPolicy.Configuration: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case serverAddress
@@ -146,13 +149,13 @@ extension PolicyConfiguration: Codable {
     }
 }
 
-extension PolicyConfiguration: SocketConfigurationProtocol {}
+extension AnyPolicy.Configuration: SocketConfigurationProtocol {}
 
-extension PolicyConfiguration: HTTPProxyConfigurationProtocol {}
+extension AnyPolicy.Configuration: HTTPProxyConfigurationProtocol {}
 
-extension PolicyConfiguration: TLSConfigurationProtocol {}
+extension AnyPolicy.Configuration: TLSConfigurationProtocol {}
 
-extension PolicyConfiguration: ShadowsocksConfigurationProtocol {
+extension AnyPolicy.Configuration: ShadowsocksConfigurationProtocol {
 
     /// Shadowsocks encryption algorithm.
     public var algorithm: CryptoAlgorithm {
@@ -167,9 +170,9 @@ extension PolicyConfiguration: ShadowsocksConfigurationProtocol {
     }
 }
 
-extension PolicyConfiguration: SOCKS5ConfigurationProtocol {}
+extension AnyPolicy.Configuration: SOCKS5ConfigurationProtocol {}
 
-extension PolicyConfiguration: VMESSConfigurationProtocol {
+extension AnyPolicy.Configuration: VMESSConfigurationProtocol {
 
     /// VMESS user object.
     public var user: UUID {

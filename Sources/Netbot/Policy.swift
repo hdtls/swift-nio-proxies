@@ -83,7 +83,10 @@ public struct HTTPProxyPolicy: Policy {
 
     public var destinationAddress: NetAddress?
 
-    public init(name: String, configuration: SocketConfigurationProtocol & HTTPProxyConfigurationProtocol) {
+    public init(
+        name: String,
+        configuration: SocketConfigurationProtocol & HTTPProxyConfigurationProtocol
+    ) {
         self.name = name
         self.configuration = configuration
     }
@@ -99,7 +102,11 @@ public struct HTTPSProxyPolicy: Policy {
 
     public var destinationAddress: NetAddress?
 
-    public init(name: String, configuration: SocketConfigurationProtocol & HTTPProxyConfigurationProtocol & TLSConfigurationProtocol) {
+    public init(
+        name: String,
+        configuration: SocketConfigurationProtocol & HTTPProxyConfigurationProtocol
+            & TLSConfigurationProtocol
+    ) {
         self.name = name
         self.configuration = configuration
     }
@@ -114,7 +121,10 @@ public struct SOCKS5Policy: Policy {
 
     public var destinationAddress: NetAddress?
 
-    public init(name: String, configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol) {
+    public init(
+        name: String,
+        configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol
+    ) {
         self.name = name
         self.configuration = configuration
     }
@@ -130,7 +140,11 @@ public struct SOCKS5OverTLSPolicy: Policy {
 
     public var destinationAddress: NetAddress?
 
-    public init(name: String, configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol & TLSConfigurationProtocol) {
+    public init(
+        name: String,
+        configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol
+            & TLSConfigurationProtocol
+    ) {
         self.name = name
         self.configuration = configuration
     }
@@ -145,7 +159,10 @@ public struct ShadowsocksPolicy: Policy {
 
     public var destinationAddress: NetAddress?
 
-    public init(name: String, configuration: SocketConfigurationProtocol & ShadowsocksConfigurationProtocol) {
+    public init(
+        name: String,
+        configuration: SocketConfigurationProtocol & ShadowsocksConfigurationProtocol
+    ) {
         self.name = name
         self.configuration = configuration
     }
@@ -160,7 +177,10 @@ public struct VMESSPolicy: Policy {
 
     public var destinationAddress: NetAddress?
 
-    public init(name: String, configuration: SocketConfigurationProtocol & VMESSConfigurationProtocol) {
+    public init(
+        name: String,
+        configuration: SocketConfigurationProtocol & VMESSConfigurationProtocol
+    ) {
         self.name = name
         self.configuration = configuration
     }

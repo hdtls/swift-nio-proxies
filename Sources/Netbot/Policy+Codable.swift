@@ -62,37 +62,37 @@ extension AnyPolicy: Codable {
                 base = RejectTinyGifPolicy()
             case "http":
                 let configuration = try container.decode(
-                    PolicyConfiguration.self,
+                    AnyPolicy.Configuration.self,
                     forKey: .configuration
                 )
                 base = HTTPProxyPolicy(name: name, configuration: configuration)
             case "https":
                 let configuration = try container.decode(
-                    PolicyConfiguration.self,
+                    AnyPolicy.Configuration.self,
                     forKey: .configuration
                 )
                 base = HTTPSProxyPolicy(name: name, configuration: configuration)
             case "socks5":
                 let configuration = try container.decode(
-                    PolicyConfiguration.self,
+                    AnyPolicy.Configuration.self,
                     forKey: .configuration
                 )
                 base = SOCKS5Policy(name: name, configuration: configuration)
             case "socks5-over-tls":
                 let configuration = try container.decode(
-                    PolicyConfiguration.self,
+                    AnyPolicy.Configuration.self,
                     forKey: .configuration
                 )
                 base = SOCKS5OverTLSPolicy(name: name, configuration: configuration)
             case "ss":
                 let configuration = try container.decode(
-                    PolicyConfiguration.self,
+                    AnyPolicy.Configuration.self,
                     forKey: .configuration
                 )
                 base = ShadowsocksPolicy(name: name, configuration: configuration)
             case "vmess":
                 let configuration = try container.decode(
-                    PolicyConfiguration.self,
+                    AnyPolicy.Configuration.self,
                     forKey: .configuration
                 )
                 base = VMESSPolicy(name: name, configuration: configuration)
@@ -106,7 +106,7 @@ extension AnyPolicy: Codable {
 
         try container.encode(base.name, forKey: .name)
 
-        var configuration: PolicyConfiguration?
+        var configuration: AnyPolicy.Configuration?
 
         switch base {
             case is DirectPolicy:
