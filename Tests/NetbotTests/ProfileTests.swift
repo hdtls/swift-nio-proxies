@@ -16,6 +16,13 @@ import XCTest
 
 @testable import Netbot
 
+extension PolicyGroup: Equatable {
+
+    public static func == (lhs: PolicyGroup, rhs: PolicyGroup) -> Bool {
+        lhs.name == rhs.name && lhs.policies == rhs.policies
+    }
+}
+
 final class ProfileTests: XCTestCase {
 
     let generalString = """
@@ -96,25 +103,6 @@ final class ProfileTests: XCTestCase {
         XCTAssertEqual(result.socksListenAddress, "127.0.0.1")
         XCTAssertEqual(result.socksListenPort, 6153)
         XCTAssertTrue(result.excludeSimpleHostnames)
-    }
-
-    func testReplicaDecoding() throws {
-        let jsonObject = try ProfileSerialization.jsonObject(
-            with: replicaString.data(using: .utf8)!
-        )
-        let profile = try jsonDecoder.decode(
-            Profile.self,
-            from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
-        )
-
-        let result = profile.replica
-
-        XCTAssertTrue(result.hideAppleRequests)
-        XCTAssertTrue(result.hideCrashlyticsRequests)
-        XCTAssertTrue(result.hideUdp)
-        XCTAssertTrue(result.hideCrashlyticsRequests)
-        XCTAssertEqual(result.reqMsgFilter, "google.com")
-        XCTAssertEqual(result.reqMsgFilterType, "none")
     }
 
     func testPoliciesDecoding() throws {

@@ -224,7 +224,7 @@ public class Netbot {
 
                                 var preferred: String?
 
-                                // Check whether there is a `SelectablePolicyGroup`
+                                // Check whether there is a `PolicyGroup`
                                 // with then same name as the rule's policy in
                                 // `policyGroups`, if group exists use group's
                                 // `selected` as policy ID else use rule's policy as ID.

@@ -33,7 +33,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
         .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0"),
-        .package(url: "https://github.com/hdtls/swift-preference.git", from: "1.0.0"),
         .package(url: "https://github.com/hdtls/swift-erase-nil-decoding.git", .revision("fc7ac89dd33f353222e610a1d8253e70dc4a1169"))
     ],
     targets: [

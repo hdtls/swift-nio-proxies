@@ -68,10 +68,6 @@ public struct NetbotCLITool: ParsableCommand {
     @Option(help: "The proxy outbound mode.")
     public var outboundMode: OutboundMode = .direct
 
-    /// The request message filter, separated by commas.
-    @Option(help: "The request message filter, separated by commas.")
-    public var reqMsgFilter: String?
-
     /// A boolean value that determines whether http capture should be enabled.
     @Flag(help: "Enable HTTP capture, should be enabled only when needed.")
     public var enableHTTPCapture: Bool = false
@@ -144,10 +140,6 @@ public struct NetbotCLITool: ParsableCommand {
             //            ProxyConfigCommand.main(proxyctl)
         }
         #endif
-
-        if let reqMsgFilter = reqMsgFilter {
-            profile.replica.reqMsgFilter = reqMsgFilter
-        }
 
         /// Default GeoLite2 database file url.
         let dstURL: URL = {
