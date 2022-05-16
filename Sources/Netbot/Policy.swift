@@ -56,6 +56,8 @@ public struct DirectPolicy: Policy {
     public var name: String = "DIRECT"
 
     public var destinationAddress: NetAddress?
+
+    public init() {}
 }
 
 /// RejectPolicy will reject connection to the destination.
@@ -64,6 +66,8 @@ public struct RejectPolicy: Policy {
     public var name: String = "REJECT"
 
     public var destinationAddress: NetAddress?
+
+    public init() {}
 }
 
 /// RejectTinyGifPolicy will reject connection and response a tiny gif.
@@ -72,6 +76,8 @@ public struct RejectTinyGifPolicy: Policy {
     public var name: String = "REJECT-TINYGIF"
 
     public var destinationAddress: NetAddress?
+
+    public init() {}
 }
 
 /// HTTPProxyPolicy will tunning connection to the destination via HTTP proxy.
