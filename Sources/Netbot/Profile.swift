@@ -18,22 +18,22 @@ import Logging
 import NetbotHTTP
 
 /// A profile object that defines behavior and policies for a Netbot process.
-public struct Profile: Codable {
+public struct Profile {
 
     /// The rules contains in this configuration.
-    @EraseNilToEmpty public var rules: [AnyRule]
+    public var rules: [AnyRule]
 
     /// A configuration object that provides HTTP MitM configuration for this process.
-    @EraseNilToEmpty public var mitm: MitMConfiguration
+    public var mitm: MitMConfiguration
 
     /// A configuration object that provides general configuration for this process.
-    @EraseNilToEmpty public var general: BasicConfiguration
+    public var general: BasicConfiguration
 
     /// All proxy policy object contains in this configuration object.
-    @EraseNilToEmpty public var policies: [AnyPolicy]
+    public var policies: [AnyPolicy]
 
     /// All selectable policy groups contains in this configuration object.
-    @EraseNilToEmpty public var policyGroups: [PolicyGroup]
+    public var policyGroups: [PolicyGroup]
 
     /// Initialize an instance of `Profile` with the specified general, replicat, rules, mitm,
     /// polcies and policyGroups.
@@ -63,6 +63,53 @@ public struct Profile: Codable {
             mitm: .init(),
             policies: .init(),
             policyGroups: .init()
+        )
+    }
+}
+
+extension Profile: Codable {
+
+    private enum CodingKeys: String, CodingKey {
+        case rules
+        case mitm
+        case general
+        case policies
+        case policyGroups
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rules = try container.decodeIfPresent([AnyRule].self, forKey: .rules) ?? []
+        mitm = try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
+        general =
+            try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
+        self.policies = try container.decodeIfPresent([AnyPolicy].self, forKey: .policies) ?? []
+        let policyGroups =
+            try container.decodeIfPresent([PolicyGroup.__Codable].self, forKey: .policyGroups) ?? []
+
+        let policies = self.policies + AnyPolicy.builtin
+
+        self.policyGroups = policyGroups.map {
+            PolicyGroup(
+                name: $0.name,
+                policies: $0.policies.compactMap { policy in
+                    policies.first {
+                        $0.base.name == policy
+                    }
+                }
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(rules.isEmpty ? nil : rules, forKey: .rules)
+        try container.encode(mitm, forKey: .mitm)
+        try container.encode(general, forKey: .general)
+        try container.encodeIfPresent(policies.isEmpty ? nil : policies, forKey: .policies)
+        try container.encodeIfPresent(
+            policyGroups.isEmpty ? nil : policyGroups.map { $0.name },
+            forKey: .policyGroups
         )
     }
 }
@@ -136,7 +183,12 @@ public struct BasicConfiguration: Codable, EmptyInitializable {
 }
 
 /// Selectable policy group object that defines policy group and current selected policy.
-public struct PolicyGroup: Codable {
+public struct PolicyGroup {
+
+    fileprivate struct __Codable: Codable {
+        var name: String
+        var policies: [String]
+    }
 
     public var id: UUID = .init()
 
@@ -144,15 +196,10 @@ public struct PolicyGroup: Codable {
     public var name: String
 
     /// Policies included in this policy group.
-    public var policies: [String]
-
-    private enum CodingKeys: String, CodingKey {
-        case name
-        case policies
-    }
+    public var policies: [AnyPolicy]
 
     /// Initialize an instance of `PolicyGroup` with specified name and policies.
-    public init(name: String, policies: [String]) {
+    public init(name: String, policies: [AnyPolicy]) {
         precondition(!policies.isEmpty, "You must provide at least one policy.")
 
         self.name = name

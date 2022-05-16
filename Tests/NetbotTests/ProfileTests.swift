@@ -16,13 +16,6 @@ import XCTest
 
 @testable import Netbot
 
-extension PolicyGroup: Equatable {
-
-    public static func == (lhs: PolicyGroup, rhs: PolicyGroup) -> Bool {
-        lhs.name == rhs.name && lhs.policies == rhs.policies
-    }
-}
-
 final class ProfileTests: XCTestCase {
 
     let generalString = """
@@ -424,11 +417,11 @@ final class ProfileTests: XCTestCase {
 
         let result = profile.policyGroups
         XCTAssertEqual(result.count, 2)
-        XCTAssertEqual(result.first, .init(name: "PROXY", policies: ["HTTP"]))
-        XCTAssertEqual(
-            result.last,
-            .init(name: "BLOCK", policies: ["DIRECT", "REJECT", "REJECT-TINYGIF"])
-        )
+        XCTAssertEqual(result.first?.name, "PROXY")
+        XCTAssertEqual(result.first?.policies.count, 1)
+        XCTAssertTrue(result.first!.policies.contains(where: { $0.base.name == "HTTP" }))
+        XCTAssertEqual(result.last?.name, "BLOCK")
+        XCTAssertEqual(result.last?.policies.count, 3)
     }
 
     func testDecodingPolicyGroupsWhichContainsPoliciesNoDefinedInPolicies() {

@@ -212,7 +212,7 @@ public struct NetbotCLITool: ParsableCommand {
             #endif
         }
 
-        let netbot = Netbot.init(
+        let netbot = App.init(
             profile: profile,
             outboundMode: outboundMode,
             enableHTTPCapture: enableHTTPCapture,

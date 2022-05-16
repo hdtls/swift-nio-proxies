@@ -163,7 +163,7 @@ final public class ProfileSerialization {
     public static func jsonObject(with data: ByteBuffer) throws -> Any {
         var __rulesKeyedByLine: [Int: String] = [:]
         var __groupKeyedByLine: [Int: [String: [String]]] = [:]
-        var __policies: [String] = AnyPolicy.builtin.map { $0.name }
+        var __policies: [String] = AnyPolicy.builtin.map { $0.base.name }
 
         /// Line number being parsed.
         var cursor: Int = 0

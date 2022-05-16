@@ -233,7 +233,7 @@ public class App {
                                         $0.name == rule.policy
                                     })
                                 {
-                                    preferred = policyGroup.policies.first
+                                    preferred = policyGroup.policies.first?.base.name
                                 } else {
                                     preferred = rule.policy
                                 }
@@ -245,16 +245,16 @@ public class App {
                                 }
 
                                 let policy =
-                                    (self.profile.policies.map { $0.base } + AnyPolicy.builtin)
+                                    (self.profile.policies + AnyPolicy.builtin)
                                     .first {
-                                        $0.name == preferred
+                                        $0.base.name == preferred
                                     }
 
                                 assert(
                                     policy != nil,
                                     "Illegal selectable policy groups, all policies group should be one of the policies in same profile."
                                 )
-                                return policy!
+                                return policy!.base
                             }
                             .flatMap {
                                 self.logger.info(

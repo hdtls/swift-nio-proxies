@@ -35,7 +35,11 @@ extension AnyPolicy {
     /// Builtin policies.
     ///
     /// For current version this array contains three element `DirectPolicy`, `RejectPolicy` and `RejectTinyGifPolicy`.
-    public static let builtin: [Policy] = [DirectPolicy(), RejectPolicy(), RejectTinyGifPolicy()]
+    public static let builtin: [AnyPolicy] = [
+        .init(DirectPolicy()),
+        .init(RejectPolicy()),
+        .init(RejectTinyGifPolicy()),
+    ]
 }
 
 extension AnyPolicy: Codable {
