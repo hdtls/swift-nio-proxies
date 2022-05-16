@@ -21,7 +21,7 @@ import NIOPosix
 import NetbotCore
 import NetbotHTTP
 
-public class Netbot {
+public class App {
 
     public let logger: Logger
 
