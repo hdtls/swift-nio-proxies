@@ -199,9 +199,8 @@ public struct PolicyGroup {
     public var policies: [AnyPolicy]
 
     /// Initialize an instance of `PolicyGroup` with specified name and policies.
-    public init(name: String, policies: [AnyPolicy]) {
-        precondition(!policies.isEmpty, "You must provide at least one policy.")
-
+    public init(id: UUID = .init(), name: String, policies: [AnyPolicy]) {
+        self.id = id
         self.name = name
         self.policies = policies
     }

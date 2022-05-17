@@ -28,6 +28,11 @@ public struct AnyPolicy {
     public init<P>(_ base: P) where P: Policy {
         self.base = base
     }
+
+    public init<P>(id: UUID = .init(), base: P) where P: Policy {
+        self.id = id
+        self.base = base
+    }
 }
 
 extension AnyPolicy {
