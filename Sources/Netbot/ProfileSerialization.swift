@@ -187,11 +187,11 @@ final public class ProfileSerialization {
                 case (.section(let g), _):
                     currentGroup = .init(rawValue: g)
 
-                case (.string(let l), .some(.rules)):
-                    __rulesKeyedByLine[cursor] = l
-                    fallthrough
-
                 case (.string(let l), _):
+                    if currentGroup == .rules {
+                        __rulesKeyedByLine[cursor] = l
+                    }
+
                     guard let currentGroup = currentGroup else {
                         throw ProfileSerializationError.dataCorrupted
                     }
@@ -251,7 +251,7 @@ final public class ProfileSerialization {
                     guard let currentGroup = currentGroup else {
                         throw ProfileSerializationError.dataCorrupted
                     }
-
+//
                     guard case .array(var array) = _json[currentGroup.rawValue] ?? .array([]) else {
                         preconditionFailure()
                     }
