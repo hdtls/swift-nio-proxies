@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import EraseNilDecoding
 import Foundation
 import Logging
 import NetbotHTTP
@@ -115,16 +114,16 @@ extension Profile: Codable {
 }
 
 /// Basic configuration object that defines behavior and polices for logging and proxy settings.
-public struct BasicConfiguration: Codable, EmptyInitializable {
+public struct BasicConfiguration: Codable {
 
     /// Log level use for `Logging.Logger`.`
     public var logLevel: Logger.Level
 
     /// DNS servers use for system proxy.
-    @EraseNilToEmpty public var dnsServers: [String]
+    public var dnsServers: [String]
 
     /// Exceptions use for system proxy.
-    @EraseNilToEmpty public var exceptions: [String]
+    public var exceptions: [String]
 
     /// Http listen address use for system http proxy.
     public var httpListenAddress: String?
@@ -139,7 +138,7 @@ public struct BasicConfiguration: Codable, EmptyInitializable {
     public var socksListenPort: Int?
 
     /// A boolean value that determines whether system proxy should exclude simple hostnames.
-    @EraseNilToTrue public var excludeSimpleHostnames: Bool
+    public var excludeSimpleHostnames: Bool
 
     /// Initialize an instance of `BasicConfiguration` with specified logLevel, dnsServers exceptions,
     /// httpListenAddress, httpListenPort, socksListenAddress, socksListenPort and excludeSimpleHostnames.
@@ -180,6 +179,41 @@ public struct BasicConfiguration: Codable, EmptyInitializable {
             excludeSimpleHostnames: false
         )
     }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.logLevel = try container.decodeIfPresent(Logger.Level.self, forKey: .logLevel) ?? .info
+        self.dnsServers = try container.decodeIfPresent([String].self, forKey: .dnsServers) ?? []
+        self.exceptions = try container.decodeIfPresent([String].self, forKey: .exceptions) ?? []
+        self.httpListenAddress = try container.decodeIfPresent(String.self, forKey: .httpListenAddress)
+        self.httpListenPort = try container.decodeIfPresent(Int.self, forKey: .httpListenPort)
+        self.socksListenAddress = try container.decodeIfPresent(String.self, forKey: .socksListenAddress)
+        self.socksListenPort = try container.decodeIfPresent(Int.self, forKey: .socksListenPort)
+        self.excludeSimpleHostnames = try container.decodeIfPresent(Bool.self, forKey: .excludeSimpleHostnames) ?? false
+    }
+
+    enum CodingKeys: CodingKey {
+        case logLevel
+        case dnsServers
+        case exceptions
+        case httpListenAddress
+        case httpListenPort
+        case socksListenAddress
+        case socksListenPort
+        case excludeSimpleHostnames
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(self.logLevel, forKey: .logLevel)
+        try container.encode(self.dnsServers, forKey: .dnsServers)
+        try container.encode(self.exceptions, forKey: .exceptions)
+        try container.encodeIfPresent(self.httpListenAddress, forKey: .httpListenAddress)
+        try container.encodeIfPresent(self.httpListenPort, forKey: .httpListenPort)
+        try container.encodeIfPresent(self.socksListenAddress, forKey: .socksListenAddress)
+        try container.encodeIfPresent(self.socksListenPort, forKey: .socksListenPort)
+        try container.encode(self.excludeSimpleHostnames, forKey: .excludeSimpleHostnames)
+    }
 }
 
 /// Selectable policy group object that defines policy group and current selected policy.
@@ -205,5 +239,3 @@ public struct PolicyGroup {
         self.policies = policies
     }
 }
-
-extension MitMConfiguration: EmptyInitializable {}

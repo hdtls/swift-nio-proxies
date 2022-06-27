@@ -33,7 +33,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
         .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0"),
-        .package(url: "https://github.com/hdtls/swift-erase-nil-decoding.git", .revision("fc7ac89dd33f353222e610a1d8253e70dc4a1169"))
+        .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0")
     ],
     targets: [
         .target(name: "CSHAKE128"),
@@ -42,24 +42,12 @@ let package = Package(
                     "CSHAKE128",
                     .product(name: "Crypto", package: "swift-crypto")
                 ]),
-        .target(name: "CMaxMindDB",
-                cSettings: [
-                    .define("PACKAGE_VERSION", to: "\"1.6.0\""),
-                    // cmake CheckTypeSize
-                    .define("MMDB_UINT128_USING_MODE", to: "0"),
-                    .define("MMDB_UINT128_IS_BYTE_ARRAY", to: "0"),
-                    // cmake TestBigEndian
-                    .define("MMDB_LITTLE_ENDIAN"),
-                ]
-               ),
         .target(name: "ConnectionPool",
                 dependencies: [
                     .product(name: "Logging", package: "swift-log"),
                     .product(name: "NIOCore", package: "swift-nio"),
                     .product(name: "NIOPosix", package: "swift-nio")
                 ]),
-        .target(name: "MaxMindDB",
-                dependencies: [ "CMaxMindDB" ]),
         .target(name: "NetbotCore",
                 dependencies: [
                     .product(name: "Logging", package: "swift-log"),
@@ -106,7 +94,6 @@ let package = Package(
                 ]),
         .target(name: "Netbot",
                 dependencies: [
-                    "MaxMindDB",
                     "NetbotCore",
                     "NetbotHTTP",
                     "NetbotSOCKS",
@@ -114,7 +101,7 @@ let package = Package(
                     "NetbotTrojan",
                     "NetbotVMESS",
                     .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                    .product(name: "EraseNilDecoding", package: "swift-erase-nil-decoding"),
+                    .product(name: "MaxMindDB", package: "swift-maxminddb"),
                     .product(name: "NIOCore", package: "swift-nio"),
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),

@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import ConnectionPool
-import EraseNilDecoding
 import Foundation
 import NIOSSL
 import NetbotCore
