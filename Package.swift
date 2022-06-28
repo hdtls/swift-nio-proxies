@@ -1,4 +1,4 @@
-// swift-tools-version:5.4
+// swift-tools-version:5.6
 //===----------------------------------------------------------------------===//
 //
 // This source file is part of the Netbot open source project
