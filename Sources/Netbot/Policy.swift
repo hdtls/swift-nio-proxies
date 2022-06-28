@@ -68,4 +68,10 @@ public struct ProxyPolicy: Policy {
     public var proxy: Proxy
 
     public var destinationAddress: NetAddress?
+
+    public init(name: String, proxy: Proxy, destinationAddress: NetAddress? = nil) {
+        self.name = name
+        self.proxy = proxy
+        self.destinationAddress = destinationAddress
+    }
 }

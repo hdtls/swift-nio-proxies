@@ -78,6 +78,34 @@ public struct Proxy: Codable {
     /// - note: This is used in Shadowsocks protocol.
     public var algorithm: CryptoAlgorithm
 
+    public init(
+        serverAddress: String = "127.0.0.1",
+        port: Int = 8080,
+        `protocol`: `Protocol` = .http,
+        username: String = "",
+        password: String = "",
+        authenticationRequired: Bool = false,
+        prefererHttpTunneling: Bool = true,
+        overTls: Bool = false,
+        skipCertificateVerification: Bool = false,
+        sni: String = "",
+        certificatePinning: String = "",
+        algorithm: CryptoAlgorithm = .aes128Gcm
+    ) {
+        self.serverAddress = serverAddress
+        self.port = port
+        self.protocol = `protocol`
+        self.username = username
+        self.password = password
+        self.authenticationRequired = authenticationRequired
+        self.prefererHttpTunneling = prefererHttpTunneling
+        self.overTls = overTls
+        self.skipCertificateVerification = skipCertificateVerification
+        self.sni = sni
+        self.certificatePinning = certificatePinning
+        self.algorithm = algorithm
+    }
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.serverAddress = try container.decode(String.self, forKey: .serverAddress)
