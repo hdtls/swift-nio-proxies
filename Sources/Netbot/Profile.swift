@@ -76,6 +76,11 @@ extension Profile: Codable {
         case policyGroups
     }
 
+    private struct __PolicyGroup: Codable {
+        let name: String
+        let policies: [String]
+    }
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         rules = try container.decodeIfPresent([AnyRule].self, forKey: .rules) ?? []
@@ -84,7 +89,7 @@ extension Profile: Codable {
             try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
         self.policies = try container.decodeIfPresent([AnyPolicy].self, forKey: .policies) ?? []
         let policyGroups =
-            try container.decodeIfPresent([PolicyGroup.__Codable].self, forKey: .policyGroups) ?? []
+            try container.decodeIfPresent([__PolicyGroup].self, forKey: .policyGroups) ?? []
 
         let policies = self.policies + AnyPolicy.builtin
 
@@ -185,11 +190,18 @@ public struct BasicConfiguration: Codable {
         self.logLevel = try container.decodeIfPresent(Logger.Level.self, forKey: .logLevel) ?? .info
         self.dnsServers = try container.decodeIfPresent([String].self, forKey: .dnsServers) ?? []
         self.exceptions = try container.decodeIfPresent([String].self, forKey: .exceptions) ?? []
-        self.httpListenAddress = try container.decodeIfPresent(String.self, forKey: .httpListenAddress)
+        self.httpListenAddress = try container.decodeIfPresent(
+            String.self,
+            forKey: .httpListenAddress
+        )
         self.httpListenPort = try container.decodeIfPresent(Int.self, forKey: .httpListenPort)
-        self.socksListenAddress = try container.decodeIfPresent(String.self, forKey: .socksListenAddress)
+        self.socksListenAddress = try container.decodeIfPresent(
+            String.self,
+            forKey: .socksListenAddress
+        )
         self.socksListenPort = try container.decodeIfPresent(Int.self, forKey: .socksListenPort)
-        self.excludeSimpleHostnames = try container.decodeIfPresent(Bool.self, forKey: .excludeSimpleHostnames) ?? false
+        self.excludeSimpleHostnames =
+            try container.decodeIfPresent(Bool.self, forKey: .excludeSimpleHostnames) ?? false
     }
 
     enum CodingKeys: CodingKey {
@@ -218,11 +230,6 @@ public struct BasicConfiguration: Codable {
 
 /// Selectable policy group object that defines policy group and current selected policy.
 public struct PolicyGroup {
-
-    fileprivate struct __Codable: Codable {
-        var name: String
-        var policies: [String]
-    }
 
     public var id: UUID = .init()
 

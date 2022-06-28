@@ -69,44 +69,9 @@ extension AnyPolicy: Codable {
                 base = RejectPolicy()
             case "reject-tinygif":
                 base = RejectTinyGifPolicy()
-            case "http":
-                let configuration = try container.decode(
-                    AnyPolicy.Configuration.self,
-                    forKey: .configuration
-                )
-                base = HTTPProxyPolicy(name: name, configuration: configuration)
-            case "https":
-                let configuration = try container.decode(
-                    AnyPolicy.Configuration.self,
-                    forKey: .configuration
-                )
-                base = HTTPSProxyPolicy(name: name, configuration: configuration)
-            case "socks5":
-                let configuration = try container.decode(
-                    AnyPolicy.Configuration.self,
-                    forKey: .configuration
-                )
-                base = SOCKS5Policy(name: name, configuration: configuration)
-            case "socks5-over-tls":
-                let configuration = try container.decode(
-                    AnyPolicy.Configuration.self,
-                    forKey: .configuration
-                )
-                base = SOCKS5OverTLSPolicy(name: name, configuration: configuration)
-            case "ss":
-                let configuration = try container.decode(
-                    AnyPolicy.Configuration.self,
-                    forKey: .configuration
-                )
-                base = ShadowsocksPolicy(name: name, configuration: configuration)
-            case "vmess":
-                let configuration = try container.decode(
-                    AnyPolicy.Configuration.self,
-                    forKey: .configuration
-                )
-                base = VMESSPolicy(name: name, configuration: configuration)
             default:
-                throw ProfileSerializationError.invalidFile(reason: .dataCorrupted)
+                let proxy = try container.decode(Proxy.self, forKey: .configuration)
+                base = ProxyPolicy(name: name, proxy: proxy)
         }
     }
 
@@ -115,8 +80,6 @@ extension AnyPolicy: Codable {
 
         try container.encode(base.name, forKey: .name)
 
-        var configuration: AnyPolicy.Configuration?
-
         switch base {
             case is DirectPolicy:
                 try container.encode("direct", forKey: .type)
@@ -124,65 +87,10 @@ extension AnyPolicy: Codable {
                 try container.encode("reject", forKey: .type)
             case is RejectTinyGifPolicy:
                 try container.encode("reject-tinygif", forKey: .type)
-            case let policy as HTTPProxyPolicy:
-                try container.encode("http", forKey: .type)
-                configuration = .init(
-                    serverAddress: policy.configuration.serverAddress,
-                    port: policy.configuration.port,
-                    username: policy.configuration.username,
-                    password: policy.configuration.password,
-                    prefererHttpTunneling: policy.configuration.prefererHttpTunneling
-                )
-            case let policy as HTTPSProxyPolicy:
-                try container.encode("https", forKey: .type)
-                configuration = .init(
-                    serverAddress: policy.configuration.serverAddress,
-                    port: policy.configuration.port,
-                    username: policy.configuration.username,
-                    password: policy.configuration.password,
-                    prefererHttpTunneling: policy.configuration.prefererHttpTunneling,
-                    skipCertificateVerification: policy.configuration.skipCertificateVerification,
-                    sni: policy.configuration.sni,
-                    certificatePinning: policy.configuration.certificatePinning
-                )
-            case let policy as SOCKS5Policy:
-                try container.encode("socks5", forKey: .type)
-                configuration = .init(
-                    serverAddress: policy.configuration.serverAddress,
-                    port: policy.configuration.port,
-                    username: policy.configuration.username,
-                    password: policy.configuration.password
-                )
-            case let policy as SOCKS5OverTLSPolicy:
-                try container.encode("socks5-over-tls", forKey: .type)
-                configuration = .init(
-                    serverAddress: policy.configuration.serverAddress,
-                    port: policy.configuration.port,
-                    username: policy.configuration.username,
-                    password: policy.configuration.password,
-                    skipCertificateVerification: policy.configuration.skipCertificateVerification,
-                    sni: policy.configuration.sni,
-                    certificatePinning: policy.configuration.certificatePinning
-                )
-            case let policy as ShadowsocksPolicy:
-                try container.encode("ss", forKey: .type)
-                configuration = .init(
-                    serverAddress: policy.configuration.serverAddress,
-                    port: policy.configuration.port,
-                    password: policy.configuration.passwordReference,
-                    algorithm: policy.configuration.algorithm
-                )
-            case let policy as VMESSPolicy:
-                try container.encode("vmess", forKey: .type)
-                configuration = .init(
-                    serverAddress: policy.configuration.serverAddress,
-                    port: policy.configuration.port,
-                    username: policy.configuration.user.uuidString
-                )
+            case let policy as ProxyPolicy:
+                try container.encodeIfPresent(policy.proxy, forKey: .configuration)
             default:
                 fatalError("Unsupported policy \(base).")
         }
-
-        try container.encodeIfPresent(configuration, forKey: .configuration)
     }
 }

@@ -21,24 +21,6 @@ import NetbotSOCKS
 import NetbotSS
 import NetbotVMESS
 
-public protocol SocketConfigurationProtocol {
-
-    /// The server address may be hostname or IP address.
-    var serverAddress: String { get set }
-
-    /// The server port
-    var port: Int { get set }
-}
-
-public protocol TLSConfigurationProtocol {
-
-    var skipCertificateVerification: Bool { get set }
-
-    var sni: String? { get set }
-
-    var certificatePinning: String? { get set }
-}
-
 /// Policy protocol representation a policy object.
 public protocol Policy: ConnectionPoolSource {
 
@@ -79,114 +61,11 @@ public struct RejectTinyGifPolicy: Policy {
     public init() {}
 }
 
-/// HTTPProxyPolicy will tunning connection to the destination via HTTP proxy.
-public struct HTTPProxyPolicy: Policy {
+public struct ProxyPolicy: Policy {
 
     public var name: String
 
-    public var configuration: SocketConfigurationProtocol & HTTPProxyConfigurationProtocol
+    public var proxy: Proxy
 
     public var destinationAddress: NetAddress?
-
-    public init(
-        name: String,
-        configuration: SocketConfigurationProtocol & HTTPProxyConfigurationProtocol
-    ) {
-        self.name = name
-        self.configuration = configuration
-    }
-}
-
-/// HTTPSProxyPolicy will tunning connection to the destination via HTTPS proxy.
-public struct HTTPSProxyPolicy: Policy {
-
-    public var name: String
-
-    public var configuration:
-        SocketConfigurationProtocol & HTTPProxyConfigurationProtocol & TLSConfigurationProtocol
-
-    public var destinationAddress: NetAddress?
-
-    public init(
-        name: String,
-        configuration: SocketConfigurationProtocol & HTTPProxyConfigurationProtocol
-            & TLSConfigurationProtocol
-    ) {
-        self.name = name
-        self.configuration = configuration
-    }
-}
-
-/// SOCKS5Policy will tunning connection to the destination via SOCKS5 proxy.
-public struct SOCKS5Policy: Policy {
-
-    public var name: String
-
-    public var configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol
-
-    public var destinationAddress: NetAddress?
-
-    public init(
-        name: String,
-        configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol
-    ) {
-        self.name = name
-        self.configuration = configuration
-    }
-}
-
-/// SOCKS5OverTLSPolicy will tunning connection to the destination via SOCKS5 proxy.
-public struct SOCKS5OverTLSPolicy: Policy {
-
-    public var name: String
-
-    public var configuration:
-        SocketConfigurationProtocol & SOCKS5ConfigurationProtocol & TLSConfigurationProtocol
-
-    public var destinationAddress: NetAddress?
-
-    public init(
-        name: String,
-        configuration: SocketConfigurationProtocol & SOCKS5ConfigurationProtocol
-            & TLSConfigurationProtocol
-    ) {
-        self.name = name
-        self.configuration = configuration
-    }
-}
-
-/// ShadowsocksPolicy will tunning connection to the destination via Shadowsocks proxy.
-public struct ShadowsocksPolicy: Policy {
-
-    public var name: String
-
-    public var configuration: SocketConfigurationProtocol & ShadowsocksConfigurationProtocol
-
-    public var destinationAddress: NetAddress?
-
-    public init(
-        name: String,
-        configuration: SocketConfigurationProtocol & ShadowsocksConfigurationProtocol
-    ) {
-        self.name = name
-        self.configuration = configuration
-    }
-}
-
-/// VMESSPolicy will tunning connection to the destination via VMESS proxy.
-public struct VMESSPolicy: Policy {
-
-    public var name: String
-
-    public var configuration: SocketConfigurationProtocol & VMESSConfigurationProtocol
-
-    public var destinationAddress: NetAddress?
-
-    public init(
-        name: String,
-        configuration: SocketConfigurationProtocol & VMESSConfigurationProtocol
-    ) {
-        self.name = name
-        self.configuration = configuration
-    }
 }

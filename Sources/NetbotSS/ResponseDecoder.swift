@@ -49,14 +49,17 @@ public class ResponseDecoder: ByteToMessageDecoder {
 
     public typealias InboundOut = ByteBuffer
 
-    public let configuration: ShadowsocksConfigurationProtocol
+    private let algorithm: CryptoAlgorithm
+
+    private let passwordReference: String
 
     private var symmetricKey: SymmetricKey!
 
     private var nonce: [UInt8]
 
-    public init(configuration: ShadowsocksConfigurationProtocol) {
-        self.configuration = configuration
+    public init(algorithm: CryptoAlgorithm, passwordReference: String) {
+        self.algorithm = algorithm
+        self.passwordReference = passwordReference
         self.nonce = .init(repeating: 0, count: 12)
     }
 
@@ -71,7 +74,7 @@ public class ResponseDecoder: ByteToMessageDecoder {
             }
             let salt = buffer.readBytes(length: saltByteCount)!
             symmetricKey = hkdfDerivedSymmetricKey(
-                secretKey: configuration.passwordReference,
+                secretKey: passwordReference,
                 salt: salt,
                 outputByteCount: keyByteCount
             )
@@ -90,7 +93,7 @@ public class ResponseDecoder: ByteToMessageDecoder {
 
         var bytes: Data
 
-        switch configuration.algorithm {
+        switch algorithm {
             case .aes128Gcm:
                 let sealedBox = try AES.GCM.SealedBox.init(combined: combined)
                 bytes = try AES.GCM.open(sealedBox, using: symmetricKey)
@@ -112,7 +115,7 @@ public class ResponseDecoder: ByteToMessageDecoder {
 
         combined = nonce + buffer.readBytes(length: copyLength)!
 
-        switch configuration.algorithm {
+        switch algorithm {
             case .aes128Gcm:
                 let sealedBox = try AES.GCM.SealedBox.init(combined: combined)
                 bytes = try AES.GCM.open(sealedBox, using: symmetricKey)

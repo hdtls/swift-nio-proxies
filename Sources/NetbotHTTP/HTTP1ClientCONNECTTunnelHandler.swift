@@ -21,28 +21,31 @@ import NetbotCore
 public final class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, RemovableChannelHandler {
 
     public typealias InboundIn = HTTPClientResponsePart
-
     public typealias OutboundIn = NIOAny
 
     private let logger: Logger
-
-    private let configuration: HTTPProxyConfigurationProtocol
-
+    private let username: String
+    private let passwordReference: String
+    private let authenticationRequired: Bool
+    private let preferHTTPTunneling: Bool
     private let destinationAddress: NetAddress
-
     private var state: ConnectionState
-
     private var headPart: HTTPResponseHead?
-
     private var bufferedWrites: MarkedCircularBuffer<BufferedWrite>
 
     public init(
         logger: Logger,
-        configuration: HTTPProxyConfigurationProtocol,
+        username: String,
+        passwordReference: String,
+        authenticationRequired: Bool,
+        preferHTTPTunneling: Bool,
         destinationAddress: NetAddress
     ) {
         self.logger = logger
-        self.configuration = configuration
+        self.username = username
+        self.passwordReference = passwordReference
+        self.authenticationRequired = authenticationRequired
+        self.preferHTTPTunneling = preferHTTPTunneling
         self.destinationAddress = destinationAddress
         self.state = .idle
         self.bufferedWrites = .init(initialCapacity: 6)
@@ -150,8 +153,11 @@ extension HTTP1ClientCONNECTTunnelHandler {
                 )
         }
 
-        if let authorization = configuration.authorization {
-            head.headers.proxyBasicAuthorization = authorization
+        if authenticationRequired {
+            head.headers.proxyBasicAuthorization = .init(
+                username: username,
+                password: passwordReference
+            )
         }
 
         context.write(NIOAny(HTTPClientRequestPart.head(head)), promise: nil)

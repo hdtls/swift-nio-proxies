@@ -14,11 +14,6 @@
 
 import Foundation
 
-public protocol VMESSConfigurationProtocol {
-
-    var user: UUID { get }
-}
-
 /// `Configuration` object defines VMESS request infomation.
 public struct Configuration {
 

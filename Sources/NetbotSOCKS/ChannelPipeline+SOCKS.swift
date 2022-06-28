@@ -20,7 +20,9 @@ extension ChannelPipeline {
 
     public func addSOCKSClientHandlers(
         logger: Logger,
-        configuration: SOCKS5ConfigurationProtocol,
+        username: String,
+        passwordReference: String,
+        authenticationRequired: Bool,
         destinationAddress: NetAddress,
         position: Position = .last
     ) -> EventLoopFuture<Void> {
@@ -30,7 +32,9 @@ extension ChannelPipeline {
             let result = Result<Void, Error> {
                 try syncOperations.addSOCKSClientHandlers(
                     logger: logger,
-                    configuration: configuration,
+                    username: username,
+                    passwordReference: passwordReference,
+                    authenticationRequired: authenticationRequired,
                     destinationAddress: destinationAddress,
                     position: position
                 )
@@ -40,7 +44,9 @@ extension ChannelPipeline {
             eventLoopFuture = eventLoop.submit({
                 try self.syncOperations.addSOCKSClientHandlers(
                     logger: logger,
-                    configuration: configuration,
+                    username: username,
+                    passwordReference: passwordReference,
+                    authenticationRequired: authenticationRequired,
                     destinationAddress: destinationAddress,
                     position: position
                 )
@@ -55,7 +61,9 @@ extension ChannelPipeline.SynchronousOperations {
 
     public func addSOCKSClientHandlers(
         logger: Logger,
-        configuration: SOCKS5ConfigurationProtocol,
+        username: String,
+        passwordReference: String,
+        authenticationRequired: Bool,
         destinationAddress: NetAddress,
         position: ChannelPipeline.Position = .last
     ) throws {
@@ -63,7 +71,9 @@ extension ChannelPipeline.SynchronousOperations {
 
         let handler = SOCKS5ClientHandler(
             logger: logger,
-            configuration: configuration,
+            username: username,
+            passwordReference: passwordReference,
+            authenticationRequired: authenticationRequired,
             destinationAddress: destinationAddress
         )
 

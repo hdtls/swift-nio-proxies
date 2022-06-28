@@ -18,15 +18,17 @@ import Logging
 import NIOCore
 import NetbotCore
 
-public class RequestEncoder: MessageToByteEncoder {
+final public class RequestEncoder: MessageToByteEncoder {
 
     public typealias OutboundIn = ByteBuffer
 
-    public var logger: Logger
+    private var logger: Logger
 
-    public let taskAddress: NetAddress
+    private let taskAddress: NetAddress
 
-    public let configuration: ShadowsocksConfigurationProtocol
+    private let algorithm: CryptoAlgorithm
+
+    private let passwordReference: String
 
     private var symmetricKey: SymmetricKey!
 
@@ -34,11 +36,13 @@ public class RequestEncoder: MessageToByteEncoder {
 
     public init(
         logger: Logger,
-        configuration: ShadowsocksConfigurationProtocol,
+        algorithm: CryptoAlgorithm,
+        passwordReference: String,
         taskAddress: NetAddress
     ) {
         self.logger = logger
-        self.configuration = configuration
+        self.algorithm = algorithm
+        self.passwordReference = passwordReference
         self.taskAddress = taskAddress
     }
 
@@ -56,7 +60,7 @@ public class RequestEncoder: MessageToByteEncoder {
                 UInt8.random(in: UInt8.min...UInt8.max)
             })
             symmetricKey = hkdfDerivedSymmetricKey(
-                secretKey: configuration.passwordReference,
+                secretKey: passwordReference,
                 salt: salt,
                 outputByteCount: keyByteCount
             )
@@ -89,7 +93,7 @@ public class RequestEncoder: MessageToByteEncoder {
             Array($0)
         }
 
-        switch configuration.algorithm {
+        switch algorithm {
             case .aes128Gcm:
                 var sealedBox = try AES.GCM.seal(
                     sequence,

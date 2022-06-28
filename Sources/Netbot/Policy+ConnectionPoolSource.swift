@@ -19,12 +19,15 @@ import NIOCore
 import NIOPosix
 import NIOSSL
 import NetbotHTTP
+import NetbotSS
+import NetbotSOCKS
+import NetbotVMESS
 
 #if canImport(Network)
 import NIOTransportServices
 #endif
 
-func makeUniversalBootstrap(group: EventLoopGroup, serverHostname: String) throws
+func makeClientTCPBootstrap(group: EventLoopGroup, serverHostname: String? = nil) throws
     -> NIOClientTCPBootstrap
 {
     #if canImport(Network)
@@ -80,128 +83,64 @@ extension RejectTinyGifPolicy: ConnectionPoolSource {
     }
 }
 
-extension ShadowsocksPolicy: ConnectionPoolSource {
+extension ProxyPolicy: ConnectionPoolSource {
 
     public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel>
     {
         do {
-            guard let destinationAddress = destinationAddress else {
-                throw HTTPProxyError.invalidURL(url: String(describing: destinationAddress))
+            precondition(destinationAddress != nil)
+            let destinationAddress = destinationAddress!
+
+            var bootstrap = try makeClientTCPBootstrap(group: eventLoop.next())
+
+            if proxy.overTls {
+                bootstrap = bootstrap.enableTLS()
             }
 
-            return ClientBootstrap.init(group: eventLoop.next())
-                .channelInitializer { channel in
-                    channel.pipeline.addSSClientHandlers(
-                        logger: logger,
-                        configuration: configuration,
-                        taskAddress: destinationAddress
-                    )
-                }
-                .connect(host: configuration.serverAddress, port: configuration.port)
-        } catch {
-            return eventLoop.makeFailedFuture(error)
-        }
-    }
-}
-
-extension SOCKS5Policy: ConnectionPoolSource {
-
-    public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel>
-    {
-        do {
-            guard let destinationAddress = destinationAddress else {
-                throw HTTPProxyError.invalidURL(url: String(describing: destinationAddress))
+            switch proxy.protocol {
+                case .http:
+                    return bootstrap.channelInitializer { channel in
+                        channel.pipeline.addHTTPProxyClientHandlers(
+                            logger: logger,
+                            username: proxy.username,
+                            passwordReference: proxy.passwordReference,
+                            authenticationRequired: proxy.authenticationRequired,
+                            preferHTTPTunneling: proxy.prefererHttpTunneling,
+                            destinationAddress: destinationAddress
+                        )
+                    }
+                    .connect(host: proxy.serverAddress, port: proxy.port)
+                case .socks5:
+                    return bootstrap.channelInitializer { channel in
+                        channel.pipeline.addSOCKSClientHandlers(
+                            logger: logger,
+                            username: proxy.username,
+                            passwordReference: proxy.passwordReference,
+                            authenticationRequired: proxy.authenticationRequired,
+                            destinationAddress: destinationAddress
+                        )
+                    }
+                    .connect(host: proxy.serverAddress, port: proxy.port)
+                case .shadowsocks:
+                    return bootstrap.channelInitializer { channel in
+                        channel.pipeline.addSSClientHandlers(
+                            logger: logger,
+                            algorithm: proxy.algorithm,
+                            passwordReference: proxy.passwordReference,
+                            taskAddress: destinationAddress
+                        )
+                    }
+                    .connect(host: proxy.serverAddress, port: proxy.port)
+                case .vmess:
+                    return bootstrap.channelInitializer { channel in
+                        channel.pipeline.addVMESSClientHandlers(
+                            logger: logger,
+                            username: UUID(uuidString: proxy.username)!,
+                            destinationAddress: destinationAddress
+                        )
+                    }
+                    .connect(host: proxy.serverAddress, port: proxy.port)
             }
-
-            return ClientBootstrap.init(group: eventLoop.next())
-                .channelInitializer { channel in
-                    channel.pipeline.addSOCKSClientHandlers(
-                        logger: logger,
-                        configuration: configuration,
-                        destinationAddress: destinationAddress
-                    )
-                }
-                .connect(host: configuration.serverAddress, port: configuration.port)
-        } catch {
-            return eventLoop.makeFailedFuture(error)
-        }
-    }
-}
-
-extension SOCKS5OverTLSPolicy: ConnectionPoolSource {
-
-    public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel>
-    {
-        do {
-            guard let destinationAddress = destinationAddress else {
-                throw HTTPProxyError.invalidURL(url: String(describing: destinationAddress))
-            }
-
-            return ClientBootstrap.init(group: eventLoop.next())
-                .channelInitializer { channel in
-                    channel.pipeline.addSOCKSClientHandlers(
-                        logger: logger,
-                        configuration: configuration,
-                        destinationAddress: destinationAddress
-                    )
-                }
-                .connect(host: configuration.serverAddress, port: configuration.port)
-        } catch {
-            return eventLoop.makeFailedFuture(error)
-        }
-    }
-}
-
-extension HTTPProxyPolicy: ConnectionPoolSource {
-
-    public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel>
-    {
-        do {
-            guard let destinationAddress = destinationAddress else {
-                throw HTTPProxyError.invalidURL(url: String(describing: destinationAddress))
-            }
-
-            return ClientBootstrap.init(group: eventLoop.next())
-                .channelInitializer { channel in
-                    channel.pipeline.addHTTPProxyClientHandlers(
-                        logger: logger,
-                        configuration: configuration,
-                        destinationAddress: destinationAddress
-                    )
-                }
-                .connect(host: configuration.serverAddress, port: configuration.port)
-        } catch {
-            return eventLoop.makeFailedFuture(error)
-        }
-    }
-}
-
-extension HTTPSProxyPolicy: ConnectionPoolSource {
-
-    public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel>
-    {
-        eventLoop.makeFailedFuture(ConnectionPoolError.shutdown)
-    }
-}
-
-extension VMESSPolicy: ConnectionPoolSource {
-
-    public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel>
-    {
-        do {
-            guard let destinationAddress = destinationAddress else {
-                throw HTTPProxyError.invalidURL(url: String(describing: destinationAddress))
-            }
-
-            return ClientBootstrap.init(group: eventLoop.next())
-                .channelInitializer { channel in
-                    channel.pipeline.addVMESSClientHandlers(
-                        logger: logger,
-                        configuration: configuration,
-                        destinationAddress: destinationAddress
-                    )
-                }
-                .connect(host: configuration.serverAddress, port: configuration.port)
         } catch {
             return eventLoop.makeFailedFuture(error)
         }

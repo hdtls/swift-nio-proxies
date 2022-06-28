@@ -34,10 +34,3 @@ public enum CryptoAlgorithm: String, CaseIterable, Equatable {
         }
     }
 }
-
-public protocol ShadowsocksConfigurationProtocol {
-
-    var algorithm: CryptoAlgorithm { get }
-
-    var passwordReference: String { get }
-}

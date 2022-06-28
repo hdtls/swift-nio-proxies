@@ -21,7 +21,8 @@ extension ChannelPipeline {
 
     public func addSSClientHandlers(
         logger: Logger,
-        configuration: ShadowsocksConfigurationProtocol,
+        algorithm: CryptoAlgorithm,
+        passwordReference: String,
         taskAddress: NetAddress,
         position: Position = .last
     ) -> EventLoopFuture<Void> {
@@ -31,7 +32,8 @@ extension ChannelPipeline {
             let result = Result<Void, Error> {
                 try syncOperations.addSSClientHandlers(
                     logger: logger,
-                    configuration: configuration,
+                    algorithm: algorithm,
+                    passwordReference: passwordReference,
                     taskAddress: taskAddress,
                     position: position
                 )
@@ -41,7 +43,8 @@ extension ChannelPipeline {
             eventLoopFuture = eventLoop.submit {
                 try self.syncOperations.addSSClientHandlers(
                     logger: logger,
-                    configuration: configuration,
+                    algorithm: algorithm,
+                    passwordReference: passwordReference,
                     taskAddress: taskAddress,
                     position: position
                 )
@@ -56,15 +59,20 @@ extension ChannelPipeline.SynchronousOperations {
 
     public func addSSClientHandlers(
         logger: Logger,
-        configuration: ShadowsocksConfigurationProtocol,
+        algorithm: CryptoAlgorithm,
+        passwordReference: String,
         taskAddress: NetAddress,
         position: ChannelPipeline.Position = .last
     ) throws {
         eventLoop.assertInEventLoop()
-        let inboundDecoder = ResponseDecoder(configuration: configuration)
+        let inboundDecoder = ResponseDecoder(
+            algorithm: algorithm,
+            passwordReference: passwordReference
+        )
         let outboundEncoder = RequestEncoder(
             logger: logger,
-            configuration: configuration,
+            algorithm: algorithm,
+            passwordReference: passwordReference,
             taskAddress: taskAddress
         )
         let handlers: [ChannelHandler] = [

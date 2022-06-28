@@ -20,7 +20,7 @@ extension ChannelPipeline {
 
     public func addVMESSClientHandlers(
         logger: Logger = .init(label: "com.netbot.vmess"),
-        configuration: VMESSConfigurationProtocol,
+        username: UUID,
         destinationAddress: NetAddress,
         position: Position = .last
     ) -> EventLoopFuture<Void> {
@@ -30,7 +30,7 @@ extension ChannelPipeline {
             let result = Result<Void, Error> {
                 try syncOperations.addVMESSClientHandlers(
                     logger: logger,
-                    configuration: configuration,
+                    username: username,
                     destinationAddress: destinationAddress,
                     position: position
                 )
@@ -40,7 +40,7 @@ extension ChannelPipeline {
             eventLoopFuture = eventLoop.submit({
                 try self.syncOperations.addVMESSClientHandlers(
                     logger: logger,
-                    configuration: configuration,
+                    username: username,
                     destinationAddress: destinationAddress,
                     position: position
                 )
@@ -55,14 +55,14 @@ extension ChannelPipeline.SynchronousOperations {
 
     public func addVMESSClientHandlers(
         logger: Logger = .init(label: "com.netbot.vmess"),
-        configuration: VMESSConfigurationProtocol,
+        username: UUID,
         destinationAddress: NetAddress,
         position: ChannelPipeline.Position = .last
     ) throws {
         eventLoop.assertInEventLoop()
 
         let configuration: Configuration = .init(
-            id: configuration.user,
+            id: username,
             algorithm: .aes128gcm,
             command: .tcp,
             options: .masking

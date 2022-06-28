@@ -29,18 +29,25 @@ public final class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
     private var state: HandshakeState
     private var readBuffer: ByteBuffer!
     private var bufferedWrites: MarkedCircularBuffer<BufferedWrite>
-
-    public let logger: Logger
-    public let destinationAddress: NetAddress
-
-    private let configuration: SOCKS5ConfigurationProtocol
+    private let logger: Logger
+    private let destinationAddress: NetAddress
+    private let username: String
+    private let passwordReference: String
+    private let authenticationRequired: Bool
 
     /// Creates a new `SOCKS5ClientHandler` that connects to a server
     /// and instructs the server to connect to `destinationAddress`.
-    /// - parameter destinationAddress: The desired end point - note that only IPv4, IPv6, and FQDNs are supported.
+    /// - Parameters:
+    ///   - logger: logger object use to log message.
+    ///   - username: The username for username/password authentication,
+    ///   - passwordReference: The password use for username/password authentication.
+    ///   - authenticationRequired: A boolean value determinse whether should use username and password authentication.
+    ///   - destinationAddress: The desired end point - note that only IPv4, IPv6, and FQDNs are supported.
     public init(
         logger: Logger,
-        configuration: SOCKS5ConfigurationProtocol,
+        username: String,
+        passwordReference: String,
+        authenticationRequired: Bool,
         destinationAddress: NetAddress
     ) {
         switch destinationAddress {
@@ -51,7 +58,9 @@ public final class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
         }
 
         self.logger = logger
-        self.configuration = configuration
+        self.username = username
+        self.passwordReference = passwordReference
+        self.authenticationRequired = authenticationRequired
         self.destinationAddress = destinationAddress
         self.state = .idle
         self.bufferedWrites = .init(initialCapacity: 6)
@@ -159,8 +168,7 @@ extension SOCKS5ClientHandler {
 
     private func sendClientGreeting(context: ChannelHandlerContext) throws {
         // Authorization is performed when username is not nil
-        let method: AuthenticationMethod =
-            configuration.username == nil ? .noRequired : .usernamePassword
+        let method: AuthenticationMethod = authenticationRequired ? .usernamePassword : .noRequired
 
         let greeting = ClientGreeting(methods: [method])
 
@@ -209,13 +217,12 @@ extension SOCKS5ClientHandler {
     }
 
     private func sendUsernamePasswordAuthentication(context: ChannelHandlerContext) throws {
-        guard let username = configuration.username, let password = configuration.password else {
-            throw SOCKSError.missingCredential
-        }
+        let authentication = UsernamePasswordAuthentication(
+            username: username,
+            password: passwordReference
+        )
 
-        let authentication = UsernamePasswordAuthentication(username: username, password: password)
-
-        let capacity = 3 + username.count + password.count
+        let capacity = 3 + username.count + passwordReference.count
         var byteBuffer = context.channel.allocator.buffer(capacity: capacity)
         byteBuffer.writeUsernamePasswordAuthentication(authentication)
 

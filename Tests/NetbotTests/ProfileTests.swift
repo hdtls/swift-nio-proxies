@@ -126,16 +126,17 @@ final class ProfileTests: XCTestCase {
 
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
-        guard let policy = policy.base as? HTTPProxyPolicy else {
+        guard let policy = policy.base as? ProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
 
-        XCTAssertEqual(policy.configuration.serverAddress, "127.0.0.1")
-        XCTAssertEqual(policy.configuration.port, 8310)
-        XCTAssertEqual(policy.configuration.username, "username")
-        XCTAssertEqual(policy.configuration.password, "password")
-        XCTAssertTrue(policy.configuration.prefererHttpTunneling)
+        XCTAssertEqual(policy.proxy.serverAddress, "127.0.0.1")
+        XCTAssertEqual(policy.proxy.port, 8310)
+        XCTAssertEqual(policy.proxy.username, "username")
+        XCTAssertEqual(policy.proxy.password, "password")
+        XCTAssertTrue(policy.proxy.prefererHttpTunneling)
+        XCTAssertEqual(policy.proxy.protocol, .http)
         XCTAssertEqual(policy.name, "HTTP")
         XCTAssertNil(policy.destinationAddress)
     }
@@ -156,18 +157,18 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? HTTPProxyPolicy else {
+        guard let policy = policy.base as? ProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
 
-        XCTAssertFalse(policy.configuration.prefererHttpTunneling)
+        XCTAssertFalse(policy.proxy.prefererHttpTunneling)
     }
 
     func testHTTPSProxyPolicySerializationAndDecoding() throws {
         let policiesString = """
             [Proxy Policy]
-            HTTPS = https, server-address=127.0.0.1, port=8310, username=username, password=password, sni=sni, preferer-http-tunneling=true, skip-certificate-verification=true
+            HTTPS = http, server-address=127.0.0.1, port=8310, username=username, password=password, sni=sni, preferer-http-tunneling=true, skip-certificate-verification=true, over-tls=true
             """
         let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
@@ -180,18 +181,20 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? HTTPSProxyPolicy else {
+        guard let policy = policy.base as? ProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
 
-        XCTAssertEqual(policy.configuration.serverAddress, "127.0.0.1")
-        XCTAssertEqual(policy.configuration.port, 8310)
-        XCTAssertEqual(policy.configuration.username, "username")
-        XCTAssertEqual(policy.configuration.password, "password")
-        XCTAssertEqual(policy.configuration.sni, "sni")
-        XCTAssertTrue(policy.configuration.prefererHttpTunneling)
-        XCTAssertTrue(policy.configuration.skipCertificateVerification)
+        XCTAssertEqual(policy.proxy.serverAddress, "127.0.0.1")
+        XCTAssertEqual(policy.proxy.port, 8310)
+        XCTAssertEqual(policy.proxy.username, "username")
+        XCTAssertEqual(policy.proxy.password, "password")
+        XCTAssertEqual(policy.proxy.sni, "sni")
+        XCTAssertTrue(policy.proxy.prefererHttpTunneling)
+        XCTAssertTrue(policy.proxy.skipCertificateVerification)
+        XCTAssertTrue(policy.proxy.overTls)
+        XCTAssertEqual(policy.proxy.protocol, .http)
         XCTAssertEqual(policy.name, "HTTPS")
         XCTAssertNil(policy.destinationAddress)
     }
@@ -199,7 +202,7 @@ final class ProfileTests: XCTestCase {
     func testHTTPSProxyPolicyDefaultValueSerializationAndDecoding() throws {
         let policiesString = """
             [Proxy Policy]
-            HTTPS = https, server-address=127.0.0.1, port=8310
+            HTTPS = http, server-address=127.0.0.1, port=8310, over-tls=true
             """
         let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
@@ -212,13 +215,13 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? HTTPSProxyPolicy else {
+        guard let policy = policy.base as? ProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
 
-        XCTAssertFalse(policy.configuration.prefererHttpTunneling)
-        XCTAssertFalse(policy.configuration.skipCertificateVerification)
+        XCTAssertFalse(policy.proxy.prefererHttpTunneling)
+        XCTAssertFalse(policy.proxy.skipCertificateVerification)
     }
 
     func testSOCKS5PolicySerializationAndDecoding() throws {
@@ -237,15 +240,16 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? SOCKS5Policy else {
+        guard let policy = policy.base as? ProxyPolicy else {
             XCTFail("should decoded as SOCKS5 proxy policy.")
             return
         }
 
-        XCTAssertEqual(policy.configuration.serverAddress, "127.0.0.1")
-        XCTAssertEqual(policy.configuration.port, 8310)
-        XCTAssertEqual(policy.configuration.username, "username")
-        XCTAssertEqual(policy.configuration.password, "password")
+        XCTAssertEqual(policy.proxy.serverAddress, "127.0.0.1")
+        XCTAssertEqual(policy.proxy.port, 8310)
+        XCTAssertEqual(policy.proxy.username, "username")
+        XCTAssertEqual(policy.proxy.password, "password")
+        XCTAssertEqual(policy.proxy.protocol, .socks5)
         XCTAssertEqual(policy.name, "SOCKS5")
         XCTAssertNil(policy.destinationAddress)
     }
@@ -253,7 +257,7 @@ final class ProfileTests: XCTestCase {
     func testSOCKS5OverTLSPolicySerializationAndDecoding() throws {
         let policiesString = """
             [Proxy Policy]
-            SOCKS5OverTLS = socks5-over-tls, server-address=127.0.0.1, port=8310, username=username, password=password, sni=sni, skip-certificate-verification=true
+            SOCKS5OverTLS = socks5, server-address=127.0.0.1, port=8310, username=username, password=password, sni=sni, skip-certificate-verification=true, over-tls=true
             """
         let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
@@ -266,25 +270,27 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? SOCKS5OverTLSPolicy else {
+        guard let policy = policy.base as? ProxyPolicy else {
             XCTFail("should decoded as SOCKS5 over TLS proxy policy.")
             return
         }
 
-        XCTAssertEqual(policy.configuration.serverAddress, "127.0.0.1")
-        XCTAssertEqual(policy.configuration.port, 8310)
-        XCTAssertEqual(policy.configuration.username, "username")
-        XCTAssertEqual(policy.configuration.password, "password")
+        XCTAssertEqual(policy.proxy.serverAddress, "127.0.0.1")
+        XCTAssertEqual(policy.proxy.port, 8310)
+        XCTAssertEqual(policy.proxy.username, "username")
+        XCTAssertEqual(policy.proxy.password, "password")
         XCTAssertEqual(policy.name, "SOCKS5OverTLS")
-        XCTAssertEqual(policy.configuration.sni, "sni")
-        XCTAssertTrue(policy.configuration.skipCertificateVerification)
+        XCTAssertEqual(policy.proxy.sni, "sni")
+        XCTAssertEqual(policy.proxy.protocol, .socks5)
+        XCTAssertTrue(policy.proxy.skipCertificateVerification)
+        XCTAssertTrue(policy.proxy.overTls)
         XCTAssertNil(policy.destinationAddress)
     }
 
     func testSOCKS5OverTLSPolicyDefaultValueSerializationAndDecoding() throws {
         let policiesString = """
             [Proxy Policy]
-            SOCKS5OverTLS = socks5-over-tls, server-address=127.0.0.1, port=8310
+            SOCKS5OverTLS = socks5, server-address=127.0.0.1, port=8310, over-tls=true
             """
         let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
@@ -297,12 +303,12 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? SOCKS5OverTLSPolicy else {
+        guard let policy = policy.base as? ProxyPolicy else {
             XCTFail("should decoded as SOCKS5 over TLS proxy policy.")
             return
         }
 
-        XCTAssertFalse(policy.configuration.skipCertificateVerification)
+        XCTAssertFalse(policy.proxy.skipCertificateVerification)
     }
 
     func testShadowsocksPolicySerilizationAndDecoding() throws {
@@ -321,16 +327,17 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? ShadowsocksPolicy else {
+        guard let policy = policy.base as? ProxyPolicy else {
             XCTFail("should decoded as shadowsocks proxy policy.")
             return
         }
 
-        XCTAssertEqual(policy.configuration.serverAddress, "127.0.0.1")
-        XCTAssertEqual(policy.configuration.port, 8310)
-        XCTAssertEqual(policy.configuration.passwordReference, "password")
+        XCTAssertEqual(policy.proxy.serverAddress, "127.0.0.1")
+        XCTAssertEqual(policy.proxy.port, 8310)
+        XCTAssertEqual(policy.proxy.passwordReference, "password")
         XCTAssertEqual(policy.name, "SHADOWSOCKS")
-        XCTAssertEqual(policy.configuration.algorithm, .aes128Gcm)
+        XCTAssertEqual(policy.proxy.protocol, .shadowsocks)
+        XCTAssertEqual(policy.proxy.algorithm, .aes128Gcm)
         XCTAssertNil(policy.destinationAddress)
     }
 
@@ -350,7 +357,7 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let _ = policy.base as? ShadowsocksPolicy else {
+        guard let _ = policy.base as? ProxyPolicy else {
             XCTFail("should decoded as shadowsocks proxy policy.")
             return
         }
@@ -373,13 +380,14 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? VMESSPolicy else {
+        guard let policy = policy.base as? ProxyPolicy else {
             XCTFail("should decoded as VMESS proxy policy.")
             return
         }
-        XCTAssertEqual(policy.configuration.serverAddress, "127.0.0.1")
-        XCTAssertEqual(policy.configuration.port, 8310)
-        XCTAssertEqual(policy.configuration.user, uuid)
+        XCTAssertEqual(policy.proxy.serverAddress, "127.0.0.1")
+        XCTAssertEqual(policy.proxy.port, 8310)
+        XCTAssertEqual(policy.proxy.username, uuid.uuidString)
+        XCTAssertEqual(policy.proxy.protocol, .vmess)
         XCTAssertEqual(policy.name, "VMESS")
         XCTAssertNil(policy.destinationAddress)
     }
@@ -392,15 +400,13 @@ final class ProfileTests: XCTestCase {
         let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-
+        
         XCTAssertThrowsError(
             try jsonDecoder.decode(
                 Profile.self,
                 from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
             )
-        ) { error in
-            XCTAssertTrue(error is ProfileSerializationError)
-        }
+        )
     }
 
     func testPolicyGroupsDecoding() throws {

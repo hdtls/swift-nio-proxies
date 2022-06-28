@@ -30,17 +30,22 @@ public final class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHa
     private var state: HandshakeState
     private var inboundBuffer: ByteBuffer!
     private var bufferedWrites: MarkedCircularBuffer<BufferedWrite> = .init(initialCapacity: 8)
-
-    public let logger: Logger
-    private let configuration: SOCKS5ConfigurationProtocol
+    private let logger: Logger
+    private let username: String
+    private let passwordReference: String
+    private let authenticationRequired: Bool
 
     public init(
         logger: Logger,
-        configuration: SOCKS5ConfigurationProtocol,
+        username: String,
+        passwordReference: String,
+        authenticationRequired: Bool,
         completion: @escaping (NetAddress) -> EventLoopFuture<Channel>
     ) {
         self.logger = logger
-        self.configuration = configuration
+        self.username = username
+        self.passwordReference = passwordReference
+        self.authenticationRequired = authenticationRequired
         self.state = .idle
     }
 
@@ -144,9 +149,7 @@ extension SOCKS5ServerHandler {
         // Choose authentication method
         let method: SelectedAuthenticationMethod
 
-        if configuration.username != nil && configuration.password != nil
-            && clientGreeting.methods.contains(.usernamePassword)
-        {
+        if authenticationRequired && clientGreeting.methods.contains(.usernamePassword) {
             method = .init(method: .usernamePassword)
             try state.greeting(.usernamePassword)
         } else if clientGreeting.methods.contains(.noRequired) {
@@ -173,7 +176,7 @@ extension SOCKS5ServerHandler {
         try state.authorizing()
 
         let success =
-            authMsg.username == configuration.username && authMsg.password == configuration.password
+            authMsg.username == username && authMsg.password == passwordReference
 
         var buffer = context.channel.allocator.buffer(capacity: 2)
         buffer.writeClientBasicAuthenticationResponse(

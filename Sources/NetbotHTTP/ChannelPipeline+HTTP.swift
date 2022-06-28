@@ -24,14 +24,20 @@ extension ChannelPipeline {
 
     public func addHTTPProxyClientHandlers(
         logger: Logger,
-        configuration: HTTPProxyConfigurationProtocol,
+        username: String,
+        passwordReference: String,
+        authenticationRequired: Bool,
+        preferHTTPTunneling: Bool,
         destinationAddress: NetAddress,
         position: ChannelPipeline.Position = .last
     ) -> EventLoopFuture<Void> {
         let execute = {
             try self.syncOperations.addHTTPProxyClientHandlers(
                 logger: logger,
-                configuration: configuration,
+                username: username,
+                passwordReference: passwordReference,
+                authenticationRequired: authenticationRequired,
+                preferHTTPTunneling: preferHTTPTunneling,
                 destinationAddress: destinationAddress,
                 position: position
             )
@@ -73,7 +79,10 @@ extension ChannelPipeline.SynchronousOperations {
 
     public func addHTTPProxyClientHandlers(
         logger: Logger,
-        configuration: HTTPProxyConfigurationProtocol,
+        username: String,
+        passwordReference: String,
+        authenticationRequired: Bool,
+        preferHTTPTunneling: Bool,
         destinationAddress: NetAddress,
         position: ChannelPipeline.Position = .last
     ) throws {
@@ -81,7 +90,10 @@ extension ChannelPipeline.SynchronousOperations {
         let handlers: [ChannelHandler] = [
             HTTP1ClientCONNECTTunnelHandler(
                 logger: logger,
-                configuration: configuration,
+                username: username,
+                passwordReference: passwordReference,
+                authenticationRequired: authenticationRequired,
+                preferHTTPTunneling: preferHTTPTunneling,
                 destinationAddress: destinationAddress
             )
         ]

@@ -233,11 +233,14 @@ final public class ProfileSerialization {
                             )
                         }
 
+                    let `protocol` = JSONValue.string(
+                        components[0].trimmingCharacters(in: .whitespaces)
+                    )
+                    configuration["protocol"] = `protocol`
+
                     let jsonValue = JSONValue.object([
                         AnyPolicy.CodingKeys.name.rawValue: .string(o.0),
-                        AnyPolicy.CodingKeys.type.rawValue: .string(
-                            components[0].trimmingCharacters(in: .whitespaces)
-                        ),
+                        AnyPolicy.CodingKeys.type.rawValue: `protocol`,
                         AnyPolicy.CodingKeys.configuration.rawValue: .object(configuration),
                     ])
 
@@ -251,7 +254,7 @@ final public class ProfileSerialization {
                     guard let currentGroup = currentGroup else {
                         throw ProfileSerializationError.dataCorrupted
                     }
-//
+                    //
                     guard case .array(var array) = _json[currentGroup.rawValue] ?? .array([]) else {
                         preconditionFailure()
                     }
