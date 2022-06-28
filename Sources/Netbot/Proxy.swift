@@ -14,7 +14,7 @@
 
 import Foundation
 
-public struct Proxy: Codable {
+public struct Proxy: Codable, Equatable, Hashable {
 
     public enum `Protocol`: String, CaseIterable, Codable, CustomStringConvertible {
         case http

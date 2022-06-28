@@ -19,8 +19,8 @@ import NIOCore
 import NIOPosix
 import NIOSSL
 import NetbotHTTP
-import NetbotSS
 import NetbotSOCKS
+import NetbotSS
 import NetbotVMESS
 
 #if canImport(Network)

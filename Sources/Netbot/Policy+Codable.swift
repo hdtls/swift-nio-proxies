@@ -15,47 +15,27 @@
 import Foundation
 import NetbotCore
 
-/// A type-erased policy value.
-public struct AnyPolicy {
-
-    /// Identifier for this policy.
-    public var id: UUID = .init()
+/// Policy coding wrapper.
+struct __Policy {
 
     /// The actual policy value.
-    public internal(set) var base: Policy
+    var base: any Policy
 
-    /// Initialize an instance of `AnyPolicy` with specified base value.
-    public init<P>(_ base: P) where P: Policy {
-        self.base = base
-    }
-
-    public init<P>(id: UUID = .init(), base: P) where P: Policy {
-        self.id = id
+    /// Initialize an instance of `__Policy` with specified base value.
+    init(_ base: any Policy) {
         self.base = base
     }
 }
 
-extension AnyPolicy {
-
-    /// Builtin policies.
-    ///
-    /// For current version this array contains three element `DirectPolicy`, `RejectPolicy` and `RejectTinyGifPolicy`.
-    public static let builtin: [AnyPolicy] = [
-        .init(DirectPolicy()),
-        .init(RejectPolicy()),
-        .init(RejectTinyGifPolicy()),
-    ]
-}
-
-extension AnyPolicy: Codable {
+extension __Policy: Codable {
 
     enum CodingKeys: String, CodingKey {
         case name
         case type
-        case configuration
+        case proxy
     }
 
-    public init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         let name = try container.decode(String.self, forKey: .name)
@@ -70,12 +50,12 @@ extension AnyPolicy: Codable {
             case "reject-tinygif":
                 base = RejectTinyGifPolicy()
             default:
-                let proxy = try container.decode(Proxy.self, forKey: .configuration)
+                let proxy = try container.decode(Proxy.self, forKey: .proxy)
                 base = ProxyPolicy(name: name, proxy: proxy)
         }
     }
 
-    public func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         try container.encode(base.name, forKey: .name)
@@ -88,7 +68,7 @@ extension AnyPolicy: Codable {
             case is RejectTinyGifPolicy:
                 try container.encode("reject-tinygif", forKey: .type)
             case let policy as ProxyPolicy:
-                try container.encodeIfPresent(policy.proxy, forKey: .configuration)
+                try container.encodeIfPresent(policy.proxy, forKey: .proxy)
             default:
                 fatalError("Unsupported policy \(base).")
         }

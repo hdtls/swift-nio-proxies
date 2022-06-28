@@ -126,7 +126,7 @@ final class ProfileTests: XCTestCase {
 
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
-        guard let policy = policy.base as? ProxyPolicy else {
+        guard let policy = policy as? ProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
@@ -157,7 +157,7 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? ProxyPolicy else {
+        guard let policy = policy as? ProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
@@ -181,7 +181,7 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? ProxyPolicy else {
+        guard let policy = policy as? ProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
@@ -215,7 +215,7 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? ProxyPolicy else {
+        guard let policy = policy as? ProxyPolicy else {
             XCTFail("should decoded as http proxy policy.")
             return
         }
@@ -240,7 +240,7 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? ProxyPolicy else {
+        guard let policy = policy as? ProxyPolicy else {
             XCTFail("should decoded as SOCKS5 proxy policy.")
             return
         }
@@ -270,7 +270,7 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? ProxyPolicy else {
+        guard let policy = policy as? ProxyPolicy else {
             XCTFail("should decoded as SOCKS5 over TLS proxy policy.")
             return
         }
@@ -303,7 +303,7 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? ProxyPolicy else {
+        guard let policy = policy as? ProxyPolicy else {
             XCTFail("should decoded as SOCKS5 over TLS proxy policy.")
             return
         }
@@ -327,7 +327,7 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? ProxyPolicy else {
+        guard let policy = policy as? ProxyPolicy else {
             XCTFail("should decoded as shadowsocks proxy policy.")
             return
         }
@@ -357,7 +357,7 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let _ = policy.base as? ProxyPolicy else {
+        guard let _ = policy as? ProxyPolicy else {
             XCTFail("should decoded as shadowsocks proxy policy.")
             return
         }
@@ -380,7 +380,7 @@ final class ProfileTests: XCTestCase {
         XCTAssertFalse(profile.policies.isEmpty)
         let policy = profile.policies.first!
 
-        guard let policy = policy.base as? ProxyPolicy else {
+        guard let policy = policy as? ProxyPolicy else {
             XCTFail("should decoded as VMESS proxy policy.")
             return
         }
@@ -425,7 +425,7 @@ final class ProfileTests: XCTestCase {
         XCTAssertEqual(result.count, 2)
         XCTAssertEqual(result.first?.name, "PROXY")
         XCTAssertEqual(result.first?.policies.count, 1)
-        XCTAssertTrue(result.first!.policies.contains(where: { $0.base.name == "HTTP" }))
+        XCTAssertTrue(result.first!.policies.contains(where: { $0.name == "HTTP" }))
         XCTAssertEqual(result.last?.name, "BLOCK")
         XCTAssertEqual(result.last?.policies.count, 3)
     }

@@ -163,7 +163,7 @@ final public class ProfileSerialization {
     public static func jsonObject(with data: ByteBuffer) throws -> Any {
         var __rulesKeyedByLine: [Int: String] = [:]
         var __groupKeyedByLine: [Int: [String: [String]]] = [:]
-        var __policies: [String] = AnyPolicy.builtin.map { $0.base.name }
+        var __policies: [String] = Builtin.policies.map { $0.name }
 
         /// Line number being parsed.
         var cursor: Int = 0
@@ -239,9 +239,9 @@ final public class ProfileSerialization {
                     configuration["protocol"] = `protocol`
 
                     let jsonValue = JSONValue.object([
-                        AnyPolicy.CodingKeys.name.rawValue: .string(o.0),
-                        AnyPolicy.CodingKeys.type.rawValue: `protocol`,
-                        AnyPolicy.CodingKeys.configuration.rawValue: .object(configuration),
+                        __Policy.CodingKeys.name.rawValue: .string(o.0),
+                        __Policy.CodingKeys.type.rawValue: `protocol`,
+                        __Policy.CodingKeys.proxy.rawValue: .object(configuration),
                     ])
 
                     array.append(jsonValue)
@@ -267,8 +267,10 @@ final public class ProfileSerialization {
                     __groupKeyedByLine[cursor] = [o.0: policies]
 
                     let jsonValue = JSONValue.object([
-                        JSONKey(rawValue: "name")!.rawValue: .string(o.0),
-                        JSONKey.policies.rawValue: .array(policies.map(JSONValue.string)),
+                        __PolicyGroup.CodingKeys.name.rawValue: .string(o.0),
+                        __PolicyGroup.CodingKeys.policies.rawValue: .array(
+                            policies.map(JSONValue.string)
+                        ),
                     ])
 
                     array.append(jsonValue)
@@ -402,10 +404,10 @@ final public class ProfileSerialization {
                 components.append(
                     contentsOf: try policies.map {
                         guard
-                            let configuration = $0[AnyPolicy.CodingKeys.configuration.rawValue]
+                            let configuration = $0[__Policy.CodingKeys.proxy.rawValue]
                                 as? [String: Any],
-                            let name = $0[AnyPolicy.CodingKeys.name.rawValue],
-                            let type = $0[AnyPolicy.CodingKeys.type.rawValue]
+                            let name = $0[__Policy.CodingKeys.name.rawValue],
+                            let type = $0[__Policy.CodingKeys.type.rawValue]
                         else {
                             throw ProfileSerializationError.dataCorrupted
                         }

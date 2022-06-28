@@ -29,7 +29,7 @@ public struct Profile {
     public var general: BasicConfiguration
 
     /// All proxy policy object contains in this configuration object.
-    public var policies: [AnyPolicy]
+    public var policies: [any Policy]
 
     /// All selectable policy groups contains in this configuration object.
     public var policyGroups: [PolicyGroup]
@@ -40,7 +40,7 @@ public struct Profile {
         general: BasicConfiguration,
         rules: [AnyRule],
         mitm: MitMConfiguration,
-        policies: [AnyPolicy],
+        policies: [any Policy],
         policyGroups: [PolicyGroup]
     ) {
         self.general = general
@@ -68,7 +68,7 @@ public struct Profile {
 
 extension Profile: Codable {
 
-    private enum CodingKeys: String, CodingKey {
+    enum CodingKeys: String, CodingKey {
         case rules
         case mitm
         case general
@@ -76,29 +76,26 @@ extension Profile: Codable {
         case policyGroups
     }
 
-    private struct __PolicyGroup: Codable {
-        let name: String
-        let policies: [String]
-    }
-
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        rules = try container.decodeIfPresent([AnyRule].self, forKey: .rules) ?? []
-        mitm = try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
-        general =
+        self.rules = try container.decodeIfPresent([AnyRule].self, forKey: .rules) ?? []
+        self.mitm = try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
+        self.general =
             try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
-        self.policies = try container.decodeIfPresent([AnyPolicy].self, forKey: .policies) ?? []
+        let anyPolicies = try container.decodeIfPresent([__Policy].self, forKey: .policies) ?? []
+        self.policies = anyPolicies.map { $0.base }
+
         let policyGroups =
             try container.decodeIfPresent([__PolicyGroup].self, forKey: .policyGroups) ?? []
 
-        let policies = self.policies + AnyPolicy.builtin
+        let policies = Builtin.policies + self.policies
 
         self.policyGroups = policyGroups.map {
             PolicyGroup(
                 name: $0.name,
                 policies: $0.policies.compactMap { policy in
                     policies.first {
-                        $0.base.name == policy
+                        $0.name == policy
                     }
                 }
             )
@@ -110,7 +107,10 @@ extension Profile: Codable {
         try container.encodeIfPresent(rules.isEmpty ? nil : rules, forKey: .rules)
         try container.encode(mitm, forKey: .mitm)
         try container.encode(general, forKey: .general)
-        try container.encodeIfPresent(policies.isEmpty ? nil : policies, forKey: .policies)
+        try container.encodeIfPresent(
+            policies.isEmpty ? nil : policies.map(__Policy.init),
+            forKey: .policies
+        )
         try container.encodeIfPresent(
             policyGroups.isEmpty ? nil : policyGroups.map { $0.name },
             forKey: .policyGroups
@@ -237,12 +237,23 @@ public struct PolicyGroup {
     public var name: String
 
     /// Policies included in this policy group.
-    public var policies: [AnyPolicy]
+    public var policies: [any Policy]
 
     /// Initialize an instance of `PolicyGroup` with specified name and policies.
-    public init(id: UUID = .init(), name: String, policies: [AnyPolicy]) {
+    public init(id: UUID = .init(), name: String, policies: [any Policy]) {
         self.id = id
         self.name = name
         self.policies = policies
+    }
+}
+
+/// PolicyGroup coding wrapper.
+struct __PolicyGroup: Codable {
+    let name: String
+    let policies: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case policies
     }
 }

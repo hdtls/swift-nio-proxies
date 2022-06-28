@@ -24,6 +24,8 @@ import NetbotVMESS
 /// Policy protocol representation a policy object.
 public protocol Policy: ConnectionPoolSource {
 
+    var id: UUID { get }
+
     /// The name of the policy.
     var name: String { get set }
 
@@ -34,34 +36,60 @@ public protocol Policy: ConnectionPoolSource {
 /// DirectPolicy will tunnel connection derectly.
 public struct DirectPolicy: Policy {
 
-    public var name: String = "DIRECT"
+    public var id: UUID
+
+    public var name: String
 
     public var destinationAddress: NetAddress?
 
-    public init() {}
+    public init(id: UUID = .init(), name: String = "DIRECT", destinationAddress: NetAddress? = nil)
+    {
+        self.id = id
+        self.name = name
+        self.destinationAddress = destinationAddress
+    }
 }
 
 /// RejectPolicy will reject connection to the destination.
 public struct RejectPolicy: Policy {
 
-    public var name: String = "REJECT"
+    public var id: UUID
+
+    public var name: String
 
     public var destinationAddress: NetAddress?
 
-    public init() {}
+    public init(id: UUID = .init(), name: String = "REJECT", destinationAddress: NetAddress? = nil)
+    {
+        self.id = id
+        self.name = name
+        self.destinationAddress = destinationAddress
+    }
 }
 
 /// RejectTinyGifPolicy will reject connection and response a tiny gif.
 public struct RejectTinyGifPolicy: Policy {
 
-    public var name: String = "REJECT-TINYGIF"
+    public var id: UUID
+
+    public var name: String
 
     public var destinationAddress: NetAddress?
 
-    public init() {}
+    public init(
+        id: UUID = .init(),
+        name: String = "REJECT-TINYGIF",
+        destinationAddress: NetAddress? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.destinationAddress = destinationAddress
+    }
 }
 
 public struct ProxyPolicy: Policy {
+
+    public var id: UUID
 
     public var name: String
 
@@ -69,9 +97,24 @@ public struct ProxyPolicy: Policy {
 
     public var destinationAddress: NetAddress?
 
-    public init(name: String, proxy: Proxy, destinationAddress: NetAddress? = nil) {
+    public init(
+        id: UUID = .init(),
+        name: String,
+        proxy: Proxy,
+        destinationAddress: NetAddress? = nil
+    ) {
+        self.id = id
         self.name = name
         self.proxy = proxy
         self.destinationAddress = destinationAddress
     }
+}
+
+public enum Builtin {
+
+    public static var policies: [any Policy] = [
+        DirectPolicy(),
+        RejectPolicy(),
+        RejectTinyGifPolicy(),
+    ]
 }
