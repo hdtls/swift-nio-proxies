@@ -58,7 +58,6 @@ let package = Package(
                 dependencies: [
                     "NetbotCore",
                     "ConnectionPool",
-                    .product(name: "ArgumentParser", package: "swift-argument-parser"),
                     .product(name: "NIOCore", package: "swift-nio"),
                     .product(name: "NIOHTTP1", package: "swift-nio"),
                     .product(name: "NIOSSL", package: "swift-nio-ssl"),
@@ -100,7 +99,6 @@ let package = Package(
                     "NetbotSS",
                     "NetbotTrojan",
                     "NetbotVMESS",
-                    .product(name: "ArgumentParser", package: "swift-argument-parser"),
                     .product(name: "MaxMindDB", package: "swift-maxminddb"),
                     .product(name: "NIOCore", package: "swift-nio"),
                     .product(name: "NIOHTTP1", package: "swift-nio"),
