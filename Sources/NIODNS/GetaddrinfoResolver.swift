@@ -47,7 +47,7 @@ import struct WinSDK.SOCKADDR_IN6
 
 extension NIOBSDSocket {
     /// Specifies the type of socket.
-    internal struct SocketType: RawRepresentable {
+    public struct SocketType: RawRepresentable {
         public typealias RawValue = CInt
         public var rawValue: RawValue
         public init(rawValue: RawValue) {
@@ -61,20 +61,20 @@ extension NIOBSDSocket.SocketType {
     /// Supports datagrams, which are connectionless, unreliable messages of a
     /// fixed (typically small) maximum length.
     #if os(Linux)
-    internal static let datagram: NIOBSDSocket.SocketType =
+    public static let datagram: NIOBSDSocket.SocketType =
         NIOBSDSocket.SocketType(rawValue: CInt(SOCK_DGRAM.rawValue))
     #else
-    internal static let datagram: NIOBSDSocket.SocketType =
+    public static let datagram: NIOBSDSocket.SocketType =
         NIOBSDSocket.SocketType(rawValue: SOCK_DGRAM)
     #endif
 
     /// Supports reliable, two-way, connection-based byte streams without
     /// duplication of data and without preservation of boundaries.
     #if os(Linux)
-    internal static let stream: NIOBSDSocket.SocketType =
+    public static let stream: NIOBSDSocket.SocketType =
         NIOBSDSocket.SocketType(rawValue: CInt(SOCK_STREAM.rawValue))
     #else
-    internal static let stream: NIOBSDSocket.SocketType =
+    public static let stream: NIOBSDSocket.SocketType =
         NIOBSDSocket.SocketType(rawValue: SOCK_STREAM)
     #endif
 }
@@ -90,12 +90,19 @@ public class GetaddrinfoResolver: Resolver {
 
     /// Create a new resolver.
     ///
-    /// - Parameter eventLoop: The `EventLoop` whose thread this resolver will block.
-    public init(eventLoop: EventLoop) {
+    /// - parameters:
+    ///     - loop: The `EventLoop` whose thread this resolver will block.
+    ///     - aiSocktype: The sock type to use as hint when calling getaddrinfo.
+    ///     - aiProtocol: the protocol to use as hint when calling getaddrinfo.
+    public init(
+        eventLoop: EventLoop,
+        aiSocktype: NIOBSDSocket.SocketType = .stream,
+        aiProtocol: CInt = CInt(IPPROTO_TCP)
+    ) {
         self.v4Future = eventLoop.makePromise()
         self.v6Future = eventLoop.makePromise()
-        self.aiSocktype = .stream
-        self.aiProtocol = CInt(IPPROTO_TCP)
+        self.aiSocktype = aiSocktype
+        self.aiProtocol = aiProtocol
     }
 
     /// Initiate a DNS A query for a given host.
@@ -221,17 +228,14 @@ public class GetaddrinfoResolver: Resolver {
 
         var info: UnsafeMutablePointer<CAddrInfo> = info
         while true {
+            let addressBytes = UnsafeRawPointer(info.pointee.ai_addr)
             switch NIOBSDSocket.AddressFamily(rawValue: info.pointee.ai_family) {
                 case .inet:
-                    info.pointee.ai_addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
-                        ptr in
-                        v4Results.append(.init(ptr.pointee, host: host))
-                    }
+                    // Force-unwrap must be safe, or libc did the wrong thing.
+                    v4Results.append(.init(addressBytes!.load(as: sockaddr_in.self), host: host))
                 case .inet6:
-                    info.pointee.ai_addr.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) {
-                        ptr in
-                        v6Results.append(.init(ptr.pointee, host: host))
-                    }
+                    // Force-unwrap must be safe, or libc did the wrong thing.
+                    v6Results.append(.init(addressBytes!.load(as: sockaddr_in6.self), host: host))
                 default:
                     self.fail(SocketAddressError.unsupported)
                     return

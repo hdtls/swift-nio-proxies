@@ -116,6 +116,7 @@ let package = Package(
                 "NetbotSS",
                 "NetbotTrojan",
                 "NetbotVMESS",
+                "NIODNS",
                 .product(name: "MaxMindDB", package: "swift-maxminddb"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOHTTP1", package: "swift-nio"),

@@ -16,6 +16,7 @@ import Foundation
 import Logging
 import MaxMindDB
 import NIOCore
+import NIODNS
 import NIOExtras
 import NIOPosix
 import NetbotCore
