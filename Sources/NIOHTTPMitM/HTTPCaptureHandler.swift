@@ -12,9 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Logging
-import NIOCore
-import NIOHTTP1
+import Foundation
 
 public final class HTTPCaptureHandler<HeadT: Equatable>: ChannelInboundHandler {
 

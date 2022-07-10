@@ -21,7 +21,7 @@ public struct Profile {
     public var rules: [AnyRule]
 
     /// A configuration object that provides HTTP MitM configuration for this process.
-    public var mitm: MitMConfiguration
+    public var mitm: NIOHTTPMitM.Configuration
 
     /// A configuration object that provides general configuration for this process.
     public var general: BasicConfiguration
@@ -37,7 +37,7 @@ public struct Profile {
     public init(
         general: BasicConfiguration,
         rules: [AnyRule],
-        mitm: MitMConfiguration,
+        mitm: NIOHTTPMitM.Configuration,
         policies: [any Policy],
         policyGroups: [PolicyGroup]
     ) {
@@ -77,7 +77,8 @@ extension Profile: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.rules = try container.decodeIfPresent([AnyRule].self, forKey: .rules) ?? []
-        self.mitm = try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
+        self.mitm =
+            try container.decodeIfPresent(NIOHTTPMitM.Configuration.self, forKey: .mitm) ?? .init()
         self.general =
             try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
         let anyPolicies = try container.decodeIfPresent([__Policy].self, forKey: .policies) ?? []

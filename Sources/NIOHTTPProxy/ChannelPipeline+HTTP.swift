@@ -47,7 +47,7 @@ extension ChannelPipeline {
         authorization: BasicAuthorization? = nil,
         enableHTTPCapture: Bool = false,
         enableMitM: Bool = false,
-        mitmConfig: MitMConfiguration? = nil,
+        mitmConfig: Configuration? = nil,
         position: ChannelPipeline.Position = .last,
         completion: @escaping (Request) -> EventLoopFuture<Channel>
     ) -> EventLoopFuture<Void> {
@@ -100,7 +100,7 @@ extension ChannelPipeline.SynchronousOperations {
         authorization: BasicAuthorization? = nil,
         enableHTTPCapture: Bool = false,
         enableMitM: Bool = false,
-        mitmConfig: MitMConfiguration? = nil,
+        mitmConfig: Configuration? = nil,
         position: ChannelPipeline.Position = .last,
         completion: @escaping (Request) -> EventLoopFuture<Channel>
     ) throws {
@@ -112,7 +112,7 @@ extension ChannelPipeline.SynchronousOperations {
         let serverHandler = HTTPProxyServerHandler(
             logger: logger,
             authorization: authorization,
-            outEFLBuilder: completion
+            channelInitializer: completion
         ) { req, channel in
             let serverHostname = req.serverHostname
 
@@ -184,7 +184,7 @@ extension ChannelPipeline.SynchronousOperations {
         }
 
         let handlers: [RemovableChannelHandler] = [
-            responseEncoder, ByteToMessageHandler(requestDecoder), serverHandler,
+            responseEncoder, ByteToMessageHandler(requestDecoder), serverHandler,  // MITM
         ]
 
         try self.addHandlers(handlers, position: position)

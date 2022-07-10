@@ -36,12 +36,12 @@ let package = Package(
         .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0"),
     ],
     targets: [
-        .target(name: "CSHAKE128"),
         .target(
-            name: "SHAKE128",
+            name: "_NIONetbotUtils",
             dependencies: [
-                "CSHAKE128",
-                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
             ]
         ),
         .target(
@@ -52,12 +52,30 @@ let package = Package(
                 .product(name: "NIOPosix", package: "swift-nio"),
             ]
         ),
+        .target(name: "CSHAKE128"),
         .target(
-            name: "_NIONetbotUtils",
+            name: "SHAKE128",
+            dependencies: [
+                "CSHAKE128",
+                .product(name: "Crypto", package: "swift-crypto"),
+            ]
+        ),
+        .target(
+            name: "NIODNS",
+            dependencies: [
+                .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+            ]
+        ),
+        .target(
+            name: "NIOHTTPMitM",
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                .product(name: "NIOHTTP1", package: "swift-nio"),
+                .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
             ]
         ),
         .target(
@@ -65,10 +83,29 @@ let package = Package(
             dependencies: [
                 "_NIONetbotUtils",
                 "ConnectionPool",
+                "NIOHTTPMitM",
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOHTTP1", package: "swift-nio"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
+            ]
+        ),
+        .target(
+            name: "NIONetbot",
+            dependencies: [
+                "_NIONetbotUtils",
+                "NIODNS",
+                "NIOHTTPProxy",
+                "NIOSOCKS5",
+                "NIOSS",
+                "NIOTrojan",
+                "NIOVMESS",
+                .product(name: "MaxMindDB", package: "swift-maxminddb"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOHTTP1", package: "swift-nio"),
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                .product(name: "NIOExtras", package: "swift-nio-extras"),
+                .product(name: "NIOTransportServices", package: "swift-nio-transport-services"),
             ]
         ),
         .target(
@@ -107,37 +144,11 @@ let package = Package(
                 .product(name: "NIOWebSocket", package: "swift-nio"),
             ]
         ),
-        .target(
-            name: "NIONetbot",
-            dependencies: [
-                "_NIONetbotUtils",
-                "NIOHTTPProxy",
-                "NIOSOCKS5",
-                "NIOSS",
-                "NIOTrojan",
-                "NIOVMESS",
-                "NIODNS",
-                .product(name: "MaxMindDB", package: "swift-maxminddb"),
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOHTTP1", package: "swift-nio"),
-                .product(name: "NIOSSL", package: "swift-nio-ssl"),
-                .product(name: "NIOExtras", package: "swift-nio-extras"),
-                .product(name: "NIOTransportServices", package: "swift-nio-transport-services"),
-            ]
-        ),
         .executableTarget(
             name: "NIONetbotCLI",
             dependencies: [
                 "NIONetbot",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
-            ]
-        ),
-        .target(
-            name: "NIODNS",
-            dependencies: [
-                .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOPosix", package: "swift-nio"),
             ]
         ),
         .testTarget(

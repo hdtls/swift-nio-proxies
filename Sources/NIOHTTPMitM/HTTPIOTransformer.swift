@@ -12,14 +12,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIOCore
-import NIOHTTP1
+import Foundation
 
 /// Transfer inbound from `HTTPPart<HeadT, ByteBuffer>` to `HTTPPart<HeadT, IOData>`.
 public final class HTTPIOTransformer<HeadT: Equatable>: ChannelInboundHandler {
 
     public typealias InboundIn = HTTPPart<HeadT, ByteBuffer>
     public typealias InboundOut = HTTPPart<HeadT, IOData>
+
+    public init() {}
 
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         switch unwrapInboundIn(data) {

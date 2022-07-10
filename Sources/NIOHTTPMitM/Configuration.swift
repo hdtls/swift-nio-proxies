@@ -12,16 +12,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIOSSL
-
-#if compiler(>=5.1)
 @_implementationOnly import CNIOBoringSSL
-#else
-import CNIOBoringSSL
-#endif
+import Foundation
 
 /// Configuration for HTTPS traffic decraption with MitM attacks.
-public struct MitMConfiguration: Codable {
+public struct Configuration: Codable, Equatable {
 
     /// A boolean value determinse whether ssl should skip server cerfitication verification.
     public var skipServerCertificateVerification: Bool
@@ -36,11 +31,11 @@ public struct MitMConfiguration: Codable {
     public var passphrase: String?
 
     /// P12 bundle pool keyed by hostname.
-    var pool: [String: NIOSSLPKCS12Bundle] {
+    public var pool: [String: NIOSSLPKCS12Bundle] {
         return buildP12BundlePool()
     }
 
-    /// Initialize an instance of `MitMConfiguration` with specified skipServerCertificateVerification, hostnames, base64EncodedP12String, passphrase.
+    /// Initialize an instance of `Configuration` with specified skipServerCertificateVerification, hostnames, base64EncodedP12String, passphrase.
     /// - Parameters:
     ///   - skipServerCertificateVerification: A boolean value determinse whether client should skip server certificate verification.
     ///   - hostnames: Hostnames use when decript.
@@ -58,7 +53,7 @@ public struct MitMConfiguration: Codable {
         self.base64EncodedP12String = base64EncodedP12String
     }
 
-    /// Initialize an instance of `MitMConfiguration`.
+    /// Initialize an instance of `Configuration`.
     ///
     /// Calling this method is equivalent to calling
     /// `init(skipServerCertificateVerification:hostnames:base64EncodedP12String:passphrase:)`
@@ -108,12 +103,12 @@ public struct MitMConfiguration: Codable {
     }
 }
 
-extension MitMConfiguration: Equatable {
-
-    public static func == (lhs: MitMConfiguration, rhs: MitMConfiguration) -> Bool {
-        lhs.skipServerCertificateVerification == rhs.skipServerCertificateVerification
-            && lhs.hostnames == rhs.hostnames
-            && lhs.base64EncodedP12String == rhs.base64EncodedP12String
-            && lhs.passphrase == rhs.passphrase
-    }
-}
+//extension Configuration: Equatable {
+//
+//    public static func == (lhs: Configuration, rhs: Configuration) -> Bool {
+//        lhs.skipServerCertificateVerification == rhs.skipServerCertificateVerification
+//            && lhs.hostnames == rhs.hostnames
+//            && lhs.base64EncodedP12String == rhs.base64EncodedP12String
+//            && lhs.passphrase == rhs.passphrase
+//    }
+//}
