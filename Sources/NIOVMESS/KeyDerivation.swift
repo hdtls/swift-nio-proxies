@@ -32,7 +32,7 @@ extension SHA256: Updatable {
         64
     }
 
-    fileprivate func get() -> [UInt8] {
+    func get() -> [UInt8] {
         finalize().withUnsafeBytes { ptr in
             Array(ptr)
         }
@@ -116,17 +116,10 @@ struct KDF {
         info: [Info],
         outputByteCount: Int? = nil
     ) -> SymmetricKey where Info: DataProtocol {
-        var updatable: __HMAC = __HMAC.init(
-            H: { SHA256() },
-            key: .init(data: KDFSaltConstVMessAEADKDF)
-        )
+        var updatable = __HMAC(H: { SHA256() }, key: .init(data: KDFSaltConstVMessAEADKDF))
+
         for path in info {
-            updatable = __HMAC.init(
-                H: {
-                    updatable
-                },
-                key: .init(data: Array(path))
-            )
+            updatable = __HMAC(H: { updatable }, key: .init(data: Array(path)))
         }
 
         inputKeyMaterial.withUnsafeBytes {

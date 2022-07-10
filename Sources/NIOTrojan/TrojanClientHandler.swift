@@ -18,9 +18,9 @@ final public class TrojanClientHandler: ChannelOutboundHandler {
 
     public typealias OutboundIn = ByteBuffer
 
-    public var logger: Logger
-    public let password: String
-    public let taskAddress: NetAddress
+    private let logger: Logger
+    private let password: String
+    private let taskAddress: NetAddress
 
     private var isTunneling: Bool = false
 

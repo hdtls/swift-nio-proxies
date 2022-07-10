@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 @_implementationOnly import CNIOBoringSSL
-@_exported import Crypto
+import Crypto
 import Foundation
 
 protocol DigestPrivate: Digest {
@@ -119,7 +119,7 @@ extension DigestContext {
     }
 }
 
-public struct SHA224Digest: DigestPrivate {
+struct SHA224Digest: DigestPrivate {
 
     let bytes: (UInt64, UInt64, UInt64, UInt64, UInt64)
 
@@ -135,11 +135,11 @@ public struct SHA224Digest: DigestPrivate {
         self.bytes = bytes
     }
 
-    public static var byteCount: Int {
+    static var byteCount: Int {
         return Int(SHA224_DIGEST_LENGTH)
     }
 
-    public func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {
+    func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {
         return try Swift.withUnsafeBytes(of: bytes) {
             let boundsCheckedPtr = UnsafeRawBufferPointer(
                 start: $0.baseAddress,
@@ -159,41 +159,41 @@ public struct SHA224Digest: DigestPrivate {
         return array.prefix(upTo: SHA224Digest.byteCount)
     }
 
-    public var description: String {
+    var description: String {
         return "\("SHA224") digest: \(toArray().hexString)"
     }
 
-    public func hash(into hasher: inout Hasher) {
+    func hash(into hasher: inout Hasher) {
         self.withUnsafeBytes { hasher.combine(bytes: $0) }
     }
 }
 
 /// The SHA-224 Hash Function
-public struct SHA224: HashFunctionImplementationDetails {
-    public static var blockByteCount: Int {
+struct SHA224: HashFunctionImplementationDetails {
+    static var blockByteCount: Int {
         get { return Int(SHA224_CBLOCK) }
 
         set { fatalError("Cannot set SHA224.blockByteCount") }
     }
-    public static var byteCount: Int {
+    static var byteCount: Int {
         get { return Int(SHA224_DIGEST_LENGTH) }
 
         set { fatalError("Cannot set SHA224.byteCount") }
     }
-    public typealias Digest = SHA224Digest
+    typealias Digest = SHA224Digest
 
     var impl: DigestImpl<SHA224>
 
     /// Initializes the hash function instance.
-    public init() {
+    init() {
         impl = DigestImpl()
     }
 
-    public mutating func update(bufferPointer: UnsafeRawBufferPointer) {
+    mutating func update(bufferPointer: UnsafeRawBufferPointer) {
         impl.update(data: bufferPointer)
     }
 
-    public func finalize() -> Self.Digest {
+    func finalize() -> Self.Digest {
         return impl.finalize()
     }
 }

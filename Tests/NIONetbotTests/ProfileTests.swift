@@ -400,7 +400,7 @@ final class ProfileTests: XCTestCase {
         let jsonObject = try ProfileSerialization.jsonObject(
             with: policiesString.data(using: .utf8)!
         )
-        
+
         XCTAssertThrowsError(
             try jsonDecoder.decode(
                 Profile.self,

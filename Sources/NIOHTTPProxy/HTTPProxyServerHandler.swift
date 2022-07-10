@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIOCore
+import Foundation
 
 final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChannelHandler {
 
@@ -42,17 +42,17 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     /// The credentials to authenticate a user.
     public let authorization: BasicAuthorization?
 
-    private var outEFLBuilder: (Request) -> EventLoopFuture<Channel>
+    private var channelInitializer: (Request) -> EventLoopFuture<Channel>
 
     public init(
         logger: Logger,
         authorization: BasicAuthorization? = nil,
-        outEFLBuilder: @escaping (Request) -> EventLoopFuture<Channel>,
+        channelInitializer: @escaping (Request) -> EventLoopFuture<Channel>,
         completion: @escaping (Request, Channel) throws -> Void
     ) {
         self.logger = logger
         self.authorization = authorization
-        self.outEFLBuilder = outEFLBuilder
+        self.channelInitializer = channelInitializer
         self.completion = completion
         self.state = .idle
     }
@@ -146,7 +146,7 @@ extension HTTPProxyServerHandler {
 
     private func evaluateClientGreeting(context: ChannelHandlerContext) throws {
         guard let head = headPart else {
-            throw HTTPProxyError.invalidURL(url: "nil")
+            throw HTTPProxyError.invalidHTTPOrdering
         }
 
         // Only CONNECT tunnel need remove default http server pipelines.
@@ -168,21 +168,21 @@ extension HTTPProxyServerHandler {
             }
         }
 
-        let req = Request.init(head: head)
+        let req = Request(head: head)
 
-        self.outEFLBuilder(req).whenComplete {
+        self.channelInitializer(req).whenComplete {
             switch $0 {
                 case .success(let channel):
-                    self.pipe(req, channel: channel, context: context)
+                    self.exchange(channel, context: context, userInfo: req)
                 case .failure(let error):
                     self.deliverOneError(error, context: context)
             }
         }
     }
 
-    private func pipe(_ request: Request, channel: Channel, context: ChannelHandlerContext) {
+    private func exchange(_ channel: Channel, context: ChannelHandlerContext, userInfo: Request) {
         logger.info(
-            "Tunneling request to \(request.uri) via \(String(describing: channel.remoteAddress))"
+            "Tunneling request to \(userInfo.uri) via \(String(describing: channel.remoteAddress))"
         )
 
         do {
@@ -214,7 +214,7 @@ extension HTTPProxyServerHandler {
         let (localGlue, peerGlue) = GlueHandler.matchedPair()
         promise.futureResult
             .flatMapThrowing {
-                try self.completion(request, channel)
+                try self.completion(userInfo, channel)
                 try context.pipeline.syncOperations.addHandler(localGlue)
                 try channel.pipeline.syncOperations.addHandler(peerGlue)
             }
@@ -222,8 +222,6 @@ extension HTTPProxyServerHandler {
                 context.pipeline.removeHandler(self)
             }
             .whenFailure { error in
-                // Close connected peer channel before closing our channel.
-                channel.close(promise: nil)
                 self.deliverOneError(error, context: context)
             }
     }

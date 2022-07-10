@@ -12,10 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
 @_exported import Logging
 @_exported import NIOCore
-@_exported import NIOHTTP1
-@_exported import NIOSSL
 @_exported import _NIONetbotUtils
-@_exported import NIOHTTPCompression
