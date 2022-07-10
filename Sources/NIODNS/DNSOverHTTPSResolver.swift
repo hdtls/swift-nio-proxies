@@ -101,7 +101,17 @@ public class DNSOverHTTPSResolver: NIOPosix.Resolver {
                 ]
                 urlRequest.httpBody = Data(buffer.readBytes(length: buffer.readableBytes)!)
 
-                return try await self.session.data(for: urlRequest)
+                return try await withCheckedThrowingContinuation {
+                    continuation in
+                    self.session.dataTask(with: urlRequest) { data, response, error in
+                        guard error == nil else {
+                            continuation.resume(throwing: error!)
+                            return
+                        }
+
+                        continuation.resume(returning: (data!, response!))
+                    }.resume()
+                }
             }
         }
 
