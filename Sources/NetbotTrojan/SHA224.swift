@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_implementationOnly import CCryptoBoringSSL
+@_implementationOnly import CNIOBoringSSL
 @_exported import Crypto
 import Foundation
 
@@ -63,20 +63,20 @@ class DigestContext {
 
     init(digest: DigestType) {
         // We force unwrap because we cannot recover from allocation failure.
-        self.contextPointer = CCryptoBoringSSL_EVP_MD_CTX_new()!
-        guard CCryptoBoringSSL_EVP_DigestInit(self.contextPointer, digest.dispatchTable) != 0 else {
+        self.contextPointer = CNIOBoringSSL_EVP_MD_CTX_new()!
+        guard CNIOBoringSSL_EVP_DigestInit(self.contextPointer, digest.dispatchTable) != 0 else {
             // We can't do much but crash here.
-            fatalError("Unable to initialize digest state: \(CCryptoBoringSSL_ERR_get_error())")
+            fatalError("Unable to initialize digest state: \(CNIOBoringSSL_ERR_get_error())")
         }
     }
 
     init(copying original: DigestContext) {
         // We force unwrap because we cannot recover from allocation failure.
-        self.contextPointer = CCryptoBoringSSL_EVP_MD_CTX_new()!
-        guard CCryptoBoringSSL_EVP_MD_CTX_copy(self.contextPointer, original.contextPointer) != 0
+        self.contextPointer = CNIOBoringSSL_EVP_MD_CTX_new()!
+        guard CNIOBoringSSL_EVP_MD_CTX_copy(self.contextPointer, original.contextPointer) != 0
         else {
             // We can't do much but crash here.
-            fatalError("Unable to copy digest state: \(CCryptoBoringSSL_ERR_get_error())")
+            fatalError("Unable to copy digest state: \(CNIOBoringSSL_ERR_get_error())")
         }
     }
 
@@ -85,25 +85,25 @@ class DigestContext {
             return
         }
 
-        CCryptoBoringSSL_EVP_DigestUpdate(self.contextPointer, baseAddress, data.count)
+        CNIOBoringSSL_EVP_DigestUpdate(self.contextPointer, baseAddress, data.count)
     }
 
     // This finalize function is _destructive_: do not call it if you want to reuse the object!
     func finalize() -> [UInt8] {
-        let digestSize = CCryptoBoringSSL_EVP_MD_size(self.contextPointer.pointee.digest)
+        let digestSize = CNIOBoringSSL_EVP_MD_size(self.contextPointer.pointee.digest)
         var digestBytes = Array(repeating: UInt8(0), count: digestSize)
         var count = UInt32(digestSize)
 
         digestBytes.withUnsafeMutableBufferPointer { digestPointer in
             assert(digestPointer.count == count)
-            CCryptoBoringSSL_EVP_DigestFinal(self.contextPointer, digestPointer.baseAddress, &count)
+            CNIOBoringSSL_EVP_DigestFinal(self.contextPointer, digestPointer.baseAddress, &count)
         }
 
         return digestBytes
     }
 
     deinit {
-        CCryptoBoringSSL_EVP_MD_CTX_free(self.contextPointer)
+        CNIOBoringSSL_EVP_MD_CTX_free(self.contextPointer)
     }
 }
 
@@ -115,7 +115,7 @@ extension DigestContext {
             self.dispatchTable = dispatchTable
         }
 
-        static let sha224 = DigestType(CCryptoBoringSSL_EVP_sha224())
+        static let sha224 = DigestType(CNIOBoringSSL_EVP_sha224())
     }
 }
 
