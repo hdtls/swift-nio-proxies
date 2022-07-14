@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import NIOConcurrencyHelpers
 import NIOCore
 import NIOPosix
 
@@ -21,18 +20,39 @@ import NIOPosix
 import FoundationNetworking
 #endif
 
+/// A DNS resolver for DoH implementation.
 public class DNSOverHTTPSResolver: NIOPosix.Resolver {
+
+    private actor TaskActor {
+        private var storage: [String: Task<Data, Error>] = [:]
+
+        func task(identifiedBy host: String) -> Task<Data, Error>? {
+            storage[host]
+        }
+
+        func save(_ task: Task<Data, Error>, for identifier: String) {
+            storage[identifier] = task
+        }
+
+        func tasks() -> [Task<Data, Error>] {
+            Array(storage.values)
+        }
+
+        func removeAll() {
+            storage.removeAll()
+        }
+    }
 
     private let url: URL
     private let v4Future: EventLoopPromise<[SocketAddress]>
     private let v6Future: EventLoopPromise<[SocketAddress]>
-    private var tasks: [String: Task<(Data, URLResponse), Error>] = [:]
     private let session: URLSession = URLSession(configuration: .default)
-    private let lock = Lock()
+    private var store = TaskActor()
 
-    /// Create a new resolver.
-    ///
-    /// - Parameter eventLoop: The `EventLoop` whose thread this resolver will block.
+    /// Initialize an instance of `DNSOverHTTPSResolver` with specified server url and eventLoop.
+    /// - Parameters:
+    ///   - url: The DoH server url.
+    ///   - eventLoop: The `EventLoop` whose thread this resolver will block.
     public init(url: URL, eventLoop: EventLoop) {
         self.url = url
         self.v4Future = eventLoop.makePromise()
@@ -41,9 +61,6 @@ public class DNSOverHTTPSResolver: NIOPosix.Resolver {
 
     public func initiateAQuery(host: String, port: Int) -> EventLoopFuture<[SocketAddress]> {
         v4Future.completeWithTask {
-            self.lock.lock()
-            defer { self.lock.unlock() }
-
             return try await self.initiateAQuery(host: host, port: port)
         }
         return v4Future.futureResult
@@ -55,9 +72,6 @@ public class DNSOverHTTPSResolver: NIOPosix.Resolver {
 
     public func initiateAAAAQuery(host: String, port: Int) -> EventLoopFuture<[SocketAddress]> {
         v6Future.completeWithTask {
-            self.lock.lock()
-            defer { self.lock.unlock() }
-
             return try await self.initialeAAAAQuery(host: host, port: port)
         }
         return v6Future.futureResult
@@ -70,8 +84,8 @@ public class DNSOverHTTPSResolver: NIOPosix.Resolver {
     private func initialeQuery(host: String, port: Int, type: UInt16) async throws
         -> [SocketAddress]
     {
-        let task: Task<(Data, URLResponse), Error>
-        if let t = self.tasks[host], !t.isCancelled {
+        let task: Task<Data, Error>
+        if let t = await self.store.task(identifiedBy: host), !t.isCancelled {
             task = t
         } else {
             task = Task {
@@ -103,21 +117,21 @@ public class DNSOverHTTPSResolver: NIOPosix.Resolver {
 
                 return try await withCheckedThrowingContinuation {
                     continuation in
-                    self.session.dataTask(with: urlRequest) { data, response, error in
+                    self.session.dataTask(with: urlRequest) { data, _, error in
                         guard error == nil else {
                             continuation.resume(throwing: error!)
                             return
                         }
 
-                        continuation.resume(returning: (data!, response!))
+                        continuation.resume(returning: data!)
                     }.resume()
                 }
             }
         }
 
-        self.tasks[host] = task
+        await self.store.save(task, for: host)
 
-        let (data, _) = try await task.value
+        let data = try await task.value
 
         let message = try MessageParser(buffer: ByteBuffer(bytes: data)).parse()
 
@@ -127,13 +141,13 @@ public class DNSOverHTTPSResolver: NIOPosix.Resolver {
     }
 
     public func cancelQueries() {
-        self.lock.withLockVoid {
-            self.tasks.values.forEach {
-                if !$0.isCancelled {
-                    $0.cancel()
+        Task {
+            for task in await store.tasks() {
+                if !task.isCancelled {
+                    task.cancel()
                 }
             }
-            self.tasks.removeAll()
+            await store.removeAll()
         }
     }
 }

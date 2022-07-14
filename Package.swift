@@ -63,7 +63,6 @@ let package = Package(
         .target(
             name: "NIODNS",
             dependencies: [
-                .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOPosix", package: "swift-nio"),
             ]
