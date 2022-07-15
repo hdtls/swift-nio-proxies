@@ -30,70 +30,44 @@ import Foundation
 
 /// Instructs the SOCKS proxy server of the target host,
 /// and how to connect.
-public struct Request: Hashable {
+struct Request: Hashable {
 
     /// The SOCKS protocol version - we currently only support v5.
-    public let version: ProtocolVersion = .v5
+    let version: ProtocolVersion = .v5
 
     /// How to connect to the host.
-    public var command: Command
+    var command: Command
 
     /// The target host address.
-    public var address: NetAddress
+    var address: NetAddress
 
     /// Creates a new `Request`.
     /// - parameter command: How to connect to the host.
     /// - parameter address: The target host address.
-    public init(command: Command, address: NetAddress) {
+    init(command: Command, address: NetAddress) {
         self.command = command
         self.address = address
     }
 }
 
-extension ByteBuffer {
-
-    @discardableResult mutating func writeClientRequest(_ request: Request) -> Int {
-        var written = writeInteger(request.version.rawValue)
-        written += writeInteger(request.command.value)
-        written += writeInteger(UInt8(0))
-        written += applying(request.address)
-        return written
-    }
-
-    @discardableResult mutating func readClientRequestIfPossible() throws -> Request? {
-        return try parseUnwindingIfNeeded { buffer -> Request? in
-            guard
-                try buffer.readAndValidateProtocolVersion() != nil,
-                let command = buffer.readInteger(as: UInt8.self),
-                try buffer.readAndValidateReserved() != nil,
-                let address = try buffer.readAddressIfPossible()
-            else {
-                return nil
-            }
-            return .init(command: .init(value: command), address: address)
-        }
-    }
-
-}
-
 /// What type of connection the SOCKS server should establish with
 /// the target host.
-public struct Command: Hashable {
+struct Command: Hashable, RawRepresentable {
 
     /// Typically the primary connection type, suitable for HTTP.
-    public static let connect = Command(value: 0x01)
+    static let connect = Command(rawValue: 0x01)
 
     /// Used in protocols that require the client to accept connections
     /// from the server, e.g. FTP.
-    public static let bind = Command(value: 0x02)
+    static let bind = Command(rawValue: 0x02)
 
     /// Used to establish an association within the UDP relay process to
     /// handle UDP datagrams.
-    public static let udpAssociate = Command(value: 0x03)
+    static let udpAssociate = Command(rawValue: 0x03)
 
-    public var value: UInt8
+    var rawValue: UInt8
 
-    public init(value: UInt8) {
-        self.value = value
+    init(rawValue: UInt8) {
+        self.rawValue = rawValue
     }
 }

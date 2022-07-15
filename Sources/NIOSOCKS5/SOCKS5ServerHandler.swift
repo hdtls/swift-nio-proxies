@@ -142,12 +142,12 @@ extension SOCKS5ServerHandler {
     }
 
     private func evaluateClientGreeting(context: ChannelHandlerContext) throws {
-        guard let clientGreeting = try inboundBuffer.readClientGreetingIfPossible() else {
+        guard let clientGreeting = try inboundBuffer.readAuthenticationMethodRequest() else {
             return
         }
 
         // Choose authentication method
-        let method: SelectedAuthenticationMethod
+        let method: Authentication.Method.Response
 
         if authenticationRequired && clientGreeting.methods.contains(.usernamePassword) {
             method = .init(method: .usernamePassword)
@@ -162,13 +162,13 @@ extension SOCKS5ServerHandler {
         }
 
         var buffer = context.channel.allocator.buffer(capacity: 2)
-        buffer.writeMethodSelection(method)
+        buffer.writeAuthenticationMethodResponse(method)
 
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
     }
 
     private func evaluateClientAuthenticationMsg(context: ChannelHandlerContext) throws {
-        guard let authMsg = try inboundBuffer.readUsernamePasswordAuthenticationIfPossible() else {
+        guard let authMsg = try inboundBuffer.readAuthenticationRequest() else {
             // Need more bytes to parse authentication message.
             return
         }
@@ -179,15 +179,15 @@ extension SOCKS5ServerHandler {
             authMsg.username == username && authMsg.password == passwordReference
 
         var buffer = context.channel.allocator.buffer(capacity: 2)
-        buffer.writeClientBasicAuthenticationResponse(
-            UsernamePasswordAuthenticationResponse(status: success ? 0 : 1)
+        buffer.writeAuthenticationResponse(
+            Authentication.UsernameAuthenticationResponse(status: success ? 0 : 1)
         )
 
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
     }
 
     private func evaluateClientRequestAndReplies(context: ChannelHandlerContext) throws {
-        guard let request = try inboundBuffer.readClientRequestIfPossible() else { return }
+        guard let request = try inboundBuffer.readRequestDetails() else { return }
 
         let completion: (NetAddress) -> EventLoopFuture<Channel> = { _ in
             context.eventLoop.makeCompletedFuture(.failure(SOCKSError.unexpectedRead))

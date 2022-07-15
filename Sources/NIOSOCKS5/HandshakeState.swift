@@ -32,7 +32,7 @@ enum HandshakeState: Equatable {
         self = .greeting
     }
 
-    mutating func greeting(_ method: AuthenticationMethod) throws {
+    mutating func greeting(_ method: Authentication.Method) throws {
         guard self == .greeting else {
             throw SOCKSError.invalidServerState
         }

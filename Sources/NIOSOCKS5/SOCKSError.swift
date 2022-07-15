@@ -41,7 +41,7 @@ extension SOCKS5ProxyError.SerializationFailureReason {
 }
 
 /// Wrapper for SOCKS protcol error.
-public enum SOCKSError: Error, Equatable {
+public enum SOCKSError: Error {
 
     /// The SOCKS client was in a different state to that required.
     case invalidClientState
@@ -61,7 +61,7 @@ public enum SOCKSError: Error, Equatable {
     case invalidAddressType(actual: UInt8)
 
     /// The server selected an authentication method not supported by the client.
-    case invalidAuthenticationSelection(AuthenticationMethod)
+    case invalidAuthenticationSelection(Authentication.Method)
 
     /// Missing authentication credential.
     case missingCredential
@@ -96,23 +96,23 @@ public enum SOCKSError: Error, Equatable {
 }
 
 extension SOCKSError.ReplyFailureReason {
-    static func withReply(_ reply: SOCKSServerReply?) -> Self {
+    static func withReply(_ reply: Response.Reply?) -> Self {
         switch reply {
-            case SOCKSServerReply.generalSOCKSServerFailure:
+            case Response.Reply.generalSOCKSServerFailure:
                 return .generalSOCKSServerFailure
-            case SOCKSServerReply.notAllowed:
+            case Response.Reply.notAllowed:
                 return .connectionNotAllowedByRuleset
-            case SOCKSServerReply.networkUnreachable:
+            case Response.Reply.networkUnreachable:
                 return .networkUnreachable
-            case SOCKSServerReply.hostUnreachable:
+            case Response.Reply.hostUnreachable:
                 return .hostUnreachable
-            case SOCKSServerReply.refused:
+            case Response.Reply.refused:
                 return .connectionRefused
-            case SOCKSServerReply.ttlExpired:
+            case Response.Reply.ttlExpired:
                 return .TTLExpired
-            case SOCKSServerReply.commandUnsupported:
+            case Response.Reply.commandUnsupported:
                 return .commandNotSupported
-            case SOCKSServerReply.addressTypeUnsupported:
+            case Response.Reply.addressTypeUnsupported:
                 return .addressTypeNotSupported
             default:
                 return .unassigned

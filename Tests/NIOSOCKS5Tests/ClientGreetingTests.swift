@@ -22,14 +22,14 @@ class ClientGreetingTests: XCTestCase {
     func testReadFromByteBuffer() {
         var buffer = ByteBuffer()
         buffer.writeBytes([0x05, 0x01, 0x00])
-        let clientGreeting = try! buffer.readClientGreetingIfPossible()
+        let clientGreeting = try! buffer.readAuthenticationMethodRequest()
         XCTAssertEqual(clientGreeting, .init(methods: [.noRequired]))
         XCTAssertEqual(buffer.readableBytes, 0)
 
         buffer.writeBytes([0x05, 0x03, 0x00, 0x01, 0x02])
         XCTAssertNoThrow(
             XCTAssertEqual(
-                try buffer.readClientGreetingIfPossible(),
+                try buffer.readClientGreeting(),
                 .init(methods: [.noRequired, .gssapi, .usernamePassword])
             )
         )
@@ -37,13 +37,15 @@ class ClientGreetingTests: XCTestCase {
     }
 
     func testWriteToByteBuffer() {
-        let clientGreeting = ClientGreeting.init(methods: [.noRequired])
+        let clientGreeting = Authentication.Method.Request.init(methods: [.noRequired])
         var buffer = ByteBuffer()
-        XCTAssertEqual(buffer.writeClientGreeting(clientGreeting), 3)
+        XCTAssertEqual(buffer.writeAuthenticationMethodRequest(clientGreeting), 3)
         XCTAssertEqual(buffer.readableBytes, 3)
         XCTAssertEqual(buffer.readBytes(length: 3), [0x05, 0x01, 0x00])
 
-        buffer.writeClientGreeting(.init(methods: [.noRequired, .gssapi, .usernamePassword]))
+        buffer.writeAuthenticationMethodRequest(
+            .init(methods: [.noRequired, .gssapi, .usernamePassword])
+        )
         XCTAssertEqual(buffer.readableBytes, 5)
         XCTAssertEqual(buffer.readBytes(length: 5), [0x05, 0x03, 0x00, 0x01, 0x02])
     }

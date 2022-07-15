@@ -18,7 +18,7 @@ import NIOCore
 /// to a host. This handler should be inserted at the beginning of a
 /// channel's pipeline. Note that SOCKS only supports fully-qualified
 /// domain names and IPv4 or IPv6 sockets, and not UNIX sockets.
-public final class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHandler {
+final public class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHandler {
 
     public typealias InboundIn = ByteBuffer
     public typealias InboundOut = ByteBuffer
@@ -89,11 +89,11 @@ public final class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
         do {
             switch state {
                 case .greeting:
-                    try evaluateServerGreeting(context: context)
+                    try receiveAuthenticationMethodResponse(context: context)
                 case .authorizing:
-                    try evaluateServerAuthenticationMsg(context: context)
+                    try receiveAuthenticationResponse(context: context)
                 case .addressing:
-                    try evaluateServerReplies(context: context)
+                    try receiveReplies(context: context)
                 default:
                     break
             }
@@ -159,28 +159,28 @@ extension SOCKS5ClientHandler {
         }
         do {
             try state.idle()
-            try sendClientGreeting(context: context)
+            try sendAuthenticationMethodRequest(context: context)
         } catch {
             deliverOneError(error, context: context)
         }
     }
 
-    private func sendClientGreeting(context: ChannelHandlerContext) throws {
-        // Authorization is performed when username is not nil
-        let method: AuthenticationMethod = authenticationRequired ? .usernamePassword : .noRequired
+    private func sendAuthenticationMethodRequest(context: ChannelHandlerContext) throws {
+        // Authorization is performed when `authenticationRequired` is true.
+        let method: Authentication.Method = authenticationRequired ? .usernamePassword : .noRequired
 
-        let greeting = ClientGreeting(methods: [method])
+        let greeting = Authentication.Method.Request(methods: [method])
 
         // [version, #methods, methods...]
         let capacity = 3
         var buffer = context.channel.allocator.buffer(capacity: capacity)
-        buffer.writeClientGreeting(greeting)
+        buffer.writeAuthenticationMethodRequest(greeting)
 
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
     }
 
-    private func evaluateServerGreeting(context: ChannelHandlerContext) throws {
-        guard let authentication = try readBuffer?.readMethodSelectionIfPossible() else {
+    private func receiveAuthenticationMethodResponse(context: ChannelHandlerContext) throws {
+        guard let authentication = try readBuffer?.readAuthenticationMethodResponse() else {
             return
         }
 
@@ -188,9 +188,9 @@ extension SOCKS5ClientHandler {
 
         switch authentication.method {
             case .noRequired:
-                try sendClientRequest(context: context)
+                try sendRequestDetails(context: context)
             case .usernamePassword:
-                try sendUsernamePasswordAuthentication(context: context)
+                try sendAuthenticationRequest(context: context)
             case .noAcceptable:
                 state.failure()
                 throw SOCKSError.authenticationFailed(reason: .noValidAuthenticationMethod)
@@ -200,8 +200,21 @@ extension SOCKS5ClientHandler {
         }
     }
 
-    private func evaluateServerAuthenticationMsg(context: ChannelHandlerContext) throws {
-        guard let authMsg = try readBuffer?.readUsernamePasswordAuthenticationResponse() else {
+    private func sendAuthenticationRequest(context: ChannelHandlerContext) throws {
+        let authentication = Authentication.UsernameAuthenticationRequest(
+            username: username,
+            password: passwordReference
+        )
+
+        let capacity = 3 + username.count + passwordReference.count
+        var byteBuffer = context.channel.allocator.buffer(capacity: capacity)
+        byteBuffer.writeAuthenticationRequest(authentication)
+
+        context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
+    }
+
+    private func receiveAuthenticationResponse(context: ChannelHandlerContext) throws {
+        guard let authMsg = try readBuffer?.readAuthenticationResponse() else {
             return
         }
 
@@ -212,35 +225,22 @@ extension SOCKS5ClientHandler {
             throw SOCKSError.authenticationFailed(reason: .incorrectUsernameOrPassword)
         }
 
-        try sendClientRequest(context: context)
+        try sendRequestDetails(context: context)
     }
 
-    private func sendUsernamePasswordAuthentication(context: ChannelHandlerContext) throws {
-        let authentication = UsernamePasswordAuthentication(
-            username: username,
-            password: passwordReference
-        )
-
-        let capacity = 3 + username.count + passwordReference.count
-        var byteBuffer = context.channel.allocator.buffer(capacity: capacity)
-        byteBuffer.writeUsernamePasswordAuthentication(authentication)
-
-        context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
-    }
-
-    private func sendClientRequest(context: ChannelHandlerContext) throws {
+    private func sendRequestDetails(context: ChannelHandlerContext) throws {
         let request = Request(command: .connect, address: destinationAddress)
 
         // the client request is always 6 bytes + the address info
         // [protocol_version, command, reserved, address type, <address>, port (2bytes)]
         let capacity = 6
         var buffer = context.channel.allocator.buffer(capacity: capacity)
-        buffer.writeClientRequest(request)
+        buffer.writeRequestDetails(request)
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
     }
 
-    private func evaluateServerReplies(context: ChannelHandlerContext) throws {
-        guard let response = try readBuffer?.readServerResponseIfPossible() else {
+    private func receiveReplies(context: ChannelHandlerContext) throws {
+        guard let response = try readBuffer?.readServerResponse() else {
             return
         }
 

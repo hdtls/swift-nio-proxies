@@ -13,11 +13,11 @@
 //===----------------------------------------------------------------------===//
 
 /// `ProtocolVersion` defines SOCKS protocol version.
-public struct ProtocolVersion: Codable, Hashable, RawRepresentable {
+struct ProtocolVersion: Hashable, RawRepresentable {
 
-    public var rawValue: UInt8
+    var rawValue: UInt8
 
-    public init(rawValue: UInt8) {
+    init(rawValue: UInt8) {
         self.rawValue = rawValue
     }
 }
@@ -25,5 +25,5 @@ public struct ProtocolVersion: Codable, Hashable, RawRepresentable {
 extension ProtocolVersion {
 
     /// SOCKS5.
-    public static let v5 = ProtocolVersion.init(rawValue: 0x05)
+    static let v5 = ProtocolVersion.init(rawValue: 0x05)
 }

@@ -21,28 +21,28 @@ class ModelsTests: XCTestCase {
     func testRequestReadWrite() {
         var request = Request.init(command: .connect, address: .domainPort("localhost", 80))
         var buffer = ByteBuffer()
-        buffer.writeClientRequest(request)
-        XCTAssertNoThrow(XCTAssertEqual(try buffer.readClientRequestIfPossible(), request))
+        buffer.writeRequestDetails(request)
+        XCTAssertNoThrow(XCTAssertEqual(try buffer.readRequestDetails(), request))
 
         request = .init(
             command: .bind,
             address: .socketAddress(try! .init(ipAddress: "127.0.0.1", port: 80))
         )
-        buffer.writeClientRequest(request)
-        XCTAssertNoThrow(XCTAssertEqual(try buffer.readClientRequestIfPossible(), request))
+        buffer.writeRequestDetails(request)
+        XCTAssertNoThrow(XCTAssertEqual(try buffer.readRequestDetails(), request))
 
         request = .init(
             command: .udpAssociate,
             address: .socketAddress(try! .init(ipAddress: "::1", port: 80))
         )
-        buffer.writeClientRequest(request)
-        XCTAssertNoThrow(XCTAssertEqual(try buffer.readClientRequestIfPossible(), request))
+        buffer.writeRequestDetails(request)
+        XCTAssertNoThrow(XCTAssertEqual(try buffer.readRequestDetails(), request))
     }
 
     func testResponseReadWrite() {
         let response = Response.init(reply: .succeeded, boundAddress: .domainPort("localhost", 80))
         var buffer = ByteBuffer()
         buffer.writeServerResponse(response)
-        XCTAssertNoThrow(XCTAssertEqual(try buffer.readServerResponseIfPossible(), response))
+        XCTAssertNoThrow(XCTAssertEqual(try buffer.readServerResponse(), response))
     }
 }
