@@ -108,10 +108,8 @@ extension ByteBuffer {
         return written
     }
 
-    mutating func readAuthenticationResponse() throws -> Authentication
-        .UsernameAuthenticationResponse?
-    {
-        return parseUnwindingIfNeeded { buffer in
+    mutating func readAuthenticationResponse() -> Authentication.UsernameAuthenticationResponse? {
+        parseUnwindingIfNeeded { buffer in
             guard let version = buffer.readInteger(as: UInt8.self),
                 let status = buffer.readInteger(as: UInt8.self)
             else {
@@ -198,7 +196,7 @@ extension ByteBuffer {
                 return nil
             }
             guard version == 0x05 else {
-                throw SOCKSError.invalidProtocolVersion(actual: version)
+                throw SOCKSError.unsupportedProtocolVersion(actual: version)
             }
             return version
         }

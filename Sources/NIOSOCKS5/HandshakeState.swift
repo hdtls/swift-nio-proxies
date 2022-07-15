@@ -17,13 +17,8 @@ enum HandshakeState: Equatable {
     case greeting
     case authorizing
     case addressing
-    case establish
-    case active
+    case established
     case failed
-
-    var isActive: Bool {
-        self == .active
-    }
 
     mutating func idle() throws {
         guard self == .idle else {
@@ -50,14 +45,14 @@ enum HandshakeState: Equatable {
         guard self == .addressing else {
             throw SOCKSError.invalidServerState
         }
-        self = .establish
+        self = .established
     }
 
     mutating func establish() throws {
-        guard self == .establish else {
+        guard self == .established else {
             throw SOCKSError.invalidServerState
         }
-        self = .active
+        self = .failed
     }
 
     mutating func failure() {

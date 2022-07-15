@@ -12,34 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-public enum SOCKS5ProxyError: Error, Equatable {
-
-    public enum SerializationFailureReason {
-        case needMoreBytes
-        case invalidInputBytes
-    }
-
-    public enum AuthenticationFailureReason {
-        case incorrectUsernameOrPassword
-        case noMethodImpl
-    }
-
-    case disconnected
-    case serializeFailed(reason: SerializationFailureReason)
-    case authenticationFailed(reason: AuthenticationFailureReason)
-}
-
-extension SOCKS5ProxyError.SerializationFailureReason {
-    var localizedDescription: String {
-        switch self {
-            case .invalidInputBytes:
-                return "Response could not be serialized, input byte is not valid."
-            case .needMoreBytes:
-                return "Response could not be serialized, need more bytes."
-        }
-    }
-}
-
 /// Wrapper for SOCKS protcol error.
 public enum SOCKSError: Error {
 
@@ -51,7 +23,7 @@ public enum SOCKSError: Error {
 
     /// The protocol version was something other than *5*. Note that
     /// we currently only supported SOCKv5.
-    case invalidProtocolVersion(actual: UInt8)
+    case unsupportedProtocolVersion(actual: UInt8)
 
     /// Reserved bytes should always be the `NULL` byte *0x00*. Something
     /// else was encountered.
@@ -62,9 +34,6 @@ public enum SOCKSError: Error {
 
     /// The server selected an authentication method not supported by the client.
     case invalidAuthenticationSelection(Authentication.Method)
-
-    /// Missing authentication credential.
-    case missingCredential
 
     ///  The SOCKS server failed to connect to the target host.
     public enum ReplyFailureReason {
@@ -97,22 +66,26 @@ public enum SOCKSError: Error {
 
 extension SOCKSError.ReplyFailureReason {
     static func withReply(_ reply: Response.Reply?) -> Self {
+        guard let reply = reply else {
+            return .unassigned
+        }
+
         switch reply {
-            case Response.Reply.generalSOCKSServerFailure:
+            case .generalSOCKSServerFailure:
                 return .generalSOCKSServerFailure
-            case Response.Reply.notAllowed:
+            case .notAllowed:
                 return .connectionNotAllowedByRuleset
-            case Response.Reply.networkUnreachable:
+            case .networkUnreachable:
                 return .networkUnreachable
-            case Response.Reply.hostUnreachable:
+            case .hostUnreachable:
                 return .hostUnreachable
-            case Response.Reply.refused:
+            case .refused:
                 return .connectionRefused
-            case Response.Reply.ttlExpired:
+            case .ttlExpired:
                 return .TTLExpired
-            case Response.Reply.commandUnsupported:
+            case .commandUnsupported:
                 return .commandNotSupported
-            case Response.Reply.addressTypeUnsupported:
+            case .addressTypeUnsupported:
                 return .addressTypeNotSupported
             default:
                 return .unassigned
@@ -165,7 +138,7 @@ extension SOCKSError: CustomStringConvertible {
                 return "Invalid client state."
             case .invalidServerState:
                 return "Invalid server state."
-            case .invalidProtocolVersion(actual: let version):
+            case .unsupportedProtocolVersion(actual: let version):
                 return "Invalid SOCKS protocol version \(version)."
             case .invalidReservedByte(actual: let reserved):
                 return "Invalid reserved byte \(reserved)."
@@ -173,8 +146,6 @@ extension SOCKSError: CustomStringConvertible {
                 return "Invalid task address type \(type)."
             case .invalidAuthenticationSelection:
                 return "Invalid authentication selection."
-            case .missingCredential:
-                return "Missing authentication credential."
             case .replyFailed(let reason):
                 return reason.localizedDescription
             case .authenticationFailed(let reason):

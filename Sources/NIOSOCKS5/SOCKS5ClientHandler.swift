@@ -28,6 +28,7 @@ final public class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
     private var state: HandshakeState
     private var readBuffer: ByteBuffer!
     private var bufferedWrites: MarkedCircularBuffer<BufferedWrite>
+    private var removalToken: ChannelHandlerContext.RemovalToken?
     private let logger: Logger
     private let destinationAddress: NetAddress
     private let username: String
@@ -66,18 +67,20 @@ final public class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
     }
 
     public func handlerAdded(context: ChannelHandlerContext) {
-        startHandshaking(context: context)
+        if context.channel.isActive {
+            startHandshaking(context: context)
+        }
     }
 
     public func channelActive(context: ChannelHandlerContext) {
-        startHandshaking(context: context)
         context.fireChannelActive()
+        startHandshaking(context: context)
     }
 
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
 
         // if we've established the connection then forward on the data
-        guard !state.isActive else {
+        guard state != .established else {
             context.fireChannelRead(data)
             return
         }
@@ -86,19 +89,15 @@ final public class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
 
         readBuffer.setOrWriteBuffer(&byteBuffer)
 
-        do {
-            switch state {
-                case .greeting:
-                    try receiveAuthenticationMethodResponse(context: context)
-                case .authorizing:
-                    try receiveAuthenticationResponse(context: context)
-                case .addressing:
-                    try receiveReplies(context: context)
-                default:
-                    break
-            }
-        } catch {
-            deliverOneError(error, context: context)
+        switch state {
+            case .greeting:
+                receiveAuthenticationMethodResponse(context: context)
+            case .authorizing:
+                receiveAuthenticationResponse(context: context)
+            case .addressing:
+                receiveReplies(context: context)
+            default:
+                break
         }
     }
 
@@ -114,10 +113,31 @@ final public class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
         bufferFlush()
 
         // Unbuffer writes when handshake is success.
-        guard state.isActive else {
+        guard state == .established else {
             return
         }
         unbufferWrites(context: context)
+    }
+
+    public func removeHandler(
+        context: ChannelHandlerContext,
+        removalToken: ChannelHandlerContext.RemovalToken
+    ) {
+        precondition(context.handler === self)
+
+        guard state == .established else {
+            self.removalToken = removalToken
+            return
+        }
+
+        unbufferWrites(context: context)
+
+        if let byteBuffer = readBuffer, byteBuffer.readableBytes > 0 {
+            readBuffer = nil
+            context.fireChannelRead(wrapInboundOut(byteBuffer))
+        }
+
+        context.leavePipeline(removalToken: removalToken)
     }
 }
 
@@ -154,18 +174,12 @@ extension SOCKS5ClientHandler {
 extension SOCKS5ClientHandler {
 
     private func startHandshaking(context: ChannelHandlerContext) {
-        guard context.channel.isActive, state == .idle else {
-            return
-        }
-        do {
-            try state.idle()
-            try sendAuthenticationMethodRequest(context: context)
-        } catch {
-            deliverOneError(error, context: context)
-        }
+        precondition(state == .idle, "Invalid client state: \(state)")
+        state = .greeting
+        sendAuthenticationMethodRequest(context: context)
     }
 
-    private func sendAuthenticationMethodRequest(context: ChannelHandlerContext) throws {
+    private func sendAuthenticationMethodRequest(context: ChannelHandlerContext) {
         // Authorization is performed when `authenticationRequired` is true.
         let method: Authentication.Method = authenticationRequired ? .usernamePassword : .noRequired
 
@@ -179,28 +193,50 @@ extension SOCKS5ClientHandler {
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
     }
 
-    private func receiveAuthenticationMethodResponse(context: ChannelHandlerContext) throws {
-        guard let authentication = try readBuffer?.readAuthenticationMethodResponse() else {
+    private func receiveAuthenticationMethodResponse(context: ChannelHandlerContext) {
+        precondition(state == .greeting, "Invalid client state: \(state)")
+
+        var authentication: Authentication.Method.Response?
+        do {
+            authentication = try readBuffer.readAuthenticationMethodResponse()
+        } catch {
+            state = .failed
+            context.fireErrorCaught(error)
+            channelClose(context: context, reason: error)
             return
         }
 
-        try state.greeting(authentication.method)
+        guard let authentication = authentication else {
+            return
+        }
 
         switch authentication.method {
             case .noRequired:
-                try sendRequestDetails(context: context)
+                state = .addressing
+                sendRequestDetails(context: context)
             case .usernamePassword:
-                try sendAuthenticationRequest(context: context)
+                state = .authorizing
+                sendAuthenticationRequest(context: context)
             case .noAcceptable:
-                state.failure()
-                throw SOCKSError.authenticationFailed(reason: .noValidAuthenticationMethod)
+                state = .failed
+                context.fireErrorCaught(
+                    SOCKSError.authenticationFailed(reason: .noValidAuthenticationMethod)
+                )
+                channelClose(
+                    context: context,
+                    reason: SOCKSError.authenticationFailed(reason: .noValidAuthenticationMethod)
+                )
             default:
-                state.failure()
-                throw SOCKSError.authenticationFailed(reason: .noMethodImpl)
+                state = .failed
+                context.fireErrorCaught(SOCKSError.authenticationFailed(reason: .noMethodImpl))
+                channelClose(
+                    context: context,
+                    reason: SOCKSError.authenticationFailed(reason: .noMethodImpl)
+                )
         }
     }
 
-    private func sendAuthenticationRequest(context: ChannelHandlerContext) throws {
+    private func sendAuthenticationRequest(context: ChannelHandlerContext) {
         let authentication = Authentication.UsernameAuthenticationRequest(
             username: username,
             password: passwordReference
@@ -213,22 +249,26 @@ extension SOCKS5ClientHandler {
         context.writeAndFlush(wrapOutboundOut(byteBuffer), promise: nil)
     }
 
-    private func receiveAuthenticationResponse(context: ChannelHandlerContext) throws {
-        guard let authMsg = try readBuffer?.readAuthenticationResponse() else {
+    private func receiveAuthenticationResponse(context: ChannelHandlerContext) {
+        precondition(state == .authorizing, "Invalid client state: \(state)")
+        guard let authMsg = readBuffer?.readAuthenticationResponse(), authMsg.isSuccess else {
+            state = .failed
+            context.fireErrorCaught(
+                SOCKSError.authenticationFailed(reason: .incorrectUsernameOrPassword)
+            )
+            channelClose(
+                context: context,
+                reason: SOCKSError.authenticationFailed(reason: .incorrectUsernameOrPassword)
+            )
             return
         }
 
-        try state.authorizing()
+        state = .addressing
 
-        guard authMsg.isSuccess else {
-            state.failure()
-            throw SOCKSError.authenticationFailed(reason: .incorrectUsernameOrPassword)
-        }
-
-        try sendRequestDetails(context: context)
+        sendRequestDetails(context: context)
     }
 
-    private func sendRequestDetails(context: ChannelHandlerContext) throws {
+    private func sendRequestDetails(context: ChannelHandlerContext) {
         let request = Request(command: .connect, address: destinationAddress)
 
         // the client request is always 6 bytes + the address info
@@ -239,35 +279,51 @@ extension SOCKS5ClientHandler {
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
     }
 
-    private func receiveReplies(context: ChannelHandlerContext) throws {
-        guard let response = try readBuffer?.readServerResponse() else {
+    private func receiveReplies(context: ChannelHandlerContext) {
+        precondition(state == .addressing, "Invalid client state: \(state)")
+        let response: Response?
+
+        do {
+            response = try readBuffer.readServerResponse()
+        } catch {
+            context.fireErrorCaught(error)
+            channelClose(context: context, reason: error)
             return
         }
 
-        try state.addressing()
+        guard let response = response else {
+            return
+        }
 
         guard response.reply == .succeeded else {
-            state.failure()
-            throw SOCKSError.replyFailed(reason: .withReply(response.reply))
+            state = .failed
+            context.fireErrorCaught(SOCKSError.replyFailed(reason: .withReply(response.reply)))
+            channelClose(
+                context: context,
+                reason: SOCKSError.replyFailed(reason: .withReply(response.reply))
+            )
+            return
         }
+
+        state = .established
 
         // After handshake success we need remove handler and clear buffers.
         unbufferWrites(context: context)
 
-        if let byteBuffer = readBuffer {
-            readBuffer.clear()
+        if let byteBuffer = readBuffer, byteBuffer.readableBytes > 0 {
+            readBuffer = nil
             context.fireChannelRead(wrapInboundOut(byteBuffer))
         }
 
-        try state.establish()
+        context.fireUserInboundEventTriggered(SOCKSUserEvent.handshakeCompleted)
 
-        context.fireUserInboundEventTriggered(SOCKSProxyEstablishedEvent.init())
-
-        context.pipeline.removeHandler(self, promise: nil)
+        if let removalToken = removalToken {
+            context.leavePipeline(removalToken: removalToken)
+        }
     }
 
-    private func deliverOneError(_ error: Error, context: ChannelHandlerContext) {
-        logger.error("\(error)")
+    private func channelClose(context: ChannelHandlerContext, reason: Error) {
+        logger.error("\(reason)")
         context.close(promise: nil)
     }
 }
@@ -275,6 +331,6 @@ extension SOCKS5ClientHandler {
 /// A `Channel` user event that is sent when a SOCKS connection has been established
 ///
 /// After this event has been received it is save to remove the `SOCKS5ClientHandler` from the channel pipeline.
-public struct SOCKSProxyEstablishedEvent {
-    public init() {}
+public enum SOCKSUserEvent: Equatable {
+    case handshakeCompleted
 }

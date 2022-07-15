@@ -61,7 +61,7 @@ public final class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHa
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         var byteBuffer = unwrapInboundIn(data)
 
-        guard !state.isActive else {
+        guard state != .established else {
             context.fireChannelRead(wrapInboundOut(byteBuffer))
             return
         }
@@ -95,7 +95,7 @@ public final class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHa
     public func flush(context: ChannelHandlerContext) {
         bufferFlush()
 
-        guard state.isActive else {
+        guard state == .established else {
             return
         }
         unbufferWrites(context: context)
@@ -230,7 +230,7 @@ extension SOCKS5ServerHandler {
             deliverOneError(error, context: context)
         }
 
-        context.fireUserInboundEventTriggered(SOCKSProxyEstablishedEvent())
+        context.fireUserInboundEventTriggered(SOCKSUserEvent.handshakeCompleted)
 
         var buffer = context.channel.allocator.buffer(capacity: 16)
         buffer.writeServerResponse(response)
