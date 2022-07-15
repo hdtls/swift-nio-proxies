@@ -202,7 +202,7 @@ public class RequestDecoder: ByteToMessageDecoder {
 
         if self.symmetricKey == nil {
             self.symmetricKey = symmetricKey
-            context.fireChannelRead(NIOAny(Packet.address(try! bytes.readAddressIfPossible()!)))
+            context.fireChannelRead(NIOAny(Packet.address(try! bytes.readAddress()!)))
         } else {
             context.fireChannelRead(NIOAny(Packet.buffer(ByteBuffer(bytes: bytes))))
         }

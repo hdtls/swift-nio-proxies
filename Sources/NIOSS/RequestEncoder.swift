@@ -64,7 +64,7 @@ final public class RequestEncoder: MessageToByteEncoder {
                 outputByteCount: keyByteCount
             )
 
-            packet.applying(taskAddress)
+            packet.writeAddress(taskAddress)
             packet = try seal(packet, using: symmetricKey)
             // TCP packet start with fix size salt so insert salt at startIndex.
             packet.insert(contentsOf: salt, at: packet.startIndex)

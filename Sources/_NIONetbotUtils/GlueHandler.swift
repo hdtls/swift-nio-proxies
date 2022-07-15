@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import Logging
 import NIOCore
 
 public final class GlueHandler: ChannelDuplexHandler {

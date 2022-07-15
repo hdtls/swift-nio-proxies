@@ -28,14 +28,6 @@ class NetAddressTests: XCTestCase {
         XCTAssertNotEqual(first, third)
     }
 
-    func testNetAddressErrorEqutable() {
-        let first = NetAddressError.invalidAddressType(actual: 0x01)
-        let second = NetAddressError.invalidAddressType(actual: 0x01)
-        let third = NetAddressError.invalidAddressType(actual: 0x02)
-        XCTAssertEqual(first, second)
-        XCTAssertNotEqual(first, third)
-    }
-
     func testApplyingDomainPortAddress() {
         var packet = Data()
         var buffer = ByteBuffer()
@@ -43,8 +35,8 @@ class NetAddressTests: XCTestCase {
         let expectedAddress: [UInt8] = [
             0x03, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74, 0x00, 0x50,
         ]
-        XCTAssertEqual(packet.applying(address), expectedAddress.count)
-        XCTAssertEqual(buffer.applying(address), expectedAddress.count)
+        XCTAssertEqual(packet.writeAddress(address), expectedAddress.count)
+        XCTAssertEqual(buffer.writeAddress(address), expectedAddress.count)
         XCTAssertEqual(packet.count, 13)
         XCTAssertEqual(buffer.readableBytes, 13)
         XCTAssertEqual([UInt8](packet), expectedAddress)
@@ -55,8 +47,8 @@ class NetAddressTests: XCTestCase {
         var packet = Data()
         var buffer = ByteBuffer()
         let address = NetAddress.socketAddress(try! .init(ipAddress: "127.0.0.1", port: 80))
-        XCTAssertEqual(packet.applying(address), 7)
-        XCTAssertEqual(buffer.applying(address), 7)
+        XCTAssertEqual(packet.writeAddress(address), 7)
+        XCTAssertEqual(buffer.writeAddress(address), 7)
         XCTAssertEqual(packet.count, 7)
         XCTAssertEqual(buffer.readableBytes, 7)
         XCTAssertEqual(packet.removeFirst(), 0x01)
@@ -77,8 +69,8 @@ class NetAddressTests: XCTestCase {
         var packet = Data()
         var buffer = ByteBuffer()
         let address = NetAddress.socketAddress(try! .init(ipAddress: "::1", port: 80))
-        XCTAssertEqual(packet.applying(address), 19)
-        XCTAssertEqual(buffer.applying(address), 19)
+        XCTAssertEqual(packet.writeAddress(address), 19)
+        XCTAssertEqual(buffer.writeAddress(address), 19)
         XCTAssertEqual(packet.count, 19)
         XCTAssertEqual(buffer.readableBytes, 19)
         XCTAssertEqual(packet.removeFirst(), 0x04)
@@ -112,20 +104,14 @@ class NetAddressTests: XCTestCase {
         var packet = Data(expectedAddress)
         var buffer = ByteBuffer(bytes: expectedAddress)
         do {
-            _ = try packet.readAddressIfPossible()
+            _ = try packet.readAddress()
         } catch {
-            XCTAssertEqual(
-                error as! NetAddressError,
-                NetAddressError.invalidAddressType(actual: 0x02)
-            )
+            XCTAssertTrue(error is SocketAddressError)
         }
         do {
-            _ = try buffer.readAddressIfPossible()
+            _ = try buffer.readAddress()
         } catch {
-            XCTAssertEqual(
-                error as! NetAddressError,
-                NetAddressError.invalidAddressType(actual: 0x02)
-            )
+            XCTAssertTrue(error is SocketAddressError)
         }
         XCTAssertEqual(packet.count, expectedAddress.count)
         XCTAssertEqual(buffer.readableBytes, expectedAddress.count)
@@ -138,8 +124,8 @@ class NetAddressTests: XCTestCase {
         var packet = Data(expectedAddress)
         var buffer = ByteBuffer(bytes: expectedAddress)
         do {
-            let addr1 = try packet.readAddressIfPossible()
-            let addr2 = try buffer.readAddressIfPossible()
+            let addr1 = try packet.readAddress()
+            let addr2 = try buffer.readAddress()
             XCTAssertNil(addr1)
             XCTAssertNil(addr2)
             XCTAssertEqual(packet.count, expectedAddress.count)
@@ -156,8 +142,8 @@ class NetAddressTests: XCTestCase {
         var packet = Data(expectedAddress)
         var buffer = ByteBuffer(bytes: expectedAddress)
         do {
-            let addr1 = try packet.readAddressIfPossible()
-            let addr2 = try buffer.readAddressIfPossible()
+            let addr1 = try packet.readAddress()
+            let addr2 = try buffer.readAddress()
             XCTAssertNil(addr1)
             XCTAssertNil(addr2)
             XCTAssertEqual(packet.count, expectedAddress.count)
@@ -175,8 +161,8 @@ class NetAddressTests: XCTestCase {
         var buffer = ByteBuffer(bytes: expectedAddress)
         var addr1: NetAddress?
         var addr2: NetAddress?
-        XCTAssertNoThrow(addr1 = try packet.readAddressIfPossible())
-        XCTAssertNoThrow(addr2 = try buffer.readAddressIfPossible())
+        XCTAssertNoThrow(addr1 = try packet.readAddress())
+        XCTAssertNoThrow(addr2 = try buffer.readAddress())
         XCTAssertNotNil(addr1)
         XCTAssertNotNil(addr2)
         XCTAssertEqual(addr1, .socketAddress(try! .init(ipAddress: "127.0.0.1", port: 80)))
@@ -194,8 +180,8 @@ class NetAddressTests: XCTestCase {
         var buffer = ByteBuffer(bytes: expectedAddress)
         var addr1: NetAddress?
         var addr2: NetAddress?
-        XCTAssertNoThrow(addr1 = try packet.readAddressIfPossible())
-        XCTAssertNoThrow(addr2 = try buffer.readAddressIfPossible())
+        XCTAssertNoThrow(addr1 = try packet.readAddress())
+        XCTAssertNoThrow(addr2 = try buffer.readAddress())
         XCTAssertNotNil(addr1)
         XCTAssertNotNil(addr2)
         XCTAssertEqual(addr1, .socketAddress(try! .init(ipAddress: "::1", port: 80)))
@@ -212,8 +198,8 @@ class NetAddressTests: XCTestCase {
         var buffer = ByteBuffer(bytes: expectedAddress)
         var addr1: NetAddress?
         var addr2: NetAddress?
-        XCTAssertNoThrow(addr1 = try packet.readAddressIfPossible())
-        XCTAssertNoThrow(addr2 = try buffer.readAddressIfPossible())
+        XCTAssertNoThrow(addr1 = try packet.readAddress())
+        XCTAssertNoThrow(addr2 = try buffer.readAddress())
         XCTAssertNotNil(addr1)
         XCTAssertNotNil(addr2)
         XCTAssertEqual(addr1, .domainPort("localhost", 80))
