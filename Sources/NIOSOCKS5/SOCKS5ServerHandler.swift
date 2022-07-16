@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Logging
 import NIOCore
 
 /// Add this handshake handler to the front of your channel, closest to the network.
@@ -20,7 +19,7 @@ import NIOCore
 /// and parser to enforce SOCKSv5 protocol correctness. Inbound bytes will by parsed into
 /// `ClientMessage` for downstream consumption. Send `ServerMessage` to this
 /// handler.
-public final class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHandler {
+final public class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHandler {
 
     public typealias InboundIn = ByteBuffer
     public typealias InboundOut = ByteBuffer
@@ -28,59 +27,49 @@ public final class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHa
     public typealias OutboundOut = ByteBuffer
 
     private var state: HandshakeState
-    private var inboundBuffer: ByteBuffer!
+    private var readBuffer: ByteBuffer!
     private var bufferedWrites: MarkedCircularBuffer<BufferedWrite> = .init(initialCapacity: 8)
+    private var removalToken: ChannelHandlerContext.RemovalToken?
     private let logger: Logger
     private let username: String
     private let passwordReference: String
     private let authenticationRequired: Bool
+    private var channelInitializer: (NetAddress) -> EventLoopFuture<Channel>
 
     public init(
         logger: Logger,
         username: String,
         passwordReference: String,
         authenticationRequired: Bool,
-        completion: @escaping (NetAddress) -> EventLoopFuture<Channel>
+        channelInitializer: @escaping (NetAddress) -> EventLoopFuture<Channel>
     ) {
         self.logger = logger
         self.username = username
         self.passwordReference = passwordReference
         self.authenticationRequired = authenticationRequired
-        self.state = .idle
-    }
-
-    public func handlerAdded(context: ChannelHandlerContext) {
-        startHandshaking(context: context)
-    }
-
-    public func channelActive(context: ChannelHandlerContext) {
-        startHandshaking(context: context)
-        context.fireChannelActive()
+        self.state = .greeting
+        self.channelInitializer = channelInitializer
     }
 
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         var byteBuffer = unwrapInboundIn(data)
 
         guard state != .established else {
-            context.fireChannelRead(wrapInboundOut(byteBuffer))
+            context.fireChannelRead(data)
             return
         }
 
-        inboundBuffer.setOrWriteBuffer(&byteBuffer)
+        readBuffer.setOrWriteBuffer(&byteBuffer)
 
-        do {
-            switch state {
-                case .greeting:
-                    try evaluateClientGreeting(context: context)
-                case .authorizing:
-                    try evaluateClientAuthenticationMsg(context: context)
-                case .addressing:
-                    try evaluateClientRequestAndReplies(context: context)
-                default:
-                    break
-            }
-        } catch {
-            deliverOneError(error, context: context)
+        switch state {
+            case .greeting:
+                receiveAuthenticationMethodRequest(context: context)
+            case .authorizing:
+                receiveAuthenticationRequest(context: context)
+            case .addressing:
+                evaluateClientRequestAndReplies(context: context)
+            default:
+                break
         }
     }
 
@@ -100,6 +89,27 @@ public final class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHa
         }
         unbufferWrites(context: context)
     }
+
+    public func removeHandler(
+        context: ChannelHandlerContext,
+        removalToken: ChannelHandlerContext.RemovalToken
+    ) {
+        precondition(context.handler === self)
+
+        guard state == .established else {
+            self.removalToken = removalToken
+            return
+        }
+
+        unbufferWrites(context: context)
+
+        if let byteBuffer = readBuffer, byteBuffer.readableBytes > 0 {
+            readBuffer = nil
+            context.fireChannelRead(wrapInboundOut(byteBuffer))
+        }
+
+        context.leavePipeline(removalToken: removalToken)
+    }
 }
 
 extension SOCKS5ServerHandler {
@@ -107,6 +117,10 @@ extension SOCKS5ServerHandler {
     private typealias BufferedWrite = (data: ByteBuffer, promise: EventLoopPromise<Void>?)
 
     private func bufferWrite(data: ByteBuffer, promise: EventLoopPromise<Void>?) {
+        guard data.readableBytes > 0 else {
+            // We don't care about empty buffer.
+            return
+        }
         bufferedWrites.append((data: data, promise: promise))
     }
 
@@ -115,68 +129,62 @@ extension SOCKS5ServerHandler {
     }
 
     private func unbufferWrites(context: ChannelHandlerContext) {
-        // Return early if the user hasn't called flush.
-        guard bufferedWrites.hasMark else {
-            return
-        }
-
         while bufferedWrites.hasMark {
             let bufferedWrite = bufferedWrites.removeFirst()
             context.write(wrapOutboundOut(bufferedWrite.data), promise: bufferedWrite.promise)
         }
         context.flush()
+
+        while !bufferedWrites.isEmpty {
+            let bufferedWrite = bufferedWrites.removeFirst()
+            context.write(wrapOutboundOut(bufferedWrite.data), promise: bufferedWrite.promise)
+        }
     }
 }
 
 extension SOCKS5ServerHandler {
 
-    private func startHandshaking(context: ChannelHandlerContext) {
-        guard context.channel.isActive else {
-            return
-        }
+    private func receiveAuthenticationMethodRequest(context: ChannelHandlerContext) {
+        let req: Authentication.Method.Request?
         do {
-            try state.idle()
+            req = try readBuffer.readAuthenticationMethodRequest()
         } catch {
-            deliverOneError(error, context: context)
-        }
-    }
-
-    private func evaluateClientGreeting(context: ChannelHandlerContext) throws {
-        guard let clientGreeting = try inboundBuffer.readAuthenticationMethodRequest() else {
+            context.fireErrorCaught(error)
+            channelClose(context: context, reason: error)
             return
         }
+
+        guard let req = req else { return }
 
         // Choose authentication method
-        let method: Authentication.Method.Response
+        let response: Authentication.Method.Response
 
-        if authenticationRequired && clientGreeting.methods.contains(.usernamePassword) {
-            method = .init(method: .usernamePassword)
-            try state.greeting(.usernamePassword)
-        } else if clientGreeting.methods.contains(.noRequired) {
-            method = .init(method: .noRequired)
-            try state.greeting(.noRequired)
+        if authenticationRequired && req.methods.contains(.usernamePassword) {
+            response = .init(method: .usernamePassword)
+            state = .authorizing
+        } else if req.methods.contains(.noRequired) {
+            response = .init(method: .noRequired)
+            state = .addressing
         } else {
-            method = .init(method: .noAcceptable)
+            response = .init(method: .noAcceptable)
             // TODO: Error handling NO acceptable method.
-            state.failure()
         }
 
         var buffer = context.channel.allocator.buffer(capacity: 2)
-        buffer.writeAuthenticationMethodResponse(method)
+        buffer.writeAuthenticationMethodResponse(response)
 
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
     }
 
-    private func evaluateClientAuthenticationMsg(context: ChannelHandlerContext) throws {
-        guard let authMsg = try inboundBuffer.readAuthenticationRequest() else {
+    private func receiveAuthenticationRequest(context: ChannelHandlerContext) {
+        guard let authMsg = readBuffer.readAuthenticationRequest() else {
             // Need more bytes to parse authentication message.
             return
         }
 
-        try state.authorizing()
+        state = .addressing
 
-        let success =
-            authMsg.username == username && authMsg.password == passwordReference
+        let success = authMsg.username == username && authMsg.password == passwordReference
 
         var buffer = context.channel.allocator.buffer(capacity: 2)
         buffer.writeAuthenticationResponse(
@@ -184,78 +192,95 @@ extension SOCKS5ServerHandler {
         )
 
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
+
+        // If authentication failure then channel MUST close.
+        // https://datatracker.ietf.org/doc/html/rfc1929#section-2
+        guard !success else {
+            return
+        }
+        context.close(promise: nil)
     }
 
-    private func evaluateClientRequestAndReplies(context: ChannelHandlerContext) throws {
-        guard let request = try inboundBuffer.readRequestDetails() else { return }
-
-        let completion: (NetAddress) -> EventLoopFuture<Channel> = { _ in
-            context.eventLoop.makeCompletedFuture(.failure(SOCKSError.unexpectedRead))
-        }
-
-        let client = completion(request.address)
-
-        logger.info("connecting to proxy server...")
-
-        client.whenSuccess { channel in
-            self.handleGlue(peer: channel, context: context)
-        }
-
-        client.whenFailure { error in
-            self.state.failure()
-
-            // TODO: Fix reply
-            let response: Response = .init(reply: .hostUnreachable, boundAddress: request.address)
-
-            var buffer = context.channel.allocator.buffer(capacity: 16)
-            buffer.writeServerResponse(response)
-
-            context.writeAndFlush(self.wrapOutboundOut(buffer), promise: nil)
-
-            self.deliverOneError(error, context: context)
-        }
-    }
-
-    private func handleGlue(peer: Channel, context: ChannelHandlerContext) {
-        logger.info("proxy server connected \(peer.remoteAddress!)")
-
-        let response: Response = .init(
-            reply: .succeeded,
-            boundAddress: .socketAddress(peer.remoteAddress!)
-        )
+    private func evaluateClientRequestAndReplies(context: ChannelHandlerContext) {
+        precondition(state == .addressing)
+        let req: Request?
 
         do {
-            try state.establish()
+            req = try readBuffer.readRequestDetails()
         } catch {
-            deliverOneError(error, context: context)
+            context.fireErrorCaught(error)
+            channelClose(context: context, reason: error)
+            return
         }
 
-        context.fireUserInboundEventTriggered(SOCKSUserEvent.handshakeCompleted)
+        guard let req = req else {
+            return
+        }
+
+        channelInitializer(req.address).whenComplete {
+            switch $0 {
+                case .success(let channel):
+                    self.exchange(channel, context: context, userInfo: req)
+                case .failure:
+                    let response: Response = .init(
+                        reply: .hostUnreachable,
+                        boundAddress: req.address
+                    )
+
+                    var buffer = context.channel.allocator.buffer(capacity: 16)
+                    buffer.writeServerResponse(response)
+
+                    context.writeAndFlush(self.wrapOutboundOut(buffer), promise: nil)
+            }
+        }
+    }
+
+    private func exchange(_ channel: Channel, context: ChannelHandlerContext, userInfo: Request) {
+        logger.info(
+            "Tunneling request to \(userInfo.address) via \(String(describing: channel.remoteAddress))"
+        )
+
+        let response = Response(
+            reply: .succeeded,
+            boundAddress: .socketAddress(channel.remoteAddress!)
+        )
 
         var buffer = context.channel.allocator.buffer(capacity: 16)
         buffer.writeServerResponse(response)
 
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
 
+        state = .established
+
         let (localGlue, peerGlue) = GlueHandler.matchedPair()
 
         // Now we need to glue our channel and the peer channel together.
         context.channel.pipeline.addHandler(localGlue)
-            .and(peer.pipeline.addHandler(peerGlue))
-            .flatMap { _ in
-                context.pipeline.removeHandler(self)
-            }
-            .flatMap {
-                context.eventLoop.makeSucceededFuture(self.unbufferWrites(context: context))
-            }
-            .whenFailure { error in
-                // Close connected peer channel before closing our channel.
-                peer.close(promise: nil)
-                self.deliverOneError(error, context: context)
+            .and(channel.pipeline.addHandler(peerGlue))
+            .whenComplete {
+                switch $0 {
+                    case .success:
+                        self.unbufferWrites(context: context)
+
+                        if let byteBuffer = self.readBuffer, byteBuffer.readableBytes > 0 {
+                            self.readBuffer = nil
+                            context.fireChannelRead(self.wrapInboundOut(byteBuffer))
+                        }
+
+                        context.fireUserInboundEventTriggered(SOCKSUserEvent.handshakeCompleted)
+
+                        if let removalToken = self.removalToken {
+                            context.leavePipeline(removalToken: removalToken)
+                        }
+                    case .failure(let error):
+                        context.fireErrorCaught(error)
+                        self.channelClose(context: context, reason: error)
+                }
             }
     }
 
-    private func deliverOneError(_ error: Error, context: ChannelHandlerContext) {
-
+    private func channelClose(context: ChannelHandlerContext, reason: Error) {
+        logger.error("\(reason)")
+        context.close(promise: nil)
     }
 }
