@@ -195,7 +195,10 @@ let package = Package(
         ),
         .testTarget(
             name: "NIOSOCKS5Tests",
-            dependencies: ["NIOSOCKS5"]
+            dependencies: [
+                "NIOSOCKS5",
+                .product(name: "NIOEmbedded", package: "swift-nio"),
+            ]
         ),
         .testTarget(
             name: "NIOVMESSTests",
