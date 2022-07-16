@@ -66,10 +66,8 @@ extension ByteBuffer {
         return writeInteger(method.version.rawValue) + writeInteger(method.method.rawValue)
     }
 
-    mutating func readAuthenticationRequest() throws -> Authentication
-        .UsernameAuthenticationRequest?
-    {
-        return parseUnwindingIfNeeded { buffer in
+    mutating func readAuthenticationRequest() -> Authentication.UsernameAuthenticationRequest? {
+        parseUnwindingIfNeeded { buffer in
             guard
                 let version = buffer.readInteger(as: UInt8.self),
                 let lengthOfUsername = buffer.readInteger(as: UInt8.self),

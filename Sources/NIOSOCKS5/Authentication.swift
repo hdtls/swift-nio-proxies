@@ -76,7 +76,14 @@ public enum Authentication {
             return status == 0
         }
 
-        init(version: UInt8 = 0, status: UInt8) {
+        /// Initialize an instance of `UsernameAuthenticationResponse` with specified version and status.
+        ///
+        /// The VER field contains the current version of the subnegotiation, which is X'01'.
+        ///
+        /// - Parameters:
+        ///   - version: The current version of the SOCKS V5 Username/Password authentication subnegotiation.
+        ///   - status: The response status. zero if success otherwise failed.
+        init(version: UInt8 = 1, status: UInt8) {
             self.version = version
             self.status = status
         }
