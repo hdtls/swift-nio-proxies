@@ -101,12 +101,7 @@ final public class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHa
             return
         }
 
-        unbufferWrites(context: context)
-
-        if let byteBuffer = readBuffer, byteBuffer.readableBytes > 0 {
-            readBuffer = nil
-            context.fireChannelRead(wrapInboundOut(byteBuffer))
-        }
+        flushBuffers(context: context)
 
         context.leavePipeline(removalToken: removalToken)
     }
@@ -140,21 +135,30 @@ extension SOCKS5ServerHandler {
             context.write(wrapOutboundOut(bufferedWrite.data), promise: bufferedWrite.promise)
         }
     }
+
+    private func flushBuffers(context: ChannelHandlerContext) {
+        unbufferWrites(context: context)
+
+        if let byteBuffer = readBuffer, byteBuffer.readableBytes > 0 {
+            readBuffer = nil
+            context.fireChannelRead(wrapInboundOut(byteBuffer))
+        }
+    }
+
 }
 
 extension SOCKS5ServerHandler {
 
     private func receiveAuthenticationMethodRequest(context: ChannelHandlerContext) {
-        let req: Authentication.Method.Request?
-        do {
-            req = try readBuffer.readAuthenticationMethodRequest()
-        } catch {
-            context.fireErrorCaught(error)
-            channelClose(context: context, reason: error)
+        guard let req = readBuffer.readAuthenticationMethodRequest() else {
             return
         }
 
-        guard let req = req else { return }
+        guard req.version == .v5 else {
+            context.fireErrorCaught(SOCKSError.unsupportedProtocolVersion)
+            channelClose(context: context, reason: SOCKSError.unsupportedProtocolVersion)
+            return
+        }
 
         // Choose authentication method
         let response: Authentication.Method.Response
@@ -260,12 +264,7 @@ extension SOCKS5ServerHandler {
             .whenComplete {
                 switch $0 {
                     case .success:
-                        self.unbufferWrites(context: context)
-
-                        if let byteBuffer = self.readBuffer, byteBuffer.readableBytes > 0 {
-                            self.readBuffer = nil
-                            context.fireChannelRead(self.wrapInboundOut(byteBuffer))
-                        }
+                        self.flushBuffers(context: context)
 
                         context.fireUserInboundEventTriggered(SOCKSUserEvent.handshakeCompleted)
 

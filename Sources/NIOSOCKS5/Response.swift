@@ -33,21 +33,31 @@ import Foundation
 struct Response: Hashable {
 
     /// The SOCKS protocol version - we currently only support v5.
-    let version: ProtocolVersion = .v5
+    let version: ProtocolVersion
 
     /// The status of the connection - used to check if the request
     /// succeeded or failed.
-    var reply: Response.Reply
+    let reply: Response.Reply
+
+    let reserved: UInt8
 
     /// The host address.
-    var boundAddress: NetAddress
+    let boundAddress: NetAddress
 
-    /// Creates a new `Response`.
-    /// - parameter reply: The status of the connection - used to check if the request
-    /// succeeded or failed.
-    /// - parameter boundAddress: The host address.
-    init(reply: Response.Reply, boundAddress: NetAddress) {
+    /// Initialize an instance of `Response`.
+    /// - Parameters:
+    ///   - version: The socks protocol version.
+    ///   - reply: The status of the connection - used to check if the request succeeded or failed.
+    ///   - boundAddress: The host address.
+    init(
+        version: ProtocolVersion = .v5,
+        reply: Response.Reply,
+        reserved: UInt8 = 0,
+        boundAddress: NetAddress
+    ) {
+        self.version = version
         self.reply = reply
+        self.reserved = reserved
         self.boundAddress = boundAddress
     }
 }

@@ -12,10 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-public enum Authentication {
+enum Authentication {
 
     /// The SOCKS authentication method to use, defined in RFC 1928.
-    public struct Method: Equatable, RawRepresentable {
+    struct Method: Equatable, RawRepresentable {
         /// No authentication required
         static let noRequired = Method(rawValue: 0x00)
 
@@ -97,7 +97,7 @@ extension Authentication.Method {
     /// methods.
     struct Request {
         /// The protocol version.
-        let version: ProtocolVersion = .v5
+        let version: ProtocolVersion
 
         /// The client-supported authentication methods.
         /// The SOCKS server will select one to use.
@@ -105,7 +105,8 @@ extension Authentication.Method {
 
         /// Creates a new `ClientGreeting`
         /// - parameter methods: The client-supported authentication methods.
-        init(methods: [Authentication.Method]) {
+        init(version: ProtocolVersion = .v5, methods: [Authentication.Method]) {
+            self.version = version
             self.methods = methods
         }
     }
@@ -115,14 +116,15 @@ extension Authentication.Method {
     /// offered.
     struct Response {
         /// The SOCKS protocol version - we currently only support v5.
-        let version: ProtocolVersion = .v5
+        let version: ProtocolVersion
 
         /// The server's selected authentication method.
         var method: Authentication.Method
 
         /// Creates a new `MethodSelection` wrapping an `Authentication.Method`.
         /// - parameter method: The selected `Authentication.Method`.
-        init(method: Authentication.Method) {
+        init(version: ProtocolVersion = .v5, method: Authentication.Method) {
+            self.version = version
             self.method = method
         }
     }

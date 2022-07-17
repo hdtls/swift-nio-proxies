@@ -33,19 +33,28 @@ import Foundation
 struct Request: Hashable {
 
     /// The SOCKS protocol version - we currently only support v5.
-    let version: ProtocolVersion = .v5
+    let version: ProtocolVersion
 
     /// How to connect to the host.
-    var command: Command
+    let command: Command
+
+    let reserved: UInt8
 
     /// The target host address.
-    var address: NetAddress
+    let address: NetAddress
 
-    /// Creates a new `Request`.
-    /// - parameter command: How to connect to the host.
-    /// - parameter address: The target host address.
-    init(command: Command, address: NetAddress) {
+    /// Initialize an instance of `Request` with specified version command and address.
+    ///
+    /// - note: Only SOCKS Protocol V5 is supported.
+    init(
+        version: ProtocolVersion = .v5,
+        command: Command,
+        reserved: UInt8 = 0,
+        address: NetAddress
+    ) {
+        self.version = version
         self.command = command
+        self.reserved = reserved
         self.address = address
     }
 }

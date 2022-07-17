@@ -130,12 +130,7 @@ final public class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
             return
         }
 
-        unbufferWrites(context: context)
-
-        if let byteBuffer = readBuffer, byteBuffer.readableBytes > 0 {
-            readBuffer = nil
-            context.fireChannelRead(wrapInboundOut(byteBuffer))
-        }
+        flushBuffers(context: context)
 
         context.leavePipeline(removalToken: removalToken)
     }
@@ -169,6 +164,15 @@ extension SOCKS5ClientHandler {
             context.write(wrapOutboundOut(bufferedWrite.data), promise: bufferedWrite.promise)
         }
     }
+
+    private func flushBuffers(context: ChannelHandlerContext) {
+        unbufferWrites(context: context)
+
+        if let byteBuffer = readBuffer, byteBuffer.readableBytes > 0 {
+            readBuffer = nil
+            context.fireChannelRead(wrapInboundOut(byteBuffer))
+        }
+    }
 }
 
 extension SOCKS5ClientHandler {
@@ -195,18 +199,14 @@ extension SOCKS5ClientHandler {
 
     private func receiveAuthenticationMethodResponse(context: ChannelHandlerContext) {
         precondition(state == .greeting, "Invalid client state: \(state)")
-
-        var authentication: Authentication.Method.Response?
-        do {
-            authentication = try readBuffer.readAuthenticationMethodResponse()
-        } catch {
-            state = .failed
-            context.fireErrorCaught(error)
-            channelClose(context: context, reason: error)
+        guard let authentication = readBuffer.readAuthenticationMethodResponse() else {
             return
         }
 
-        guard let authentication = authentication else {
+        guard authentication.version == .v5 else {
+            state = .failed
+            context.fireErrorCaught(SOCKSError.unsupportedProtocolVersion)
+            channelClose(context: context, reason: SOCKSError.unsupportedProtocolVersion)
             return
         }
 
@@ -220,18 +220,18 @@ extension SOCKS5ClientHandler {
             case .noAcceptable:
                 state = .failed
                 context.fireErrorCaught(
-                    SOCKSError.authenticationFailed(reason: .noValidAuthenticationMethod)
+                    SOCKSError.authenticationFailed(reason: .noAcceptableMethod)
                 )
                 channelClose(
                     context: context,
-                    reason: SOCKSError.authenticationFailed(reason: .noValidAuthenticationMethod)
+                    reason: SOCKSError.authenticationFailed(reason: .noAcceptableMethod)
                 )
             default:
                 state = .failed
-                context.fireErrorCaught(SOCKSError.authenticationFailed(reason: .noMethodImpl))
+                context.fireErrorCaught(SOCKSError.authenticationFailed(reason: .unsupported))
                 channelClose(
                     context: context,
-                    reason: SOCKSError.authenticationFailed(reason: .noMethodImpl)
+                    reason: SOCKSError.authenticationFailed(reason: .unsupported)
                 )
         }
     }
@@ -254,11 +254,11 @@ extension SOCKS5ClientHandler {
         guard let authMsg = readBuffer?.readAuthenticationResponse(), authMsg.isSuccess else {
             state = .failed
             context.fireErrorCaught(
-                SOCKSError.authenticationFailed(reason: .incorrectUsernameOrPassword)
+                SOCKSError.authenticationFailed(reason: .badCredentials)
             )
             channelClose(
                 context: context,
-                reason: SOCKSError.authenticationFailed(reason: .incorrectUsernameOrPassword)
+                reason: SOCKSError.authenticationFailed(reason: .badCredentials)
             )
             return
         }
@@ -297,23 +297,17 @@ extension SOCKS5ClientHandler {
 
         guard response.reply == .succeeded else {
             state = .failed
-            context.fireErrorCaught(SOCKSError.replyFailed(reason: .withReply(response.reply)))
+            context.fireErrorCaught(SOCKSError.replyFailed(reason: .parse(response.reply)))
             channelClose(
                 context: context,
-                reason: SOCKSError.replyFailed(reason: .withReply(response.reply))
+                reason: SOCKSError.replyFailed(reason: .parse(response.reply))
             )
             return
         }
 
         state = .established
 
-        // After handshake success we need remove handler and clear buffers.
-        unbufferWrites(context: context)
-
-        if let byteBuffer = readBuffer, byteBuffer.readableBytes > 0 {
-            readBuffer = nil
-            context.fireChannelRead(wrapInboundOut(byteBuffer))
-        }
+        flushBuffers(context: context)
 
         context.fireUserInboundEventTriggered(SOCKSUserEvent.handshakeCompleted)
 

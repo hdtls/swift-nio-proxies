@@ -23,7 +23,7 @@ class MessageTests: XCTestCase {
         let expected = Authentication.Method.Request(methods: [.noRequired, .usernamePassword])
         var buffer = ByteBuffer()
         buffer.writeAuthenticationMethodRequest(expected)
-        let req = try buffer.readAuthenticationMethodRequest()
+        let req = buffer.readAuthenticationMethodRequest()
 
         XCTAssertEqual(req?.version, expected.version)
         XCTAssertEqual(req?.methods, expected.methods)
@@ -33,7 +33,7 @@ class MessageTests: XCTestCase {
         let expected = Authentication.Method.Response(method: .usernamePassword)
         var buffer = ByteBuffer()
         buffer.writeAuthenticationMethodResponse(expected)
-        let response = try buffer.readAuthenticationMethodResponse()
+        let response = buffer.readAuthenticationMethodResponse()
 
         XCTAssertEqual(response?.version, expected.version)
         XCTAssertEqual(response?.method, expected.method)

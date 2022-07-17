@@ -16,22 +16,24 @@ import Foundation
 
 extension ByteBuffer {
 
-    mutating func readAuthenticationMethodRequest() throws -> Authentication.Method.Request? {
-        try parseUnwindingIfNeeded { buffer in
-            guard
-                try buffer.readAndValidateProtocolVersion() != nil,
-                let numMethods = buffer.readInteger(as: UInt8.self),
-                buffer.readableBytes >= numMethods
-            else {
-                return nil
-            }
-
-            // safe to bang as we've already checked the buffer size
-            let methods = buffer.readBytes(length: Int(numMethods))!.map {
-                Authentication.Method(rawValue: $0)
-            }
-            return .init(methods: methods)
+    mutating func readAuthenticationMethodRequest() -> Authentication.Method.Request? {
+        guard let numberOfMethods = getInteger(at: readerIndex + 1, as: UInt8.self) else {
+            return nil
         }
+
+        guard readableBytes >= numberOfMethods + 2 else {
+            return nil
+        }
+
+        let version = readInteger(as: UInt8.self)!
+        moveReaderIndex(forwardBy: 1)
+
+        // safe to bang as we've already checked the buffer size
+        let methods = readBytes(length: Int(numberOfMethods))!.map {
+            Authentication.Method(rawValue: $0)
+        }
+
+        return .init(version: .init(rawValue: version), methods: methods)
     }
 
     @discardableResult
@@ -48,16 +50,15 @@ extension ByteBuffer {
         return written
     }
 
-    mutating func readAuthenticationMethodResponse() throws -> Authentication.Method.Response? {
-        return try parseUnwindingIfNeeded { buffer in
-            guard
-                try buffer.readAndValidateProtocolVersion() != nil,
-                let method = buffer.readInteger(as: UInt8.self)
-            else {
-                return nil
-            }
-            return .init(method: .init(rawValue: method))
+    mutating func readAuthenticationMethodResponse() -> Authentication.Method.Response? {
+        guard readableBytes >= 2 else {
+            return nil
         }
+
+        let version = readInteger(as: UInt8.self)!
+        let method = readInteger(as: UInt8.self)!
+
+        return .init(version: .init(rawValue: version), method: .init(rawValue: method))
     }
 
     @discardableResult
@@ -67,28 +68,30 @@ extension ByteBuffer {
     }
 
     mutating func readAuthenticationRequest() -> Authentication.UsernameAuthenticationRequest? {
-        parseUnwindingIfNeeded { buffer in
-            guard
-                let version = buffer.readInteger(as: UInt8.self),
-                let lengthOfUsername = buffer.readInteger(as: UInt8.self),
-                buffer.readableBytes >= lengthOfUsername
-            else {
-                return nil
-            }
+        var buffer = self
 
-            let username = buffer.readString(length: Int(lengthOfUsername))!
-
-            guard
-                let lenthOfPassword = buffer.readInteger(as: UInt8.self),
-                buffer.readableBytes >= lenthOfPassword
-            else {
-                return nil
-            }
-
-            let password = buffer.readString(length: Int(lenthOfPassword))!
-
-            return .init(version: version, username: username, password: password)
+        guard
+            let version = buffer.readInteger(as: UInt8.self),
+            let lengthOfUsername = buffer.readInteger(as: UInt8.self),
+            buffer.readableBytes >= lengthOfUsername
+        else {
+            return nil
         }
+
+        let username = buffer.readString(length: Int(lengthOfUsername))!
+
+        guard
+            let lenthOfPassword = buffer.readInteger(as: UInt8.self),
+            buffer.readableBytes >= lenthOfPassword
+        else {
+            return nil
+        }
+
+        let password = buffer.readString(length: Int(lenthOfPassword))!
+
+        self = buffer
+
+        return .init(version: version, username: username, password: password)
     }
 
     @discardableResult
@@ -107,15 +110,14 @@ extension ByteBuffer {
     }
 
     mutating func readAuthenticationResponse() -> Authentication.UsernameAuthenticationResponse? {
-        parseUnwindingIfNeeded { buffer in
-            guard let version = buffer.readInteger(as: UInt8.self),
-                let status = buffer.readInteger(as: UInt8.self)
-            else {
-                return nil
-            }
-
-            return .init(version: version, status: status)
+        guard readableBytes >= 2 else {
+            return nil
         }
+
+        let version = readInteger(as: UInt8.self)!
+        let status = readInteger(as: UInt8.self)!
+
+        return .init(version: version, status: status)
     }
 
     @discardableResult
@@ -132,30 +134,26 @@ extension ByteBuffer {
         return written
     }
 
-    @discardableResult
-    mutating func writeServerMessage(_ message: ServerMessage) -> Int {
-        switch message {
-            case .selectedAuthenticationMethod(let method):
-                return writeAuthenticationMethodResponse(method)
-            case .response(let response):
-                return writeServerResponse(response)
-            case .authenticationData(var buffer, _):
-                return writeBuffer(&buffer)
-        }
-    }
-
     mutating func readRequestDetails() throws -> Request? {
-        try parseUnwindingIfNeeded { buffer -> Request? in
-            guard
-                try buffer.readAndValidateProtocolVersion() != nil,
-                let command = buffer.readInteger(as: UInt8.self),
-                try buffer.readAndValidateReserved() != nil,
-                let address = try buffer.readAddress()
-            else {
-                return nil
-            }
-            return .init(command: .init(rawValue: command), address: address)
+        var buffer = self
+
+        guard
+            let version = buffer.readInteger(as: UInt8.self),
+            let command = buffer.readInteger(as: UInt8.self),
+            let reserved = buffer.readInteger(as: UInt8.self),
+            let address = try buffer.readAddress()
+        else {
+            return nil
         }
+
+        self = buffer
+
+        return .init(
+            version: .init(rawValue: version),
+            command: .init(rawValue: command),
+            reserved: reserved,
+            address: address
+        )
     }
 
     @discardableResult
@@ -168,47 +166,30 @@ extension ByteBuffer {
     }
 
     mutating func readServerResponse() throws -> Response? {
-        return try parseUnwindingIfNeeded { buffer in
-            guard
-                try buffer.readAndValidateProtocolVersion() != nil,
-                let reply = buffer.readInteger(as: UInt8.self).map({ Response.Reply(rawValue: $0) }
-                ),
-                try buffer.readAndValidateReserved() != nil,
-                let boundAddress = try buffer.readAddress()
-            else {
-                return nil
-            }
-            return .init(reply: reply, boundAddress: boundAddress)
+        var buffer = self
+        guard
+            let version = buffer.readInteger(as: UInt8.self),
+            let reply = buffer.readInteger(as: UInt8.self).map(Response.Reply.init),
+            let reserved = buffer.readInteger(as: UInt8.self),
+            let boundAddress = try buffer.readAddress()
+        else {
+            return nil
         }
+        
+        self = buffer
+
+        return .init(
+            version: .init(rawValue: version),
+            reply: reply,
+            reserved: reserved,
+            boundAddress: boundAddress
+        )
     }
 
     @discardableResult
     mutating func writeServerResponse(_ response: Response) -> Int {
-        writeInteger(response.version.rawValue) + writeInteger(response.reply.rawValue)
+        writeInteger(response.version.rawValue)
+            + writeInteger(response.reply.rawValue)
             + writeInteger(UInt8.zero) + writeAddress(response.boundAddress)
-    }
-
-    mutating func readAndValidateProtocolVersion() throws -> UInt8? {
-        return try parseUnwindingIfNeeded { buffer -> UInt8? in
-            guard let version = buffer.readInteger(as: UInt8.self) else {
-                return nil
-            }
-            guard version == 0x05 else {
-                throw SOCKSError.unsupportedProtocolVersion(actual: version)
-            }
-            return version
-        }
-    }
-
-    mutating func readAndValidateReserved() throws -> UInt8? {
-        return try parseUnwindingIfNeeded { buffer -> UInt8? in
-            guard let reserved = buffer.readInteger(as: UInt8.self) else {
-                return nil
-            }
-            guard reserved == 0x00 else {
-                throw SOCKSError.invalidReservedByte(actual: reserved)
-            }
-            return reserved
-        }
     }
 }

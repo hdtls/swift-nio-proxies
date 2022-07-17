@@ -15,36 +15,37 @@
 /// Wrapper for SOCKS protcol error.
 public enum SOCKSError: Error {
 
-    /// The SOCKS client was in a different state to that required.
-    case invalidClientState
-
-    /// The SOCKS server was in a different state to that required.
-    case invalidServerState
-
     /// The protocol version was something other than *5*. Note that
     /// we currently only supported SOCKv5.
-    case unsupportedProtocolVersion(actual: UInt8)
-
-    /// Reserved bytes should always be the `NULL` byte *0x00*. Something
-    /// else was encountered.
-    case invalidReservedByte(actual: UInt8)
-
-    /// SOCKSv5 only supports IPv4 (*0x01*), IPv6 (*0x04*), or FQDN(*0x03*).
-    case invalidAddressType(actual: UInt8)
-
-    /// The server selected an authentication method not supported by the client.
-    case invalidAuthenticationSelection(Authentication.Method)
+    case unsupportedProtocolVersion
 
     ///  The SOCKS server failed to connect to the target host.
     public enum ReplyFailureReason {
+
+        /// The SOCKS server encountered an internal failure.
         case generalSOCKSServerFailure
+
+        /// The connection to the host was not allowed.
         case connectionNotAllowedByRuleset
+
+        /// The host network is not reachable.
         case networkUnreachable
+
+        /// The target host was not reachable.
         case hostUnreachable
+
+        /// The connection tot he host was refused
         case connectionRefused
+
+        /// The host address's TTL has expired.
         case TTLExpired
+
+        /// The provided command is not supported.
         case commandNotSupported
+
+        /// The provided address type is not supported.
         case addressTypeNotSupported
+
         case unassigned
     }
 
@@ -54,22 +55,20 @@ public enum SOCKSError: Error {
     case unexpectedRead
 
     public enum AuthenticationFailureReason {
-        case incorrectUsernameOrPassword
-        case noMethodImpl
+        /// The authentication credentials is incorrect.
+        case badCredentials
+
+        case unsupported
+
         /// The client and server were unable to agree on an authentication method.
-        case noValidAuthenticationMethod
+        case noAcceptableMethod
     }
 
     case authenticationFailed(reason: AuthenticationFailureReason)
-
 }
 
 extension SOCKSError.ReplyFailureReason {
-    static func withReply(_ reply: Response.Reply?) -> Self {
-        guard let reply = reply else {
-            return .unassigned
-        }
-
+    static func parse(_ reply: Response.Reply) -> Self {
         switch reply {
             case .generalSOCKSServerFailure:
                 return .generalSOCKSServerFailure
@@ -121,11 +120,11 @@ extension SOCKSError.ReplyFailureReason {
 extension SOCKSError.AuthenticationFailureReason {
     var localizedDescription: String {
         switch self {
-            case .noMethodImpl:
+            case .unsupported:
                 return "METHOD specific negotiation not implemented."
-            case .incorrectUsernameOrPassword:
+            case .badCredentials:
                 return "METHOD specific negotiation failed, incorrect username or password"
-            case .noValidAuthenticationMethod:
+            case .noAcceptableMethod:
                 return "Unable to agree on an authentication method."
         }
     }
@@ -134,18 +133,8 @@ extension SOCKSError.AuthenticationFailureReason {
 extension SOCKSError: CustomStringConvertible {
     public var description: String {
         switch self {
-            case .invalidClientState:
-                return "Invalid client state."
-            case .invalidServerState:
-                return "Invalid server state."
-            case .unsupportedProtocolVersion(actual: let version):
-                return "Invalid SOCKS protocol version \(version)."
-            case .invalidReservedByte(actual: let reserved):
-                return "Invalid reserved byte \(reserved)."
-            case .invalidAddressType(actual: let type):
-                return "Invalid task address type \(type)."
-            case .invalidAuthenticationSelection:
-                return "Invalid authentication selection."
+            case .unsupportedProtocolVersion:
+                return "Unsupported SOCKS protocol version."
             case .replyFailed(let reason):
                 return reason.localizedDescription
             case .authenticationFailed(let reason):
