@@ -37,14 +37,6 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "_NIONetbotUtils",
-            dependencies: [
-                .product(name: "Logging", package: "swift-log"),
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOPosix", package: "swift-nio"),
-            ]
-        ),
-        .target(
             name: "ConnectionPool",
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
@@ -80,19 +72,18 @@ let package = Package(
         .target(
             name: "NIOHTTPProxy",
             dependencies: [
-                "_NIONetbotUtils",
+                "NIONetbotMisc",
                 "ConnectionPool",
                 "NIOHTTPMitM",
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOHTTP1", package: "swift-nio"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
-                .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
             ]
         ),
         .target(
             name: "NIONetbot",
             dependencies: [
-                "_NIONetbotUtils",
+                "NIONetbotMisc",
                 "NIODNS",
                 "NIOHTTPProxy",
                 "NIOSOCKS5",
@@ -108,9 +99,17 @@ let package = Package(
             ]
         ),
         .target(
+            name: "NIONetbotMisc",
+            dependencies: [
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+            ]
+        ),
+        .target(
             name: "NIOSOCKS5",
             dependencies: [
-                "_NIONetbotUtils",
+                "NIONetbotMisc",
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
             ]
@@ -118,7 +117,7 @@ let package = Package(
         .target(
             name: "NIOSS",
             dependencies: [
-                "_NIONetbotUtils",
+                "NIONetbotMisc",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "NIOCore", package: "swift-nio"),
             ]
@@ -126,17 +125,17 @@ let package = Package(
         .target(
             name: "NIOTrojan",
             dependencies: [
-                "_NIONetbotUtils",
+                "NIONetbotMisc",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOSSL", package: "swift-nio"),
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
             ]
         ),
         .target(
             name: "NIOVMESS",
             dependencies: [
-                "_NIONetbotUtils",
+                "NIONetbotMisc",
                 "SHAKE128",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "NIOCore", package: "swift-nio"),
@@ -151,17 +150,10 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "_NIONetbotUtilsTests",
-            dependencies: [
-                "_NIONetbotUtils",
-                .product(name: "NIO", package: "swift-nio"),
-            ]
-        ),
-        .testTarget(
             name: "NIONetbotTests",
             dependencies: [
                 "NIONetbot",
-                "_NIONetbotUtils",
+                "NIONetbotMisc",
                 "NIOHTTPProxy",
                 "NIOSOCKS5",
                 "NIOSS",
@@ -169,10 +161,16 @@ let package = Package(
                 .product(name: "NIO", package: "swift-nio"),
                 .product(name: "NIOHTTP1", package: "swift-nio"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
-                .product(name: "NIOExtras", package: "swift-nio-extras"),
                 .product(name: "NIOTransportServices", package: "swift-nio-transport-services"),
             ],
             exclude: ["RuleTests.swift.gyb"]
+        ),
+        .testTarget(
+            name: "NIONetbotMiscTests",
+            dependencies: [
+                "NIONetbotMisc",
+                .product(name: "NIO", package: "swift-nio"),
+            ]
         ),
         .testTarget(
             name: "NIOHTTPProxyTests",
@@ -180,7 +178,7 @@ let package = Package(
                 "NIOHTTPProxy",
                 .product(name: "NIO", package: "swift-nio"),
                 .product(name: "NIOHTTP1", package: "swift-nio"),
-                .product(name: "NIOSSL", package: "swift-nio"),
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
             ]
         ),
         .testTarget(

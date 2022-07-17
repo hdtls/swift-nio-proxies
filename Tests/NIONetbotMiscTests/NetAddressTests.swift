@@ -14,7 +14,7 @@
 
 import XCTest
 
-@testable import _NIONetbotUtils
+@testable import NIONetbotMisc
 
 class NetAddressTests: XCTestCase {
 

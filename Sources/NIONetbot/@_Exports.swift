@@ -25,4 +25,4 @@
 @_exported import NIOSS
 @_exported import NIOTrojan
 @_exported import NIOVMESS
-@_exported import _NIONetbotUtils
+@_exported import NIONetbotMisc

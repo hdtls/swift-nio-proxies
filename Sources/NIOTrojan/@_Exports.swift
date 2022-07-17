@@ -15,4 +15,4 @@
 @_exported import Logging
 @_exported import NIOCore
 @_exported import NIOSSL
-@_exported import _NIONetbotUtils
+@_exported import NIONetbotMisc
