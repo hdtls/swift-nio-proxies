@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
+import NIOCore
 
 final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChannelHandler {
 
@@ -35,7 +35,7 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     private var eventBuffer: CircularBuffer<Event> = .init(initialCapacity: 0)
 
     /// The Logger for this handler.
-    public let logger: Logger
+    private let logger: Logger
 
     public let completion: (Request, Channel) throws -> Void
 
@@ -57,15 +57,6 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
         self.state = .idle
     }
 
-    public func handlerAdded(context: ChannelHandlerContext) {
-        startHandshaking(context: context)
-    }
-
-    public func channelActive(context: ChannelHandlerContext) {
-        startHandshaking(context: context)
-        context.fireChannelActive()
-    }
-
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         guard state != .active else {
             // All inbound events will be buffered until handle remove from pipeline.
@@ -73,50 +64,50 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
             return
         }
 
-        do {
-            switch unwrapInboundIn(data) {
-                case .head(let head) where state == .evaluating:
-                    headPart = head
-                    guard head.method != .CONNECT else {
-                        return
-                    }
-                    // Strip hop-by-hop header based on rfc2616.
-                    headPart.headers = headPart.headers.trimmingFieldsInHopByHop()
-
-                    eventBuffer.append(.channelRead(data: wrapInboundOut(.head(headPart))))
-                    try evaluateClientGreeting(context: context)
-
-                case .body where headPart != nil && headPart.method != .CONNECT:
-                    eventBuffer.append(.channelRead(data: data))
-                case .end where headPart != nil:
-                    guard headPart.method != .CONNECT else {
-                        try evaluateClientGreeting(context: context)
-                        return
-                    }
-                    eventBuffer.append(.channelRead(data: data))
-
-                default:
-                    throw HTTPProxyError.invalidHTTPOrdering
-            }
-        } catch {
-            deliverOneError(error, context: context)
+        switch unwrapInboundIn(data) {
+            case .head(let head) where state == .idle:
+                headPart = head
+                state = .handshaking
+                guard head.method != .CONNECT else {
+                    return
+                }
+                // Strip hop-by-hop header based on rfc2616.
+                headPart.headers = headPart.headers.trimmingFieldsInHopByHop()
+                eventBuffer.append(.channelRead(data: wrapInboundOut(.head(headPart))))
+                evaluateClientGreeting(context: context)
+            case .body where headPart != nil && headPart.method != .CONNECT:
+                eventBuffer.append(.channelRead(data: data))
+            case .end where headPart != nil:
+                guard headPart.method != .CONNECT else {
+                    evaluateClientGreeting(context: context)
+                    return
+                }
+                eventBuffer.append(.channelRead(data: data))
+            default:
+                context.fireErrorCaught(HTTPProxyError.invalidHTTPOrdering)
+                context.close(promise: nil)
         }
-    }
-
-    public func channelReadComplete(context: ChannelHandlerContext) {
-        // All events will be buffered before the `self.state` becomes `active`.
-        // After the state becomes active, the handler will be automatically removed
-        // and all cached events will be unbuffered, so we only need buffer this
-        // event at this time.
-        eventBuffer.append(.channelReadComplete)
     }
 
     public func removeHandler(
         context: ChannelHandlerContext,
         removalToken: ChannelHandlerContext.RemovalToken
     ) {
-        assert(state == .active, "\(self) should never remove before proxy pipe active.")
+        precondition(context.handler === self)
+        guard state == .active else {
 
+            return
+        }
+
+        flushBuffers(context: context)
+
+        context.leavePipeline(removalToken: removalToken)
+    }
+}
+
+extension HTTPProxyServerHandler {
+
+    func flushBuffers(context: ChannelHandlerContext) {
         // We're being removed from the pipeline. If we have buffered events, deliver them.
         while !eventBuffer.isEmpty {
             switch eventBuffer.removeFirst() {
@@ -126,45 +117,35 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
                     context.fireChannelReadComplete()
             }
         }
-
-        context.leavePipeline(removalToken: removalToken)
     }
 }
 
 extension HTTPProxyServerHandler {
 
-    private func startHandshaking(context: ChannelHandlerContext) {
-        guard context.channel.isActive, state == .idle else {
-            return
-        }
-        do {
-            try state.evaluating()
-        } catch {
-            deliverOneError(error, context: context)
-        }
-    }
-
-    private func evaluateClientGreeting(context: ChannelHandlerContext) throws {
+    private func evaluateClientGreeting(context: ChannelHandlerContext) {
         guard let head = headPart else {
-            throw HTTPProxyError.invalidHTTPOrdering
+            return
         }
 
         // Only CONNECT tunnel need remove default http server pipelines.
-        if headPart.method == .CONNECT {
+        if head.method == .CONNECT {
             // New request is complete. We don't want any more data from now on.
-            context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
-                .whenSuccess { httpDecoder in
-                    context.pipeline.removeHandler(httpDecoder, promise: nil)
-                }
+            _ = context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
+                .flatMap(context.pipeline.removeHandler)
         }
 
         // Proxy Authorization
         if let authorization = authorization {
             guard let basicAuthorization = head.headers.proxyBasicAuthorization else {
-                throw HTTPProxyError.unacceptable(code: .proxyAuthenticationRequired)
+                context.fireErrorCaught(
+                    HTTPProxyError.unacceptable(code: .proxyAuthenticationRequired)
+                )
+                return
             }
+
             guard authorization == basicAuthorization else {
-                throw HTTPProxyError.unacceptable(code: .unauthorized)
+                context.fireErrorCaught(HTTPProxyError.unacceptable(code: .unauthorized))
+                return
             }
         }
 
@@ -181,15 +162,10 @@ extension HTTPProxyServerHandler {
     }
 
     private func exchange(_ channel: Channel, context: ChannelHandlerContext, userInfo: Request) {
+        precondition(state == .handshaking, "invalid http order")
         logger.info(
             "Tunneling request to \(userInfo.uri) via \(String(describing: channel.remoteAddress))"
         )
-
-        do {
-            try state.established()
-        } catch {
-            deliverOneError(error, context: context)
-        }
 
         let promise = context.eventLoop.makePromise(of: Void.self)
 
@@ -214,7 +190,9 @@ extension HTTPProxyServerHandler {
         let (localGlue, peerGlue) = GlueHandler.matchedPair()
         promise.futureResult
             .flatMapThrowing {
+                self.state = .active
                 try self.completion(userInfo, channel)
+                context.fireUserInboundEventTriggered(UserEvent.established(channel: channel))
                 try context.pipeline.syncOperations.addHandler(localGlue)
                 try channel.pipeline.syncOperations.addHandler(peerGlue)
             }

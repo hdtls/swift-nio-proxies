@@ -14,7 +14,7 @@
 
 import NIOCore
 
-public final class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, RemovableChannelHandler {
+final public class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, RemovableChannelHandler {
 
     public typealias InboundIn = HTTPClientResponsePart
     public typealias OutboundIn = NIOAny
@@ -48,12 +48,14 @@ public final class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, Remova
     }
 
     public func handlerAdded(context: ChannelHandlerContext) {
-        startHandshaking(context: context)
+        if context.channel.isActive {
+            performCONNECTHandshake(context: context)
+        }
     }
 
     public func channelActive(context: ChannelHandlerContext) {
-        startHandshaking(context: context)
         context.fireChannelActive()
+        performCONNECTHandshake(context: context)
     }
 
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -62,22 +64,14 @@ public final class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, Remova
             return
         }
 
-        do {
-            switch unwrapInboundIn(data) {
-                case .head(let head) where state == .evaluating:
-                    switch head.status.code {
-                        case 200..<300:
-                            headPart = head
-                        default:
-                            throw HTTPProxyError.invalidProxyResponse(head)
-                    }
-                case .end where state == .evaluating && headPart != nil:
-                    try established(context: context)
-                default:
-                    throw HTTPProxyError.invalidHTTPOrdering
-            }
-        } catch {
-            deliverOneError(error, context: context)
+        switch unwrapInboundIn(data) {
+            case .head(let head) where state == .handshaking:
+                headPart = head
+            case .end where state == .handshaking && headPart != nil:
+                established(context: context)
+            default:
+                context.fireErrorCaught(HTTPProxyError.invalidHTTPOrdering)
+                channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
         }
     }
 
@@ -120,35 +114,27 @@ extension HTTP1ClientCONNECTTunnelHandler {
 
 extension HTTP1ClientCONNECTTunnelHandler {
 
-    private func startHandshaking(context: ChannelHandlerContext) {
+    private func performCONNECTHandshake(context: ChannelHandlerContext) {
         guard context.channel.isActive, state == .idle else {
             return
         }
-        do {
-            try state.evaluating()
-            try sendClientGreeting(context: context)
-        } catch {
-            deliverOneError(error, context: context)
-        }
-    }
 
-    private func sendClientGreeting(context: ChannelHandlerContext) throws {
-        var head: HTTPRequestHead
+        state = .handshaking
 
+        let uri: String
         switch destinationAddress {
             case .domainPort(let domain, let port):
-                head = .init(version: .http1_1, method: .CONNECT, uri: "\(domain):\(port)")
+                uri = "\(domain):\(port)"
             case .socketAddress(let socketAddress):
                 guard let host = socketAddress.ipAddress else {
-                    throw HTTPProxyError.invalidURL(url: "nil")
+                    context.fireErrorCaught(HTTPProxyError.invalidURL(url: "nil"))
+                    channelClose(context: context, reason: HTTPProxyError.invalidURL(url: "nil"))
+                    return
                 }
-                head = .init(
-                    version: .http1_1,
-                    method: .CONNECT,
-                    uri: "\(host):\(socketAddress.port ?? 80)"
-                )
+                uri = "\(host):\(socketAddress.port ?? 80)"
         }
 
+        var head: HTTPRequestHead = .init(version: .http1_1, method: .CONNECT, uri: uri)
         if authenticationRequired {
             head.headers.proxyBasicAuthorization = .init(
                 username: username,
@@ -160,25 +146,34 @@ extension HTTP1ClientCONNECTTunnelHandler {
         context.writeAndFlush(NIOAny(HTTPClientRequestPart.end(nil)), promise: nil)
     }
 
-    private func established(context: ChannelHandlerContext) throws {
+    private func established(context: ChannelHandlerContext) {
         context.pipeline.handler(type: HTTPRequestEncoder.self)
-            .flatMap(context.pipeline.removeHandler(_:))
+            .flatMap {
+                context.pipeline.removeHandler($0)
+            }
             .flatMap {
                 context.pipeline.handler(type: ByteToMessageHandler<HTTPResponseDecoder>.self)
             }
-            .flatMap(context.pipeline.removeHandler(_:))
-            .flatMapThrowing { _ in
-                self.unbufferWrites(context: context)
-                try self.state.established()
+            .flatMap {
+                context.pipeline.removeHandler($0)
             }
-            .flatMap { context.pipeline.removeHandler(self) }
-            .whenFailure { error in
-                self.deliverOneError(error, context: context)
+            .whenComplete {
+                switch $0 {
+                    case .success:
+                        self.state = .active
+                        self.unbufferWrites(context: context)
+                        context.fireUserInboundEventTriggered(
+                            UserEvent.established(channel: context.channel)
+                        )
+                        context.pipeline.removeHandler(self, promise: nil)
+                    case .failure(let error):
+                        context.fireErrorCaught(error)
+                        self.channelClose(context: context, reason: error)
+                }
             }
     }
 
-    private func deliverOneError(_ error: Error, context: ChannelHandlerContext) {
-        context.fireErrorCaught(error)
+    private func channelClose(context: ChannelHandlerContext, reason: Error) {
         context.close(promise: nil)
     }
 }

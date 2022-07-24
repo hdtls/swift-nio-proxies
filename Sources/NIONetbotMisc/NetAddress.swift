@@ -41,7 +41,7 @@ extension ByteBuffer {
     /// - Throws: May throw  `NetAddressError.invalidAddressType` if address type is illegal.
     /// - Returns: If success return `NetAddress` else return nil for need more bytes.
     public mutating func readAddress() throws -> NetAddress? {
-        return try parseUnwindingIfNeeded { buffer in
+        try parseUnwinding { buffer in
             guard let rawValue = buffer.readInteger(as: UInt8.self) else {
                 return nil
             }
@@ -100,8 +100,7 @@ extension ByteBuffer {
         }
     }
 
-    public mutating func parseUnwindingIfNeeded<T>(_ closure: (inout ByteBuffer) throws -> T?)
-        rethrows
+    public mutating func parseUnwinding<T>(_ closure: (inout ByteBuffer) throws -> T?) rethrows
         -> T?
     {
         let save = self

@@ -20,29 +20,11 @@ enum ConnectionState: Equatable {
     case idle
 
     /// We are evaluating request or response message.
-    case evaluating
+    case handshaking
 
     /// After evaluating finished, tunnel become active.
     case active
 
     /// Error
     case failed
-
-    /// Move state into `.evaluating`.
-    /// - Throws: HTTPProxyError.invalidServerState if previouse state is not equal to `.idle`.
-    mutating func evaluating() throws {
-        guard self == .idle else {
-            throw HTTPProxyError.invalidServerState
-        }
-        self = .evaluating
-    }
-
-    /// Move state inot `.active`
-    /// - Throws: HTTPProxyError.invalidServerState if previouse state is not equal to `.evaluating`.
-    mutating func established() throws {
-        guard self == .evaluating else {
-            throw HTTPProxyError.invalidServerState
-        }
-        self = .active
-    }
 }
