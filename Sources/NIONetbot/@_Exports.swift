@@ -20,9 +20,9 @@
 @_exported import NIOExtras
 @_exported import NIOHTTP1
 @_exported import NIOHTTPProxy
+@_exported import NIONetbotMisc
 @_exported import NIOPosix
 @_exported import NIOSOCKS5
 @_exported import NIOSS
 @_exported import NIOTrojan
 @_exported import NIOVMESS
-@_exported import NIONetbotMisc

@@ -175,7 +175,7 @@ extension ByteBuffer {
         else {
             return nil
         }
-        
+
         self = buffer
 
         return .init(
