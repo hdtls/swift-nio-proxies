@@ -20,38 +20,35 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     public typealias InboundOut = HTTPServerRequestPart
     public typealias OutboundOut = HTTPServerResponsePart
 
-    private var state: ConnectionState
-
-    /// The task request head part. this value is updated after `head` part received.
-    private var headPart: HTTPRequestHead!
-
     private enum Event {
         case channelRead(data: NIOAny)
         case channelReadComplete
     }
 
+    private var state: ConnectionState
+
+    /// The task request head part. this value is updated after `head` part received.
+    private var headPart: HTTPRequestHead!
+    private let username: String
+    private let passwordReference: String
+    private let authenticationRequired: Bool
+
     /// When a proxy request is received, we will send a new request to the target server.
     /// During the request is established, we need to buffer events.
     private var eventBuffer: CircularBuffer<Event> = .init(initialCapacity: 0)
-
-    /// The Logger for this handler.
-    private let logger: Logger
-
-    public let completion: (Request, Channel) throws -> Void
-
-    /// The credentials to authenticate a user.
-    public let authorization: BasicAuthorization?
-
+    private let completion: (Request, Channel) throws -> Void
     private var channelInitializer: (Request) -> EventLoopFuture<Channel>
 
     public init(
-        logger: Logger,
-        authorization: BasicAuthorization? = nil,
+        username: String,
+        passwordReference: String,
+        authenticationRequired: Bool,
         channelInitializer: @escaping (Request) -> EventLoopFuture<Channel>,
         completion: @escaping (Request, Channel) throws -> Void
     ) {
-        self.logger = logger
-        self.authorization = authorization
+        self.username = username
+        self.passwordReference = passwordReference
+        self.authenticationRequired = authenticationRequired
         self.channelInitializer = channelInitializer
         self.completion = completion
         self.state = .idle
@@ -135,15 +132,24 @@ extension HTTPProxyServerHandler {
         }
 
         // Proxy Authorization
-        if let authorization = authorization {
-            guard let basicAuthorization = head.headers.proxyBasicAuthorization else {
+        if authenticationRequired {
+            guard let authorization = head.headers.proxyBasicAuthorization else {
+                channelClose(
+                    context: context,
+                    reason: HTTPProxyError.unacceptable(code: .proxyAuthenticationRequired)
+                )
                 context.fireErrorCaught(
                     HTTPProxyError.unacceptable(code: .proxyAuthenticationRequired)
                 )
                 return
             }
 
-            guard authorization == basicAuthorization else {
+            guard username == authorization.username, passwordReference == authorization.password
+            else {
+                channelClose(
+                    context: context,
+                    reason: HTTPProxyError.unacceptable(code: .unauthorized)
+                )
                 context.fireErrorCaught(HTTPProxyError.unacceptable(code: .unauthorized))
                 return
             }
@@ -156,16 +162,13 @@ extension HTTPProxyServerHandler {
                 case .success(let channel):
                     self.exchange(channel, context: context, userInfo: req)
                 case .failure(let error):
-                    self.deliverOneError(error, context: context)
+                    self.channelClose(context: context, reason: error)
             }
         }
     }
 
     private func exchange(_ channel: Channel, context: ChannelHandlerContext, userInfo: Request) {
         precondition(state == .handshaking, "invalid http order")
-        logger.info(
-            "Tunneling request to \(userInfo.uri) via \(String(describing: channel.remoteAddress))"
-        )
 
         let promise = context.eventLoop.makePromise(of: Void.self)
 
@@ -200,16 +203,14 @@ extension HTTPProxyServerHandler {
                 context.pipeline.removeHandler(self)
             }
             .whenFailure { error in
-                self.deliverOneError(error, context: context)
+                self.channelClose(context: context, reason: error)
             }
     }
 
-    private func deliverOneError(_ error: Error, context: ChannelHandlerContext) {
-        logger.error("\(error)")
-
+    private func channelClose(context: ChannelHandlerContext, reason: Error) {
         var head: HTTPResponseHead?
 
-        if let err = error as? HTTPProxyError {
+        if let err = reason as? HTTPProxyError {
             switch err {
                 case .invalidProxyResponse(let response):
                     head = response
@@ -234,7 +235,7 @@ extension HTTPProxyServerHandler {
             context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
         }
 
-        context.fireErrorCaught(error)
+        context.fireErrorCaught(reason)
         context.close(promise: nil)
     }
 }

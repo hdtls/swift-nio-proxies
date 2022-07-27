@@ -99,7 +99,6 @@ public class App {
                 }
                 .childChannelInitializer { channel in
                     channel.pipeline.configureHTTPProxyServerPipeline(
-                        logger: self.logger,
                         enableHTTPCapture: self.isHTTPCaptureEnabled,
                         enableMitM: self.isMitmEnabled,
                         mitmConfig: self.profile.mitm

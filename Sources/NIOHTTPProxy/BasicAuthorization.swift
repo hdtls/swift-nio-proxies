@@ -16,15 +16,15 @@ import Foundation
 import NIOHTTP1
 
 /// A basic username and password.
-public struct BasicAuthorization: Equatable {
+struct BasicAuthorization: Equatable {
     /// The username, sometimes an email address
-    public let username: String
+    let username: String
 
     /// The plaintext password
-    public let password: String
+    let password: String
 
     /// Create a new `BasicAuthorization`.
-    public init(username: String, password: String) {
+    init(username: String, password: String) {
         self.username = username
         self.password = password
     }
@@ -32,9 +32,9 @@ public struct BasicAuthorization: Equatable {
 
 extension HTTPHeaders {
 
-    public var proxyBasicAuthorization: BasicAuthorization? {
+    var proxyBasicAuthorization: BasicAuthorization? {
         get {
-            guard let string = self.first(name: .authorization) else {
+            guard let string = self.first(name: .proxyAuthorization) else {
                 return nil
             }
 

@@ -19,25 +19,43 @@ final public class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, Remova
     public typealias InboundIn = HTTPClientResponsePart
     public typealias OutboundIn = NIOAny
 
-    private let logger: Logger
+    /// The usename used to authenticate this proxy connection.
     private let username: String
+
+    /// The password used to authenticate this proxy connection.
     private let passwordReference: String
+
+    /// A boolean value deterinse whether client should perform proxy authentication.
     private let authenticationRequired: Bool
+
+    /// A boolean value determinse whether client should use HTTP CONNECT tunnel to proxy connection.
     private let preferHTTPTunneling: Bool
+
+    /// The destination for this proxy connection.
     private let destinationAddress: NetAddress
     private var state: ConnectionState
     private var headPart: HTTPResponseHead?
+
+    /// The circular buffer to buffer channel write before handshake established.
+    ///
+    /// All buffered write will unbuffered when proxy established.
     private var bufferedWrites: MarkedCircularBuffer<BufferedWrite>
 
+    /// Initialize an instance of `HTTP1ClientCONNECTTunnelHandler` with specified parameters.
+    ///
+    /// - Parameters:
+    ///   - username: Username for proxy authentication.
+    ///   - passwordReference: Password for proxy authentication.
+    ///   - authenticationRequired: A boolean value deterinse whether client should perform proxy authentication.
+    ///   - preferHTTPTunneling: A boolean value determinse whether client should use HTTP CONNECT tunnel to proxy connection.
+    ///   - destinationAddress: The destination for this proxy connection.
     public init(
-        logger: Logger,
         username: String,
         passwordReference: String,
         authenticationRequired: Bool,
         preferHTTPTunneling: Bool,
         destinationAddress: NetAddress
     ) {
-        self.logger = logger
         self.username = username
         self.passwordReference = passwordReference
         self.authenticationRequired = authenticationRequired

@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_implementationOnly import CNIOBoringSSL
 import Foundation
 
 /// Configuration for HTTPS traffic decraption with MitM attacks.
@@ -102,13 +101,3 @@ public struct Configuration: Codable, Equatable {
         return pool
     }
 }
-
-//extension Configuration: Equatable {
-//
-//    public static func == (lhs: Configuration, rhs: Configuration) -> Bool {
-//        lhs.skipServerCertificateVerification == rhs.skipServerCertificateVerification
-//            && lhs.hostnames == rhs.hostnames
-//            && lhs.base64EncodedP12String == rhs.base64EncodedP12String
-//            && lhs.passphrase == rhs.passphrase
-//    }
-//}

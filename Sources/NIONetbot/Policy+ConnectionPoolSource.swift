@@ -92,7 +92,6 @@ extension ProxyPolicy: ConnectionPoolSource {
                 case .http:
                     return bootstrap.channelInitializer { channel in
                         channel.pipeline.addHTTPProxyClientHandlers(
-                            logger: logger,
                             username: proxy.username,
                             passwordReference: proxy.passwordReference,
                             authenticationRequired: proxy.authenticationRequired,

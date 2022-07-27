@@ -27,22 +27,22 @@ class BasicAuthorizationTests: XCTestCase {
     func testParseBasicAuthorizationFromHTTPHeadersWitchAuthorizationFieldIsNotBasicAuthorization()
     {
         var headers = HTTPHeaders()
-        headers.add(name: .authorization, value: "Bearer <token>")
+        headers.add(name: .proxyAuthorization, value: "Bearer <token>")
         XCTAssertNil(headers.proxyBasicAuthorization)
     }
 
     func testParseBasicAuthorizationFromHTTPHeadersWitchAuthorizationFieldIsInvalid() {
         var headers = HTTPHeaders()
-        headers.add(name: .authorization, value: "Basic <token>")
+        headers.add(name: .proxyAuthorization, value: "Basic <token>")
         XCTAssertNil(headers.proxyBasicAuthorization)
 
-        headers.replaceOrAdd(name: .authorization, value: "Basic cGFzc3dvcmQ=")
+        headers.replaceOrAdd(name: .proxyAuthorization, value: "Basic cGFzc3dvcmQ=")
         XCTAssertNil(headers.proxyBasicAuthorization)
     }
 
     func testParseBasicAuthorization() {
         var headers = HTTPHeaders()
-        headers.add(name: .authorization, value: "Basic dGVzdDpwYXNzd29yZA==")
+        headers.add(name: .proxyAuthorization, value: "Basic dGVzdDpwYXNzd29yZA==")
 
         XCTAssertNotNil(headers.proxyBasicAuthorization)
 
@@ -62,6 +62,6 @@ class BasicAuthorizationTests: XCTestCase {
         )
 
         headers.proxyBasicAuthorization = nil
-        XCTAssertFalse(headers.contains(name: .authorization))
+        XCTAssertFalse(headers.contains(name: .proxyAuthorization))
     }
 }

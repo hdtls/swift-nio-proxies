@@ -25,7 +25,6 @@ class HTTPProxyClientHandlerTests: XCTestCase {
         XCTAssertNil(self.channel)
 
         self.handler = .init(
-            logger: .init(label: ""),
             username: "username",
             passwordReference: "passwordReference",
             authenticationRequired: false,
@@ -118,7 +117,6 @@ class HTTPProxyClientHandlerTests: XCTestCase {
         try channel.close().wait()
 
         handler = .init(
-            logger: .init(label: ""),
             username: "username",
             passwordReference: "passwordReference",
             authenticationRequired: true,
@@ -154,7 +152,6 @@ class HTTPProxyClientHandlerTests: XCTestCase {
         try channel.close().wait()
 
         handler = .init(
-            logger: .init(label: ""),
             username: "username",
             passwordReference: "passwordReference",
             authenticationRequired: true,

@@ -16,24 +16,31 @@ import NIOCore
 
 extension ChannelPipeline {
 
+    /// Configure a `ChannelPipeline` for use as a HTTP proxy client.
+    /// - Parameters:
+    ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy client handlers. Defaults to `.last`.
+    ///   - username: The username to use when authenticate this connection.
+    ///   - passwordReference: The passwordReference to use when authenticate this connection.
+    ///   - authenticationRequired: A boolean value to determinse whether HTTP proxy client should perform proxy authentication.
+    ///   - preferHTTPTunneling: A boolean value use to determinse whether HTTP proxy client should use CONNECT method. Defaults to `true`.
+    ///   - destinationAddress: The destination for proxy connection.
+    /// - Returns: An `EventLoopFuture` that will fire when the pipeline is configured.
     public func addHTTPProxyClientHandlers(
-        logger: Logger,
+        position: ChannelPipeline.Position = .last,
         username: String,
         passwordReference: String,
         authenticationRequired: Bool,
-        preferHTTPTunneling: Bool,
-        destinationAddress: NetAddress,
-        position: ChannelPipeline.Position = .last
+        preferHTTPTunneling: Bool = true,
+        destinationAddress: NetAddress
     ) -> EventLoopFuture<Void> {
         let execute = {
             try self.syncOperations.addHTTPProxyClientHandlers(
-                logger: logger,
+                position: position,
                 username: username,
                 passwordReference: passwordReference,
                 authenticationRequired: authenticationRequired,
                 preferHTTPTunneling: preferHTTPTunneling,
-                destinationAddress: destinationAddress,
-                position: position
+                destinationAddress: destinationAddress
             )
         }
 
@@ -42,23 +49,33 @@ extension ChannelPipeline {
             : self.eventLoop.submit(execute)
     }
 
+    /// Configure a `ChannelPipeline` for use as a HTTP proxy server.
+    /// - Parameters:
+    ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy client handlers. Defaults to `.last`.
+    ///   - username: The username to use when authenticate this connection. Defaults to `""`.
+    ///   - passwordReference: The passwordReference to use when authenticate this connection. Defaults to `""`.
+    ///   - authenticationRequired: A boolean value to determinse whether HTTP proxy client should perform proxy authentication. Defaults to `false`.
+    ///   - completion: The completion handler to use when handshake completed and prepare outbound channel.
+    /// - Returns: An `EventLoopFuture` that will fire when the pipeline is configured.
     public func configureHTTPProxyServerPipeline(
-        logger: Logger,
-        authorization: BasicAuthorization? = nil,
+        position: ChannelPipeline.Position = .last,
+        username: String = "",
+        passwordReference: String = "",
+        authenticationRequired: Bool = false,
         enableHTTPCapture: Bool = false,
         enableMitM: Bool = false,
         mitmConfig: Configuration? = nil,
-        position: ChannelPipeline.Position = .last,
         completion: @escaping (Request) -> EventLoopFuture<Channel>
     ) -> EventLoopFuture<Void> {
         let execute = {
             try self.syncOperations.configureHTTPProxyServerPipeline(
-                logger: logger,
-                authorization: authorization,
+                position: position,
+                username: username,
+                passwordReference: passwordReference,
+                authenticationRequired: authenticationRequired,
                 enableHTTPCapture: enableHTTPCapture,
                 enableMitM: enableMitM,
                 mitmConfig: mitmConfig,
-                position: position,
                 completion: completion
             )
         }
@@ -71,19 +88,26 @@ extension ChannelPipeline {
 
 extension ChannelPipeline.SynchronousOperations {
 
+    /// Configure a `ChannelPipeline` for use as a HTTP proxy client.
+    /// - Parameters:
+    ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy client handlers. Defaults to `.last`.
+    ///   - username: The username to use when authenticate this connection.
+    ///   - passwordReference: The passwordReference to use when authenticate this connection.
+    ///   - authenticationRequired: A boolean value to determinse whether HTTP proxy client should perform proxy authentication.
+    ///   - preferHTTPTunneling: A boolean value use to determinse whether HTTP proxy client should use CONNECT method. Defaults to `true.`
+    ///   - destinationAddress: The destination for proxy connection.
+    /// - Throws: If the pipeline could not be configured.
     public func addHTTPProxyClientHandlers(
-        logger: Logger,
+        position: ChannelPipeline.Position = .last,
         username: String,
         passwordReference: String,
         authenticationRequired: Bool,
-        preferHTTPTunneling: Bool,
-        destinationAddress: NetAddress,
-        position: ChannelPipeline.Position = .last
+        preferHTTPTunneling: Bool = true,
+        destinationAddress: NetAddress
     ) throws {
         eventLoop.assertInEventLoop()
         let handlers: [ChannelHandler] = [
             HTTP1ClientCONNECTTunnelHandler(
-                logger: logger,
                 username: username,
                 passwordReference: passwordReference,
                 authenticationRequired: authenticationRequired,
@@ -95,13 +119,22 @@ extension ChannelPipeline.SynchronousOperations {
         try self.addHandlers(handlers, position: position)
     }
 
+    /// Configure a `ChannelPipeline` for use as a HTTP proxy server.
+    /// - Parameters:
+    ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy client handlers. Defaults to `.last`.
+    ///   - username: The username to use when authenticate this connection. Defaults to `""`.
+    ///   - passwordReference: The passwordReference to use when authenticate this connection. Defaults to `""`.
+    ///   - authenticationRequired: A boolean value to determinse whether HTTP proxy client should perform proxy authentication. Defaults to `false`.
+    ///   - completion: The completion handler to use when handshake completed and prepare outbound channel.
+    /// - Throws: If the pipeline could not be configured.
     public func configureHTTPProxyServerPipeline(
-        logger: Logger,
-        authorization: BasicAuthorization? = nil,
+        position: ChannelPipeline.Position = .last,
+        username: String = "",
+        passwordReference: String = "",
+        authenticationRequired: Bool = false,
         enableHTTPCapture: Bool = false,
         enableMitM: Bool = false,
         mitmConfig: Configuration? = nil,
-        position: ChannelPipeline.Position = .last,
         completion: @escaping (Request) -> EventLoopFuture<Channel>
     ) throws {
         self.eventLoop.assertInEventLoop()
@@ -110,8 +143,9 @@ extension ChannelPipeline.SynchronousOperations {
         let requestDecoder = HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)
 
         let serverHandler = HTTPProxyServerHandler(
-            logger: logger,
-            authorization: authorization,
+            username: username,
+            passwordReference: passwordReference,
+            authenticationRequired: authenticationRequired,
             channelInitializer: completion
         ) { req, channel in
             let serverHostname = req.serverHostname
@@ -120,14 +154,14 @@ extension ChannelPipeline.SynchronousOperations {
                 // Those handlers will be added to `self` to enable HTTP capture for request.
                 let handlers0: [ChannelHandler] = [
                     HTTPResponseCompressor(),
-                    HTTPCaptureHandler<HTTPRequestHead>(logger: logger),
+                    HTTPCaptureHandler<HTTPRequestHead>(logger: Logger(label: "http.capture")),
                     HTTPIOTransformer<HTTPRequestHead>(),
                 ]
 
                 // Those handlers will be added to the channel to enable HTTP capture for response.
                 let handlers1: [ChannelHandler] = [
                     NIOHTTPResponseDecompressor(limit: .none),
-                    HTTPCaptureHandler<HTTPResponseHead>(logger: logger),
+                    HTTPCaptureHandler<HTTPResponseHead>(logger: Logger(label: "http.capture")),
                     HTTPIOTransformer<HTTPResponseHead>(),
                 ]
 

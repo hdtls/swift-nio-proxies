@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import Logging
 @_exported import NIOCore
 @_exported import NIOHTTP1
 @_exported import NIOHTTPMitM
