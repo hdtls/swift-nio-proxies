@@ -12,17 +12,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+@_implementationOnly import CCryptoBoringSSL
 import Crypto
 import Foundation
 import Logging
 import NIOCore
+import NIONetbotMisc
 import SHAKE128
-
-#if compiler(>=5.1)
-@_implementationOnly import CCryptoBoringSSL
-#else
-import CCryptoBoringSSL
-#endif
 
 final public class RequestEncodingHandler: ChannelOutboundHandler {
 

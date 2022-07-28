@@ -12,9 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NIOCore
+import NIONetbotMisc
 import XCTest
-
-@testable import NIONetbotMisc
 
 class NetAddressTests: XCTestCase {
 

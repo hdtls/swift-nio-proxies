@@ -15,6 +15,7 @@
 import Foundation
 import Logging
 import NIOCore
+import NIONetbotMisc
 import SHAKE128
 
 /// A decoder that split the received `ByteBuffer` by the number of bytes specified in a fixed length header

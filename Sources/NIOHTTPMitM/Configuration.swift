@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
+import NIOSSL
 
 /// Configuration for HTTPS traffic decraption with MitM attacks.
 public struct Configuration: Codable, Equatable {

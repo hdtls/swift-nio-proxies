@@ -12,7 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
+import NIOCore
+import NIONetbotMisc
 
 extension ByteBuffer {
 
@@ -20,7 +21,7 @@ extension ByteBuffer {
     mutating func writeAddress(_ address: NetAddress) -> Int {
         switch address {
             case .domainPort(let domain, let port):
-                return writeInteger(in_port_t(port))
+                return writeInteger(UInt16(port))
                     + writeInteger(UInt8(2))
                     + writeInteger(UInt8(domain.utf8.count))
                     + writeString(domain)

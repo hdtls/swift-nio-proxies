@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
+import NIOSS
 
 public struct Proxy: Codable, Equatable, Hashable {
 

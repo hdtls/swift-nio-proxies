@@ -26,7 +26,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
+import NIONetbotMisc
 
 /// Instructs the SOCKS proxy server of the target host,
 /// and how to connect.

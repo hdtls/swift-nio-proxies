@@ -13,6 +13,14 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import Logging
+import MaxMindDB
+import NIOCore
+import NIODNS
+import NIOExtras
+import NIOHTTPProxy
+import NIONetbotMisc
+import NIOPosix
 
 public class App {
 

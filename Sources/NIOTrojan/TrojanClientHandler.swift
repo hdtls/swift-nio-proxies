@@ -12,7 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Logging
 import NIOCore
+import NIONetbotMisc
 
 final public class TrojanClientHandler: ChannelOutboundHandler {
 

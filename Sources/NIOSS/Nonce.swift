@@ -12,8 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-
 extension Array where Element == UInt8 {
 
     /// Increment array like `sodium_increment(_:)`

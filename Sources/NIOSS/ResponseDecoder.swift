@@ -15,6 +15,7 @@
 import Crypto
 import Foundation
 import NIOCore
+import NIONetbotMisc
 
 ///
 /// Spec: http://shadowsocks.org/en/wiki/AEAD-Ciphers.html

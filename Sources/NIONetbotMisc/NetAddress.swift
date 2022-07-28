@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import NIOCore
 
 /// Represent a socket address or domain port to which we may want to connect or bind.
 public enum NetAddress: Equatable, Hashable {

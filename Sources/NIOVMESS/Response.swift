@@ -14,6 +14,7 @@
 
 import Foundation
 import NIOCore
+import NIONetbotMisc
 
 /// `Response` object defines VMESS response data object.
 public struct Response {

@@ -26,7 +26,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
+import NIONetbotMisc
 
 /// The SOCKS Server's response to the client's request
 /// indicating if the request succeeded or failed.

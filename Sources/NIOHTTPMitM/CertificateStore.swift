@@ -14,6 +14,7 @@
 
 @_implementationOnly import CNIOBoringSSL
 import Foundation
+import NIOSSL
 
 /// Wraps a single error from BoringSSL.
 struct BoringSSLInternalError: Equatable, CustomStringConvertible {

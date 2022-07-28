@@ -12,7 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
+import NIOCore
+import NIOHTTP1
 
 /// Transfer inbound from `HTTPPart<HeadT, ByteBuffer>` to `HTTPPart<HeadT, IOData>`.
 public final class HTTPIOTransformer<HeadT: Equatable>: ChannelInboundHandler {

@@ -12,7 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Logging
 import NIOCore
+import NIONetbotMisc
+import NIOSSL
 
 extension ChannelPipeline {
 

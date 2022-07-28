@@ -15,6 +15,7 @@
 import Foundation
 import Logging
 import NIOCore
+import NIONetbotMisc
 import SHAKE128
 
 final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {

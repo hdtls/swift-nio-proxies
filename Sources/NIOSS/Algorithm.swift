@@ -12,8 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-
 /// Shadowsocks crypto algorithm.
 ///
 /// We don't care about rawValue is uppercase or lowercase for example:

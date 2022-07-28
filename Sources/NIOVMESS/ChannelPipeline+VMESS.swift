@@ -13,7 +13,9 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import Logging
 import NIOCore
+import NIONetbotMisc
 
 extension ChannelPipeline {
 

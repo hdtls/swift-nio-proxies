@@ -43,11 +43,11 @@ extension HTTPHeaders {
                 return nil
             }
 
-            guard let decodedToken = Data(base64Encoded: headerParts[1]) else {
+            guard let data = Data(base64Encoded: headerParts[1]) else {
                 return nil
             }
 
-            let parts = String.init(decoding: decodedToken, as: UTF8.self).split(
+            let parts = String(decoding: data, as: UTF8.self).split(
                 separator: ":",
                 maxSplits: 1
             )

@@ -13,6 +13,9 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import NIOCore
+import NIOHTTP1
+import NIONetbotMisc
 
 /// Represents an HTTP proxy request in an application.
 public struct Request: Equatable {

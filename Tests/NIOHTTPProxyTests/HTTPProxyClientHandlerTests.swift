@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import NIO
+import NIOHTTP1
 import NIOHTTPProxy
 import XCTest
 

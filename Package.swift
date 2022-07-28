@@ -22,7 +22,15 @@ let package = Package(
         .iOS(.v13),
     ],
     products: [
+        .library(name: "NIODNS", targets: ["NIODNS"]),
+        .library(name: "NIOHTTPMitM", targets: ["NIOHTTPMitM"]),
+        .library(name: "NIOHTTPProxy", targets: ["NIOHTTPProxy"]),
         .library(name: "NIONetbot", targets: ["NIONetbot"]),
+        .library(name: "NIONetbotMisc", targets: ["NIONetbotMisc"]),
+        .library(name: "NIOSOCKS5", targets: ["NIOSOCKS5"]),
+        .library(name: "NIOSS", targets: ["NIOSS"]),
+        .library(name: "NIOTrojan", targets: ["NIOTrojan"]),
+        .library(name: "NIOVMESS", targets: ["NIOVMESS"]),
         .executable(name: "netbotcli", targets: ["NIONetbotCLI"]),
     ],
     dependencies: [
@@ -62,11 +70,11 @@ let package = Package(
         .target(
             name: "NIOHTTPMitM",
             dependencies: [
-                .product(name: "Logging", package: "swift-log"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 .product(name: "NIOHTTP1", package: "swift-nio"),
                 .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
+                .product(name: "Logging", package: "swift-log")
             ]
         ),
         .target(
@@ -86,12 +94,15 @@ let package = Package(
                 "NIONetbotMisc",
                 "NIODNS",
                 "NIOHTTPProxy",
+                "NIOHTTPMitM",
                 "NIOSOCKS5",
                 "NIOSS",
                 "NIOTrojan",
                 "NIOVMESS",
+                .product(name: "Logging", package: "swift-log"),
                 .product(name: "MaxMindDB", package: "swift-maxminddb"),
                 .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
                 .product(name: "NIOHTTP1", package: "swift-nio"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 .product(name: "NIOExtras", package: "swift-nio-extras"),

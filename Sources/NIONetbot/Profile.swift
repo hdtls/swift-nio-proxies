@@ -13,6 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import Logging
+import NIOHTTPMitM
 
 /// A profile object that defines behavior and policies for a Netbot process.
 public struct Profile {

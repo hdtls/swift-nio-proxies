@@ -12,10 +12,19 @@
 //
 //===----------------------------------------------------------------------===//
 
+import ConnectionPool
 import Foundation
+import Logging
+import NIOCore
+import NIOHTTPProxy
+import NIOPosix
+import NIOSOCKS5
+import NIOSS
+import NIOSSL
+import NIOVMESS
 
 #if canImport(Network)
-@_exported import NIOTransportServices
+import NIOTransportServices
 #endif
 
 func makeClientTCPBootstrap(group: EventLoopGroup, serverHostname: String? = nil) throws

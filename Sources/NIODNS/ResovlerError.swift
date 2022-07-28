@@ -12,10 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-
 enum ResolverError: Error {
-
     case unknown(host: String, port: Int)
     case unsupported
     case invalidPayloadData

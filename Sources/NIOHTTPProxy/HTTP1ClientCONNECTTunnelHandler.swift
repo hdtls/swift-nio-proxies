@@ -13,6 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 import NIOCore
+import NIOHTTP1
+import NIONetbotMisc
 
 final public class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, RemovableChannelHandler {
 

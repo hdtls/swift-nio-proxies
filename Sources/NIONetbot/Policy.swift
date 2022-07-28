@@ -12,7 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+import ConnectionPool
 import Foundation
+import NIONetbotMisc
 
 /// Policy protocol representation a policy object.
 public protocol Policy: ConnectionPoolSource {

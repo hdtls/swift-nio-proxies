@@ -12,10 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NIOCore
 import NIOHTTP1
+import NIOHTTPProxy
 import XCTest
-
-@testable import NIOHTTPProxy
 
 class RequestTests: XCTestCase {
 
