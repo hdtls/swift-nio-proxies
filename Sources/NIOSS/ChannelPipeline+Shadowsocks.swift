@@ -12,40 +12,36 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Logging
 import NIOCore
 import NIONetbotMisc
 
 extension ChannelPipeline {
 
     public func addSSClientHandlers(
-        logger: Logger,
-        algorithm: CryptoAlgorithm,
+        position: Position = .last,
+        algorithm: Algorithm,
         passwordReference: String,
-        taskAddress: NetAddress,
-        position: Position = .last
+        taskAddress: NetAddress
     ) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
 
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
                 try syncOperations.addSSClientHandlers(
-                    logger: logger,
+                    position: position,
                     algorithm: algorithm,
                     passwordReference: passwordReference,
-                    taskAddress: taskAddress,
-                    position: position
+                    taskAddress: taskAddress
                 )
             }
             eventLoopFuture = eventLoop.makeCompletedFuture(result)
         } else {
             eventLoopFuture = eventLoop.submit {
                 try self.syncOperations.addSSClientHandlers(
-                    logger: logger,
+                    position: position,
                     algorithm: algorithm,
                     passwordReference: passwordReference,
-                    taskAddress: taskAddress,
-                    position: position
+                    taskAddress: taskAddress
                 )
             }
         }
@@ -57,11 +53,10 @@ extension ChannelPipeline {
 extension ChannelPipeline.SynchronousOperations {
 
     public func addSSClientHandlers(
-        logger: Logger,
-        algorithm: CryptoAlgorithm,
+        position: ChannelPipeline.Position = .last,
+        algorithm: Algorithm,
         passwordReference: String,
-        taskAddress: NetAddress,
-        position: ChannelPipeline.Position = .last
+        taskAddress: NetAddress
     ) throws {
         eventLoop.assertInEventLoop()
         let inboundDecoder = ResponseDecoder(
@@ -69,7 +64,6 @@ extension ChannelPipeline.SynchronousOperations {
             passwordReference: passwordReference
         )
         let outboundEncoder = RequestEncoder(
-            logger: logger,
             algorithm: algorithm,
             passwordReference: passwordReference,
             taskAddress: taskAddress

@@ -15,7 +15,6 @@
 @_implementationOnly import CCryptoBoringSSL
 import Crypto
 import Foundation
-import Logging
 import NIOCore
 import NIONetbotMisc
 import SHAKE128
@@ -23,8 +22,6 @@ import SHAKE128
 final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
     public typealias InboundOut = ByteBuffer
-
-    private let logger: Logger
 
     private let authenticationCode: UInt8
 
@@ -39,7 +36,6 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
     private var response: Response?
 
     public init(
-        logger: Logger,
         authenticationCode: UInt8,
         symmetricKey: SecureBytes,
         nonce: SecureBytes,
@@ -52,7 +48,6 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
             return SecureBytes(hasher.finalize().prefix(16))
         }
 
-        self.logger = logger
         self.authenticationCode = authenticationCode
         self.symmetricKey = hash(symmetricKey)
         self.nonce = hash(nonce)

@@ -32,9 +32,8 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
         self.childChannel = EmbeddedChannel()
 
         self.handler = SOCKS5ServerHandler(
-            logger: .init(label: ""),
-            username: "String",
-            passwordReference: "String",
+            username: "",
+            passwordReference: "",
             authenticationRequired: false
         ) { address in
             switch address {
@@ -98,9 +97,8 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
         let childChannel = EmbeddedChannel()
 
         let handler = SOCKS5ServerHandler(
-            logger: .init(label: ""),
-            username: "String",
-            passwordReference: "String",
+            username: "username",
+            passwordReference: "passwordReference",
             authenticationRequired: true
         ) { address in
             switch address {
@@ -128,9 +126,12 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
 
         XCTAssertEqual(try channel.readOutbound(), ByteBuffer(bytes: [0x05, 0x02]))
 
-        let usernameReference = Array("String".data(using: .utf8)!)
-        let passwordReference = usernameReference
-        let authenticationData = [0x01, 0x06] + usernameReference + [0x06] + passwordReference
+        let usernameReference = Array("username".data(using: .utf8)!)
+        let passwordReference = Array("passwordReference".data(using: .utf8)!)
+        let authenticationData =
+            [0x01, UInt8(usernameReference.count)] + usernameReference + [
+                UInt8(passwordReference.count)
+            ] + passwordReference
 
         try channel.writeInbound(ByteBuffer(bytes: authenticationData))
         XCTAssertEqual(try channel.readOutbound(), ByteBuffer(bytes: [0x01, 0x00]))
@@ -159,9 +160,8 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
         let childChannel = EmbeddedChannel()
 
         let handler = SOCKS5ServerHandler(
-            logger: .init(label: ""),
-            username: "String",
-            passwordReference: "String",
+            username: "username",
+            passwordReference: "passwordReference",
             authenticationRequired: true
         ) { address in
             switch address {
@@ -190,7 +190,7 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
         XCTAssertEqual(try channel.readOutbound(), ByteBuffer(bytes: [0x05, 0x02]))
 
         let usernameReference = Array("Wrong credential".data(using: .utf8)!)
-        let passwordReference = usernameReference
+        let passwordReference = Array("passwordReference".data(using: .utf8)!)
         let authenticationData =
             [0x01, UInt8(usernameReference.count)] + usernameReference + [
                 UInt8(passwordReference.count)

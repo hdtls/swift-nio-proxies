@@ -12,8 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-
 /// `ProtocolVersion` defines VMESS protocol version.
 public struct ProtocolVersion: Codable, Equatable, RawRepresentable {
 

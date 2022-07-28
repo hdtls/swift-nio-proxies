@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Logging
 import NIOCore
 import NIONetbotMisc
 
@@ -32,20 +31,17 @@ final public class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHa
     private var readBuffer: ByteBuffer!
     private var bufferedWrites: MarkedCircularBuffer<BufferedWrite> = .init(initialCapacity: 8)
     private var removalToken: ChannelHandlerContext.RemovalToken?
-    private let logger: Logger
     private let username: String
     private let passwordReference: String
     private let authenticationRequired: Bool
     private var channelInitializer: (NetAddress) -> EventLoopFuture<Channel>
 
     public init(
-        logger: Logger,
         username: String,
         passwordReference: String,
         authenticationRequired: Bool,
         channelInitializer: @escaping (NetAddress) -> EventLoopFuture<Channel>
     ) {
-        self.logger = logger
         self.username = username
         self.passwordReference = passwordReference
         self.authenticationRequired = authenticationRequired
@@ -242,10 +238,6 @@ extension SOCKS5ServerHandler {
     }
 
     private func exchange(_ channel: Channel, context: ChannelHandlerContext, userInfo: Request) {
-        logger.info(
-            "Tunneling request to \(userInfo.address) via \(String(describing: channel.remoteAddress))"
-        )
-
         let response = Response(
             reply: .succeeded,
             boundAddress: .socketAddress(channel.remoteAddress!)
@@ -281,7 +273,6 @@ extension SOCKS5ServerHandler {
     }
 
     private func channelClose(context: ChannelHandlerContext, reason: Error) {
-        logger.error("\(reason)")
         context.close(promise: nil)
     }
 }

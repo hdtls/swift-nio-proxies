@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import Logging
 import NIOCore
 import NIONetbotMisc
 import SHAKE128
@@ -22,29 +21,17 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
 
     public typealias OutboundIn = ByteBuffer
 
-    private let logger: Logger
-
     private let symmetricKey: SecureBytes
-
     private let nonce: SecureBytes
-
     private let configuration: Configuration
-
     private var frameOffset: UInt16 = 0
-
     private lazy var shake128: SHAKE128 = {
         var shake128 = SHAKE128()
         shake128.update(data: nonce)
         return shake128
     }()
 
-    public init(
-        logger: Logger,
-        symmetricKey: SecureBytes,
-        nonce: SecureBytes,
-        configuration: Configuration
-    ) {
-        self.logger = logger
+    public init(symmetricKey: SecureBytes, nonce: SecureBytes, configuration: Configuration) {
         self.configuration = configuration
         self.symmetricKey = symmetricKey
         self.nonce = nonce

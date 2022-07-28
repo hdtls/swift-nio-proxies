@@ -12,43 +12,39 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Logging
 import NIOCore
 import NIONetbotMisc
 
 extension ChannelPipeline {
 
     public func addSOCKSClientHandlers(
-        logger: Logger,
+        position: Position = .last,
         username: String,
         passwordReference: String,
         authenticationRequired: Bool,
-        destinationAddress: NetAddress,
-        position: Position = .last
+        destinationAddress: NetAddress
     ) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
 
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
                 try syncOperations.addSOCKSClientHandlers(
-                    logger: logger,
+                    position: position,
                     username: username,
                     passwordReference: passwordReference,
                     authenticationRequired: authenticationRequired,
-                    destinationAddress: destinationAddress,
-                    position: position
+                    destinationAddress: destinationAddress
                 )
             }
             eventLoopFuture = eventLoop.makeCompletedFuture(result)
         } else {
             eventLoopFuture = eventLoop.submit({
                 try self.syncOperations.addSOCKSClientHandlers(
-                    logger: logger,
+                    position: position,
                     username: username,
                     passwordReference: passwordReference,
                     authenticationRequired: authenticationRequired,
-                    destinationAddress: destinationAddress,
-                    position: position
+                    destinationAddress: destinationAddress
                 )
             })
         }
@@ -60,17 +56,15 @@ extension ChannelPipeline {
 extension ChannelPipeline.SynchronousOperations {
 
     public func addSOCKSClientHandlers(
-        logger: Logger,
+        position: ChannelPipeline.Position = .last,
         username: String,
         passwordReference: String,
         authenticationRequired: Bool,
-        destinationAddress: NetAddress,
-        position: ChannelPipeline.Position = .last
+        destinationAddress: NetAddress
     ) throws {
         eventLoop.assertInEventLoop()
 
         let handler = SOCKS5ClientHandler(
-            logger: logger,
             username: username,
             passwordReference: passwordReference,
             authenticationRequired: authenticationRequired,

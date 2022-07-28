@@ -12,16 +12,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Logging
 import NIOCore
 import NIONetbotMisc
-import NIOSSL
 
 extension ChannelPipeline {
 
     public func addTrojanClientHandlers(
         position: ChannelPipeline.Position = .last,
-        logger: Logger,
         password: String,
         taskAddress: NetAddress
     ) -> EventLoopFuture<Void> {
@@ -31,7 +28,6 @@ extension ChannelPipeline {
             let result = Result<Void, Error> {
                 try self.syncOperations.addTrojanClientHandlers(
                     position: position,
-                    logger: logger,
                     password: password,
                     taskAddress: taskAddress
                 )
@@ -41,7 +37,6 @@ extension ChannelPipeline {
             eventLoopFuture = eventLoop.submit {
                 try self.syncOperations.addTrojanClientHandlers(
                     position: position,
-                    logger: logger,
                     password: password,
                     taskAddress: taskAddress
                 )
@@ -56,19 +51,13 @@ extension ChannelPipeline.SynchronousOperations {
 
     public func addTrojanClientHandlers(
         position: ChannelPipeline.Position = .last,
-        logger: Logger,
         password: String,
         taskAddress: NetAddress
     ) throws {
-        let sslContext = try NIOSSLContext(configuration: .makeClientConfiguration())
-        let sslHandler = try NIOSSLClientHandler(context: sslContext, serverHostname: nil)
-        let clientHandler = TrojanClientHandler(
-            logger: logger,
+        let handler = TrojanClientHandler(
             password: password,
             taskAddress: taskAddress
         )
-        let handlers: [ChannelHandler] = [sslHandler, clientHandler]
-
-        try self.addHandlers(handlers)
+        try self.addHandler(handler)
     }
 }

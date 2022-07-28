@@ -76,7 +76,7 @@ public struct Proxy: Codable, Equatable, Hashable {
     /// SS encryption and decryption algorithm.
     ///
     /// - note: This is used in Shadowsocks protocol.
-    public var algorithm: CryptoAlgorithm
+    public var algorithm: Algorithm
 
     public init(
         serverAddress: String = "127.0.0.1",
@@ -90,7 +90,7 @@ public struct Proxy: Codable, Equatable, Hashable {
         skipCertificateVerification: Bool = false,
         sni: String = "",
         certificatePinning: String = "",
-        algorithm: CryptoAlgorithm = .aes128Gcm
+        algorithm: Algorithm = .aes128Gcm
     ) {
         self.serverAddress = serverAddress
         self.port = port
@@ -123,7 +123,7 @@ public struct Proxy: Codable, Equatable, Hashable {
         self.certificatePinning =
             try container.decodeIfPresent(String.self, forKey: .certificatePinning) ?? ""
         self.algorithm =
-            try container.decodeIfPresent(CryptoAlgorithm.self, forKey: .algorithm) ?? .aes128Gcm
+            try container.decodeIfPresent(Algorithm.self, forKey: .algorithm) ?? .aes128Gcm
         self.overTls = try container.decodeIfPresent(Bool.self, forKey: .overTls) ?? false
     }
 
@@ -180,4 +180,4 @@ public struct Proxy: Codable, Equatable, Hashable {
     }
 }
 
-extension CryptoAlgorithm: Codable {}
+extension Algorithm: Codable {}

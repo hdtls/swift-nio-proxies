@@ -26,17 +26,16 @@ class SOCKS5ClientHandlerTests: XCTestCase {
     override func setUp() {
         XCTAssertNil(self.channel)
         self.handler = SOCKS5ClientHandler(
-            logger: .init(label: ""),
-            username: "String",
-            passwordReference: "String",
+            username: "",
+            passwordReference: "",
             authenticationRequired: false,
             destinationAddress: .socketAddress(try! .init(ipAddress: "192.168.1.1", port: 80))
         )
         self.channel = EmbeddedChannel(handler: self.handler)
     }
 
-    func connect() {
-        try! self.channel.connect(to: .init(ipAddress: "127.0.0.1", port: 80)).wait()
+    func waitUntilConnected() throws {
+        try self.channel.connect(to: .init(ipAddress: "127.0.0.1", port: 80)).wait()
     }
 
     override func tearDown() {
@@ -45,7 +44,7 @@ class SOCKS5ClientHandlerTests: XCTestCase {
     }
 
     func testWorkflow() throws {
-        self.connect()
+        try waitUntilConnected()
 
         XCTAssertEqual(try channel.readOutbound(), ByteBuffer(bytes: [0x05, 0x01, 0x00]))
         try channel.writeInbound(ByteBuffer(bytes: [0x05, 0x00]))
@@ -62,23 +61,27 @@ class SOCKS5ClientHandlerTests: XCTestCase {
 
     func testWorkflowWithUsernamePasswordAuthentication() throws {
         let handler = SOCKS5ClientHandler(
-            logger: .init(label: ""),
-            username: "String",
-            passwordReference: "String",
+            username: "username",
+            passwordReference: "passwordReference",
             authenticationRequired: true,
             destinationAddress: .socketAddress(try! .init(ipAddress: "192.168.1.1", port: 80))
         )
-        let channel = EmbeddedChannel(handler: handler)
+        XCTAssertNoThrow(try channel.finish())
+        channel = nil
+        channel = EmbeddedChannel(handler: handler)
 
-        try channel.connect(to: .init(ipAddress: "127.0.0.1", port: 80)).wait()
+        try waitUntilConnected()
 
         XCTAssertEqual(try channel.readOutbound(), ByteBuffer(bytes: [0x05, 0x01, 0x02]))
 
         try channel.writeInbound(ByteBuffer(bytes: [0x05, 0x02]))
 
-        let usernameReference = Array("String".data(using: .utf8)!)
-        let passwordReference = usernameReference
-        let authenticationData = [0x01, 0x06] + usernameReference + [0x06] + passwordReference
+        let usernameReference = Array("username".data(using: .utf8)!)
+        let passwordReference = Array("passwordReference".data(using: .utf8)!)
+        let authenticationData =
+            [0x01, UInt8(usernameReference.count)] + usernameReference + [
+                UInt8(passwordReference.count)
+            ] + passwordReference
         XCTAssertEqual(try channel.readOutbound(), ByteBuffer(bytes: authenticationData))
 
         try channel.writeInbound(ByteBuffer(bytes: [0x01, 0x00]))
@@ -96,15 +99,16 @@ class SOCKS5ClientHandlerTests: XCTestCase {
 
     func testWorkflowWithWrongUsernameOrPasswordAuthentication() throws {
         let handler = SOCKS5ClientHandler(
-            logger: .init(label: ""),
-            username: "String",
-            passwordReference: "String",
+            username: "username",
+            passwordReference: "passwordReference",
             authenticationRequired: true,
             destinationAddress: .socketAddress(try! .init(ipAddress: "192.168.1.1", port: 80))
         )
-        let channel = EmbeddedChannel(handler: handler)
+        XCTAssertNoThrow(try channel.finish())
+        channel = nil
+        channel = EmbeddedChannel(handler: handler)
 
-        try channel.connect(to: .init(ipAddress: "127.0.0.1", port: 80)).wait()
+        try waitUntilConnected()
 
         // the client should start the handshake instantly
         let bytes: [UInt8] = [0x05, 0x01, 0x02]
@@ -116,9 +120,12 @@ class SOCKS5ClientHandlerTests: XCTestCase {
 
         try channel.writeInbound(ByteBuffer(bytes: [0x05, 0x02]))
 
-        let usernameReference = Array("String".data(using: .utf8)!)
-        let passwordReference = usernameReference
-        let authenticationData = [0x01, 0x06] + usernameReference + [0x06] + passwordReference
+        let usernameReference = Array("username".data(using: .utf8)!)
+        let passwordReference = Array("passwordReference".data(using: .utf8)!)
+        let authenticationData =
+            [0x01, UInt8(usernameReference.count)] + usernameReference + [
+                UInt8(passwordReference.count)
+            ] + passwordReference
         if var buffer = try channel.readOutbound(as: ByteBuffer.self) {
             XCTAssertEqual(buffer.readBytes(length: buffer.readableBytes), authenticationData)
         } else if authenticationData.count > 0 {
@@ -132,7 +139,7 @@ class SOCKS5ClientHandlerTests: XCTestCase {
     }
 
     func testWorkflowDripfeed() throws {
-        self.connect()
+        try waitUntilConnected()
 
         XCTAssertEqual(try channel.readOutbound(), ByteBuffer(bytes: [0x05, 0x01, 0x00]))
 
@@ -159,7 +166,7 @@ class SOCKS5ClientHandlerTests: XCTestCase {
     }
 
     func testBuffering() throws {
-        self.connect()
+        try waitUntilConnected()
 
         let writePromise = self.channel.eventLoop.makePromise(of: Void.self)
         self.channel.writeAndFlush(ByteBuffer(bytes: [1, 2, 3, 4, 5]), promise: writePromise)
@@ -178,7 +185,7 @@ class SOCKS5ClientHandlerTests: XCTestCase {
     }
 
     func testBufferingWithMark() throws {
-        self.connect()
+        try waitUntilConnected()
 
         let writePromise1 = self.channel.eventLoop.makePromise(of: Void.self)
         let writePromise2 = self.channel.eventLoop.makePromise(of: Void.self)
@@ -206,7 +213,7 @@ class SOCKS5ClientHandlerTests: XCTestCase {
     }
 
     func testProxyConnectionFailed() throws {
-        self.connect()
+        try waitUntilConnected()
 
         class ErrorHandler: ChannelInboundHandler {
             typealias InboundIn = ByteBuffer
@@ -242,21 +249,22 @@ class SOCKS5ClientHandlerTests: XCTestCase {
         //        }
     }
 
-    func testWorkflowShouldStartAfterChannelActive() {
+    func testWorkflowShouldStartAfterChannelActive() throws {
         XCTAssertFalse(channel.isActive)
         XCTAssertNil(try channel.readOutbound())
 
-        self.connect()
+        try waitUntilConnected()
         XCTAssertTrue(channel.isActive)
 
         XCTAssertEqual(try channel.readOutbound(), ByteBuffer(bytes: [0x05, 0x01, 0x00]))
     }
 
-    func testAddHandlerAfterChannelActived() {
+    func testAddHandlerAfterChannelActived() throws {
         // reset the channel that was set up automatically
         XCTAssertNoThrow(try self.channel.close().wait())
-        self.channel = EmbeddedChannel()
-        self.connect()
+        channel = nil
+        channel = EmbeddedChannel()
+        try waitUntilConnected()
 
         XCTAssertTrue(self.channel.isActive)
 
@@ -299,7 +307,7 @@ class SOCKS5ClientHandlerTests: XCTestCase {
             ).wait()
         )
 
-        self.connect()
+        try waitUntilConnected()
 
         // these writes should be buffered to be send out once the connection is established.
         self.channel.write(ByteBuffer(bytes: [1, 2, 3]), promise: nil)
@@ -332,7 +340,7 @@ class SOCKS5ClientHandlerTests: XCTestCase {
     }
 
     func testRemoveHandlerBeforeEstablished() throws {
-        self.connect()
+        try waitUntilConnected()
 
         // these writes should be buffered to be send out once the connection is established.
         self.channel.write(ByteBuffer(bytes: [1, 2, 3]), promise: nil)

@@ -15,7 +15,6 @@
 @_implementationOnly import CCryptoBoringSSL
 import Crypto
 import Foundation
-import Logging
 import NIOCore
 import NIONetbotMisc
 import SHAKE128
@@ -25,8 +24,6 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
     public typealias OutboundIn = ByteBuffer
 
     public typealias OutboundOut = ByteBuffer
-
-    private let logger: Logger
 
     private let authenticationCode: UInt8
 
@@ -73,7 +70,6 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
     ///   - forceAEADEncoding: A boolean value determinse whether encoder should use AEAD encoding.
     ///   - taskAddress: The requet address.
     public init(
-        logger: Logger,
         authenticationCode: UInt8,
         symmetricKey: SecureBytes,
         nonce: SecureBytes,
@@ -81,7 +77,6 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
         forceAEADEncoding: Bool = true,
         taskAddress: NetAddress
     ) {
-        self.logger = logger
         self.authenticationCode = authenticationCode
         self.symmetricKey = symmetricKey
         self.nonce = nonce
@@ -89,7 +84,6 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
         self.forceAEADEncoding = forceAEADEncoding
         self.address = taskAddress
         self.encoder = .init(
-            logger: logger,
             symmetricKey: symmetricKey,
             nonce: nonce,
             configuration: configuration

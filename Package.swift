@@ -112,7 +112,6 @@ let package = Package(
         .target(
             name: "NIONetbotMisc",
             dependencies: [
-                .product(name: "Logging", package: "swift-log"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOPosix", package: "swift-nio"),
             ]
@@ -121,8 +120,7 @@ let package = Package(
             name: "NIOSOCKS5",
             dependencies: [
                 "NIONetbotMisc",
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                .product(name: "NIOCore", package: "swift-nio")
             ]
         ),
         .target(
@@ -138,7 +136,6 @@ let package = Package(
             dependencies: [
                 "NIONetbotMisc",
                 .product(name: "Crypto", package: "swift-crypto"),
-                .product(name: "Logging", package: "swift-log"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
             ]

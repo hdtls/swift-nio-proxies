@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Logging
 import NIOCore
 import NIONetbotMisc
 
@@ -20,14 +19,12 @@ final public class TrojanClientHandler: ChannelOutboundHandler {
 
     public typealias OutboundIn = ByteBuffer
 
-    private let logger: Logger
     private let password: String
     private let taskAddress: NetAddress
 
     private var isTunneling: Bool = false
 
-    public init(logger: Logger, password: String, taskAddress: NetAddress) {
-        self.logger = logger
+    public init(password: String, taskAddress: NetAddress) {
         self.password = password
         self.taskAddress = taskAddress
     }

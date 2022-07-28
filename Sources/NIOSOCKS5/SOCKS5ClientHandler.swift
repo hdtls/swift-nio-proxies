@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Logging
 import NIOCore
 import NIONetbotMisc
 
@@ -31,7 +30,6 @@ final public class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
     private var readBuffer: ByteBuffer!
     private var bufferedWrites: MarkedCircularBuffer<BufferedWrite>
     private var removalToken: ChannelHandlerContext.RemovalToken?
-    private let logger: Logger
     private let destinationAddress: NetAddress
     private let username: String
     private let passwordReference: String
@@ -40,13 +38,11 @@ final public class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
     /// Creates a new `SOCKS5ClientHandler` that connects to a server
     /// and instructs the server to connect to `destinationAddress`.
     /// - Parameters:
-    ///   - logger: logger object use to log message.
     ///   - username: The username for username/password authentication,
     ///   - passwordReference: The password use for username/password authentication.
     ///   - authenticationRequired: A boolean value determinse whether should use username and password authentication.
     ///   - destinationAddress: The desired end point - note that only IPv4, IPv6, and FQDNs are supported.
     public init(
-        logger: Logger,
         username: String,
         passwordReference: String,
         authenticationRequired: Bool,
@@ -59,7 +55,6 @@ final public class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
                 break
         }
 
-        self.logger = logger
         self.username = username
         self.passwordReference = passwordReference
         self.authenticationRequired = authenticationRequired
@@ -319,7 +314,6 @@ extension SOCKS5ClientHandler {
     }
 
     private func channelClose(context: ChannelHandlerContext, reason: Error) {
-        logger.error("\(reason)")
         context.close(promise: nil)
     }
 }

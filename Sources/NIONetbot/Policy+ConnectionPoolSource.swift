@@ -112,7 +112,6 @@ extension ProxyPolicy: ConnectionPoolSource {
                 case .socks5:
                     return bootstrap.channelInitializer { channel in
                         channel.pipeline.addSOCKSClientHandlers(
-                            logger: logger,
                             username: proxy.username,
                             passwordReference: proxy.passwordReference,
                             authenticationRequired: proxy.authenticationRequired,
@@ -123,7 +122,6 @@ extension ProxyPolicy: ConnectionPoolSource {
                 case .shadowsocks:
                     return bootstrap.channelInitializer { channel in
                         channel.pipeline.addSSClientHandlers(
-                            logger: logger,
                             algorithm: proxy.algorithm,
                             passwordReference: proxy.passwordReference,
                             taskAddress: destinationAddress
@@ -133,7 +131,6 @@ extension ProxyPolicy: ConnectionPoolSource {
                 case .vmess:
                     return bootstrap.channelInitializer { channel in
                         channel.pipeline.addVMESSClientHandlers(
-                            logger: logger,
                             username: UUID(uuidString: proxy.username)!,
                             destinationAddress: destinationAddress
                         )

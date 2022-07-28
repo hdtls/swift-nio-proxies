@@ -50,7 +50,7 @@ public class ResponseDecoder: ByteToMessageDecoder {
 
     public typealias InboundOut = ByteBuffer
 
-    private let algorithm: CryptoAlgorithm
+    private let algorithm: Algorithm
 
     private let passwordReference: String
 
@@ -58,7 +58,7 @@ public class ResponseDecoder: ByteToMessageDecoder {
 
     private var nonce: [UInt8]
 
-    public init(algorithm: CryptoAlgorithm, passwordReference: String) {
+    public init(algorithm: Algorithm, passwordReference: String) {
         self.algorithm = algorithm
         self.passwordReference = passwordReference
         self.nonce = .init(repeating: 0, count: 12)
@@ -209,5 +209,4 @@ public class RequestDecoder: ByteToMessageDecoder {
         }
         return .needMoreData
     }
-
 }

@@ -15,17 +15,17 @@
 /// Shadowsocks crypto algorithm.
 ///
 /// We don't care about rawValue is uppercase or lowercase for example:
-///     CryptoAlgorithm(rawValue: "aes-128-gcm") == CryptoAlgorithm(rawValue: "AES-128-GCM") // true
-public enum CryptoAlgorithm: String, CaseIterable, Equatable {
+///     Algorithm(rawValue: "aes-128-gcm") == Algorithm(rawValue: "AES-128-GCM") // true
+public enum Algorithm: String, CaseIterable, Equatable {
 
     case aes128Gcm = "AES-128-GCM"
     case chaCha20Poly1305 = "ChaCha20-Poly1305"
 
     public init?(rawValue: String) {
         switch rawValue.uppercased() {
-            case CryptoAlgorithm.aes128Gcm.rawValue:
+            case Algorithm.aes128Gcm.rawValue:
                 self = .aes128Gcm
-            case CryptoAlgorithm.chaCha20Poly1305.rawValue.uppercased():
+            case Algorithm.chaCha20Poly1305.rawValue.uppercased():
                 self = .chaCha20Poly1305
             default:
                 return nil

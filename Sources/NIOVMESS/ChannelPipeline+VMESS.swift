@@ -13,37 +13,33 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import Logging
 import NIOCore
 import NIONetbotMisc
 
 extension ChannelPipeline {
 
     public func addVMESSClientHandlers(
-        logger: Logger = .init(label: "com.netbot.vmess"),
+        position: Position = .last,
         username: UUID,
-        destinationAddress: NetAddress,
-        position: Position = .last
+        destinationAddress: NetAddress
     ) -> EventLoopFuture<Void> {
         let eventLoopFuture: EventLoopFuture<Void>
 
         if eventLoop.inEventLoop {
             let result = Result<Void, Error> {
                 try syncOperations.addVMESSClientHandlers(
-                    logger: logger,
+                    position: position,
                     username: username,
-                    destinationAddress: destinationAddress,
-                    position: position
+                    destinationAddress: destinationAddress
                 )
             }
             eventLoopFuture = eventLoop.makeCompletedFuture(result)
         } else {
             eventLoopFuture = eventLoop.submit({
                 try self.syncOperations.addVMESSClientHandlers(
-                    logger: logger,
+                    position: position,
                     username: username,
-                    destinationAddress: destinationAddress,
-                    position: position
+                    destinationAddress: destinationAddress
                 )
             })
         }
@@ -55,10 +51,9 @@ extension ChannelPipeline {
 extension ChannelPipeline.SynchronousOperations {
 
     public func addVMESSClientHandlers(
-        logger: Logger = .init(label: "com.netbot.vmess"),
+        position: ChannelPipeline.Position = .last,
         username: UUID,
-        destinationAddress: NetAddress,
-        position: ChannelPipeline.Position = .last
+        destinationAddress: NetAddress
     ) throws {
         eventLoop.assertInEventLoop()
 
@@ -76,7 +71,6 @@ extension ChannelPipeline.SynchronousOperations {
         let authenticationCode = UInt8.random(in: 0...UInt8.max)
 
         let outboundHandler = RequestEncodingHandler(
-            logger: logger,
             authenticationCode: authenticationCode,
             symmetricKey: symmetricKey,
             nonce: nonce,
@@ -85,7 +79,6 @@ extension ChannelPipeline.SynchronousOperations {
         )
 
         let responseDecoder = ResponseHeaderDecoder(
-            logger: logger,
             authenticationCode: authenticationCode,
             symmetricKey: symmetricKey,
             nonce: nonce,
@@ -93,7 +86,6 @@ extension ChannelPipeline.SynchronousOperations {
         )
 
         let frameDecoder = LengthFieldBasedFrameDecoder(
-            logger: logger,
             symmetricKey: symmetricKey,
             nonce: nonce,
             configuration: configuration

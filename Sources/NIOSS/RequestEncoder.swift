@@ -14,7 +14,6 @@
 
 import Crypto
 import Foundation
-import Logging
 import NIOCore
 import NIONetbotMisc
 
@@ -22,11 +21,9 @@ final public class RequestEncoder: MessageToByteEncoder {
 
     public typealias OutboundIn = ByteBuffer
 
-    private var logger: Logger
-
     private let taskAddress: NetAddress
 
-    private let algorithm: CryptoAlgorithm
+    private let algorithm: Algorithm
 
     private let passwordReference: String
 
@@ -34,13 +31,7 @@ final public class RequestEncoder: MessageToByteEncoder {
 
     private var nonce: [UInt8]!
 
-    public init(
-        logger: Logger,
-        algorithm: CryptoAlgorithm,
-        passwordReference: String,
-        taskAddress: NetAddress
-    ) {
-        self.logger = logger
+    public init(algorithm: Algorithm, passwordReference: String, taskAddress: NetAddress) {
         self.algorithm = algorithm
         self.passwordReference = passwordReference
         self.taskAddress = taskAddress

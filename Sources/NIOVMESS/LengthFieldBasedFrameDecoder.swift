@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import Logging
 import NIOCore
 import NIONetbotMisc
 import SHAKE128
@@ -24,14 +23,9 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
 
     public typealias InboundOut = ByteBuffer
 
-    private let logger: Logger
-
     private let symmetricKey: SecureBytes
-
     private let nonce: SecureBytes
-
     private let configuration: Configuration
-
     private var frameOffset: UInt16 = 0
 
     /// The frame length and padding record.
@@ -43,19 +37,13 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
         return shake128
     }()
 
-    public init(
-        logger: Logger,
-        symmetricKey: SecureBytes,
-        nonce: SecureBytes,
-        configuration: Configuration
-    ) {
+    public init(symmetricKey: SecureBytes, nonce: SecureBytes, configuration: Configuration) {
         let hash: (SecureBytes) -> SecureBytes = {
             var hasher = SHA256()
             hasher.update(data: $0)
             return SecureBytes(hasher.finalize().prefix(16))
         }
 
-        self.logger = logger
         self.symmetricKey = hash(symmetricKey)
         self.nonce = hash(nonce)
         self.configuration = configuration
@@ -209,8 +197,6 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
     private func parseLastFrame(context: ChannelHandlerContext, buffer: inout ByteBuffer)
         -> ByteBuffer
     {
-        logger.debug("\(self) \(#function)")
-
         // We don't care about contents of this frame just remove it from buffer.
         _ = buffer.readBytes(length: Int(size?.0 ?? 0))
 
