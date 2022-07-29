@@ -30,7 +30,8 @@ class HTTPProxyClientHandlerTests: XCTestCase {
             passwordReference: "passwordReference",
             authenticationRequired: false,
             preferHTTPTunneling: true,
-            destinationAddress: .domainPort("swift.org", 443)
+            destinationAddress: .domainPort("swift.org", 443),
+            timeoutInterval: .seconds(5)
         )
 
         self.channel = EmbeddedChannel()
@@ -173,12 +174,13 @@ class HTTPProxyClientHandlerTests: XCTestCase {
                     "CONNECT swift.org:443 HTTP/1.1\r\nproxy-authorization: Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=\r\n\r\n"
             )
         )
-        try channel.writeInbound(
-            ByteBuffer(string: "HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
+        XCTAssertThrowsError(
+            try channel.writeInbound(
+                ByteBuffer(string: "HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
+            )
         )
-        channel.embeddedEventLoop.advanceTime(to: .now())
 
-        // TODO: Error handling
+        XCTAssertThrowsError(try channel.finish())
     }
 
     func testBasicAuthenticationRequired() throws {
@@ -188,29 +190,12 @@ class HTTPProxyClientHandlerTests: XCTestCase {
             try channel.readOutbound(),
             ByteBuffer(string: "CONNECT swift.org:443 HTTP/1.1\r\n\r\n")
         )
-        try channel.writeInbound(
-            ByteBuffer(string: "HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
+        XCTAssertThrowsError(
+            try channel.writeInbound(
+                ByteBuffer(string: "HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
+            )
         )
-        channel.embeddedEventLoop.advanceTime(to: .now())
-
-        // TODO: Error handling
-    }
-
-    func testBasicAuthenticationRequired0() throws {
-        try waitUtilConnected()
-
-        XCTAssertEqual(
-            try channel.readOutbound(),
-            ByteBuffer(string: "CONNECT swift.org:443 HTTP/1.1\r\n\r\n")
-        )
-        try channel.writeInbound(ByteBuffer(string: "\r\n"))
-        try channel.writeInbound(
-            ByteBuffer(string: "HTTP/1.1 407 Proxy Authentication Required\r\n")
-        )
-        try channel.writeInbound(ByteBuffer(string: "\r\n"))
-        channel.embeddedEventLoop.advanceTime(to: .now())
-
-        // TODO: Error handling
+        XCTAssertThrowsError(try channel.finish())
     }
 
     func testHTTPEncoderAndDecoderShouldBeenRemovedAfterEstablishedEventTriggered() throws {

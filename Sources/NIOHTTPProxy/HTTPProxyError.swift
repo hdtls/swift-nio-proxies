@@ -15,11 +15,12 @@
 import NIOHTTP1
 
 public enum HTTPProxyError: Error {
-    case invalidClientState
-    case invalidServerState
-    case invalidProxyResponse(HTTPResponseHead)
+    /// Receive http part in invalid ordering.
     case invalidHTTPOrdering
-    case invalidURL(url: String)
 
-    case unacceptable(code: HTTPResponseStatus)
+    /// Connection timed out.
+    case connectionTimedOut
+
+    /// The response status code was not acceptable.
+    case unacceptableStatusCode(HTTPResponseStatus)
 }

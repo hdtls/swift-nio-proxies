@@ -57,7 +57,7 @@ extension DirectPolicy: ConnectionPoolSource {
     {
         do {
             guard case .domainPort(let serverHostname, let serverPort) = destinationAddress else {
-                throw HTTPProxyError.invalidURL(url: String(describing: destinationAddress))
+                throw SocketAddressError.unsupported
             }
             return ClientBootstrap.init(group: eventLoop.next())
                 .connect(host: serverHostname, port: serverPort)

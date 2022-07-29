@@ -16,6 +16,8 @@ import NIOCore
 import NIOHTTP1
 import NIONetbotMisc
 
+/// A channel handler that wraps a channel in HTTP CONNECT tunnel.
+/// This handler can be used in channels that are acting as the client in the HTTP CONNECT tunnel proxy dialog.
 final public class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, RemovableChannelHandler {
 
     public typealias InboundIn = HTTPClientResponsePart
@@ -35,8 +37,14 @@ final public class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, Remova
 
     /// The destination for this proxy connection.
     private let destinationAddress: NetAddress
+
     private var state: ConnectionState
-    private var headPart: HTTPResponseHead?
+
+    /// The HTTP proxy connection time out time amount.
+    private let timeoutInterval: TimeAmount
+
+    /// Time out shceduled task.
+    private var scheduled: Scheduled<Void>?
 
     /// The circular buffer to buffer channel write before handshake established.
     ///
@@ -51,12 +59,14 @@ final public class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, Remova
     ///   - authenticationRequired: A boolean value deterinse whether client should perform proxy authentication.
     ///   - preferHTTPTunneling: A boolean value determinse whether client should use HTTP CONNECT tunnel to proxy connection.
     ///   - destinationAddress: The destination for this proxy connection.
+    ///   - timeout: A TimeAmount use to calculate deadline for handshaking timeout. The default timeout interval is 60 seconds.
     public init(
         username: String,
         passwordReference: String,
         authenticationRequired: Bool,
         preferHTTPTunneling: Bool,
-        destinationAddress: NetAddress
+        destinationAddress: NetAddress,
+        timeoutInterval: TimeAmount = .seconds(60)
     ) {
         self.username = username
         self.passwordReference = passwordReference
@@ -65,6 +75,7 @@ final public class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, Remova
         self.destinationAddress = destinationAddress
         self.state = .idle
         self.bufferedWrites = .init(initialCapacity: 6)
+        self.timeoutInterval = timeoutInterval
     }
 
     public func handlerAdded(context: ChannelHandlerContext) {
@@ -78,19 +89,33 @@ final public class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, Remova
         performCONNECTHandshake(context: context)
     }
 
+    public func channelInactive(context: ChannelHandlerContext) {
+        context.fireChannelInactive()
+        scheduled?.cancel()
+    }
+
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         guard state != .active else {
             context.fireChannelRead(data)
             return
         }
 
-        switch unwrapInboundIn(data) {
-            case .head(let head) where state == .handshaking:
-                headPart = head
-            case .end where state == .handshaking && headPart != nil:
+        switch (unwrapInboundIn(data), state) {
+            case (.head(let head), .handshaking):
+                if !(200..<300).contains(head.status.code) {
+                    scheduled?.cancel()
+                    state = .failed
+                    channelClose(
+                        context: context,
+                        reason: HTTPProxyError.unacceptableStatusCode(head.status)
+                    )
+                }
+            case (.body, .handshaking):
+                break
+            case (.end, .handshaking):
                 established(context: context)
             default:
-                context.fireErrorCaught(HTTPProxyError.invalidHTTPOrdering)
+                scheduled?.cancel()
                 channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
         }
     }
@@ -134,9 +159,23 @@ extension HTTP1ClientCONNECTTunnelHandler {
 
 extension HTTP1ClientCONNECTTunnelHandler {
 
+    /// Sending HTTP CONNECT request to proxy server and perform a timeout schedule task.
     private func performCONNECTHandshake(context: ChannelHandlerContext) {
         guard context.channel.isActive, state == .idle else {
             return
+        }
+
+        scheduled = context.eventLoop.scheduleTask(in: timeoutInterval) {
+            switch self.state {
+                case .idle:
+                    preconditionFailure(
+                        "How can we have a scheduled timeout, if the connection is not even up?"
+                    )
+                case .handshaking:
+                    self.channelClose(context: context, reason: HTTPProxyError.connectionTimedOut)
+                case .active, .failed:
+                    break
+            }
         }
 
         state = .handshaking
@@ -146,12 +185,11 @@ extension HTTP1ClientCONNECTTunnelHandler {
             case .domainPort(let domain, let port):
                 uri = "\(domain):\(port)"
             case .socketAddress(let socketAddress):
-                guard let host = socketAddress.ipAddress else {
-                    context.fireErrorCaught(HTTPProxyError.invalidURL(url: "nil"))
-                    channelClose(context: context, reason: HTTPProxyError.invalidURL(url: "nil"))
+                guard let host = socketAddress.ipAddress, let port = socketAddress.port else {
+                    channelClose(context: context, reason: SocketAddressError.unsupported)
                     return
                 }
-                uri = "\(host):\(socketAddress.port ?? 80)"
+                uri = "\(host):\(port)"
         }
 
         var head: HTTPRequestHead = .init(version: .http1_1, method: .CONNECT, uri: uri)
@@ -182,18 +220,19 @@ extension HTTP1ClientCONNECTTunnelHandler {
                     case .success:
                         self.state = .active
                         self.unbufferWrites(context: context)
+                        self.scheduled?.cancel()
                         context.fireUserInboundEventTriggered(
                             UserEvent.established(channel: context.channel)
                         )
                         context.pipeline.removeHandler(self, promise: nil)
                     case .failure(let error):
-                        context.fireErrorCaught(error)
                         self.channelClose(context: context, reason: error)
                 }
             }
     }
 
     private func channelClose(context: ChannelHandlerContext, reason: Error) {
+        context.fireErrorCaught(reason)
         context.close(promise: nil)
     }
 }

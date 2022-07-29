@@ -16,6 +16,8 @@ import NIOCore
 import NIOHTTP1
 import NIONetbotMisc
 
+/// A channel handler that wraps a channel for HTTP proxy.
+/// This handler can be used in channels that are acting as the server in the HTTP proxy dialog.
 final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChannelHandler {
 
     public typealias InboundIn = HTTPServerRequestPart
@@ -31,16 +33,34 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
 
     /// The task request head part. this value is updated after `head` part received.
     private var headPart: HTTPRequestHead!
+
+    /// The usename used to authenticate this proxy connection.
     private let username: String
+
+    /// The password used to authenticate this proxy connection.
     private let passwordReference: String
+
+    /// A boolean value deterinse whether server should evaluate proxy authentication request.
     private let authenticationRequired: Bool
 
     /// When a proxy request is received, we will send a new request to the target server.
     /// During the request is established, we need to buffer events.
     private var eventBuffer: CircularBuffer<Event> = .init(initialCapacity: 0)
+
+    /// The completion handler when proxy connection established.
     private let completion: (Request, Channel) throws -> Void
+
+    /// The `EventLoopFuture<Channel>` to used when creating outbound client channel.
     private var channelInitializer: (Request) -> EventLoopFuture<Channel>
 
+    /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
+    ///
+    /// - Parameters:
+    ///   - username: Username for proxy authentication.
+    ///   - passwordReference: Password for proxy authentication.
+    ///   - authenticationRequired: A boolean value deterinse whether server should evaluate proxy authentication request.
+    ///   - channelInitializer: The `EventLoopFuture<Channel>` to used when creating outbound client channel.
+    ///   - completion: The completion handler when proxy connection established.
     public init(
         username: String,
         passwordReference: String,
@@ -83,8 +103,7 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
                 }
                 eventBuffer.append(.channelRead(data: data))
             default:
-                context.fireErrorCaught(HTTPProxyError.invalidHTTPOrdering)
-                context.close(promise: nil)
+                channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
         }
     }
 
@@ -138,10 +157,7 @@ extension HTTPProxyServerHandler {
             guard let authorization = head.headers.proxyBasicAuthorization else {
                 channelClose(
                     context: context,
-                    reason: HTTPProxyError.unacceptable(code: .proxyAuthenticationRequired)
-                )
-                context.fireErrorCaught(
-                    HTTPProxyError.unacceptable(code: .proxyAuthenticationRequired)
+                    reason: HTTPProxyError.unacceptableStatusCode(.proxyAuthenticationRequired)
                 )
                 return
             }
@@ -150,9 +166,8 @@ extension HTTPProxyServerHandler {
             else {
                 channelClose(
                     context: context,
-                    reason: HTTPProxyError.unacceptable(code: .unauthorized)
+                    reason: HTTPProxyError.unacceptableStatusCode(.unauthorized)
                 )
-                context.fireErrorCaught(HTTPProxyError.unacceptable(code: .unauthorized))
                 return
             }
         }
@@ -214,21 +229,12 @@ extension HTTPProxyServerHandler {
 
         if let err = reason as? HTTPProxyError {
             switch err {
-                case .invalidProxyResponse(let response):
-                    head = response
-                case .invalidClientState, .invalidServerState, .invalidHTTPOrdering:
+                case .invalidHTTPOrdering:
                     head = HTTPResponseHead.init(version: .http1_1, status: .internalServerError)
-                case .unacceptable(let code):
+                case .unacceptableStatusCode(let code):
                     head = HTTPResponseHead.init(version: .http1_1, status: code)
-                case .invalidURL:
-                    var headers = HTTPHeaders.init()
-                    headers.add(name: .proxyConnection, value: "close")
-                    headers.add(name: .connection, value: "close")
-                    head = HTTPResponseHead.init(
-                        version: .http1_1,
-                        status: .badRequest,
-                        headers: headers
-                    )
+                case .connectionTimedOut:
+                    break
             }
         }
 

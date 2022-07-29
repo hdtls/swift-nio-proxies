@@ -207,17 +207,29 @@ extension ChannelPipeline.SynchronousOperations {
             let certificateChain = p12.certificateChain.map(NIOSSLCertificateSource.certificate)
             let privateKey = NIOSSLPrivateKeySource.privateKey(p12.privateKey)
 
-            try self.configureSSLServerHandlers(
+            var configuration = TLSConfiguration.makeServerConfiguration(
                 certificateChain: certificateChain,
                 privateKey: privateKey
             )
+            var sslContext = try NIOSSLContext(configuration: configuration)
+            let sslServerHandler = NIOSSLServerHandler(context: sslContext)
+            try addHandler(sslServerHandler)
+
             try self.configureHTTPServerPipeline(
                 withPipeliningAssistance: false,
                 withErrorHandling: false
             )
 
             // Peer channel pipeline setup.
-            try channel.pipeline.syncOperations.addSSLClientHandlers(serverHostname: serverHostname)
+            configuration = TLSConfiguration.makeClientConfiguration()
+            configuration.certificateVerification =
+                mitmConfig.skipServerCertificateVerification ? .none : .fullVerification
+            sslContext = try NIOSSLContext(configuration: configuration)
+            let sslClientHandler = try NIOSSLClientHandler(
+                context: sslContext,
+                serverHostname: serverHostname
+            )
+            try channel.pipeline.syncOperations.addHandler(sslClientHandler)
             try channel.pipeline.syncOperations.addHTTPClientHandlers()
 
             try enableHTTPCapture0()
