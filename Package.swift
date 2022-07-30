@@ -158,6 +158,13 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "NIOHTTPMitMTests",
+            dependencies: [
+                "NIOHTTPMitM",
+                .product(name: "NIOEmbedded", package: "swift-nio"),
+            ]
+        ),
+        .testTarget(
             name: "NIONetbotTests",
             dependencies: [
                 "NIONetbot",
