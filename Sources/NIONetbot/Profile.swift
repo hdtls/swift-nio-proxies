@@ -14,7 +14,6 @@
 
 import Foundation
 import Logging
-import NIOHTTPMitM
 
 /// A profile object that defines behavior and policies for a Netbot process.
 public struct Profile {
@@ -23,7 +22,7 @@ public struct Profile {
     public var rules: [AnyRule]
 
     /// A configuration object that provides HTTP MitM configuration for this process.
-    public var mitm: NIOHTTPMitM.Configuration
+    public var mitm: MitMConfiguration
 
     /// A configuration object that provides general configuration for this process.
     public var general: BasicConfiguration
@@ -39,7 +38,7 @@ public struct Profile {
     public init(
         general: BasicConfiguration,
         rules: [AnyRule],
-        mitm: NIOHTTPMitM.Configuration,
+        mitm: MitMConfiguration,
         policies: [any Policy],
         policyGroups: [PolicyGroup]
     ) {
@@ -80,7 +79,7 @@ extension Profile: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.rules = try container.decodeIfPresent([AnyRule].self, forKey: .rules) ?? []
         self.mitm =
-            try container.decodeIfPresent(NIOHTTPMitM.Configuration.self, forKey: .mitm) ?? .init()
+            try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
         self.general =
             try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
         let anyPolicies = try container.decodeIfPresent([__Policy].self, forKey: .policies) ?? []
@@ -226,6 +225,54 @@ public struct BasicConfiguration: Codable {
         try container.encodeIfPresent(self.socksListenAddress, forKey: .socksListenAddress)
         try container.encodeIfPresent(self.socksListenPort, forKey: .socksListenPort)
         try container.encode(self.excludeSimpleHostnames, forKey: .excludeSimpleHostnames)
+    }
+}
+
+/// Configuration for HTTPS traffic decraption with MitM attacks.
+public struct MitMConfiguration: Codable, Equatable {
+
+    /// A boolean value determinse whether ssl should skip server cerfitication verification.
+    public var skipCertificateVerification: Bool
+
+    /// Hostnames that should perform MitM.
+    public var hostnames: [String]
+
+    /// Base64 encoded CA P12 bundle.
+    public var base64EncodedP12String: String?
+
+    /// Passphrase for P12 bundle.
+    public var passphrase: String?
+
+    /// Initialize an instance of `Configuration` with specified skipCertificateVerification, hostnames, base64EncodedP12String, passphrase.
+    /// - Parameters:
+    ///   - skipCertificateVerification: A boolean value determinse whether client should skip server certificate verification.
+    ///   - hostnames: Hostnames use when decript.
+    ///   - base64EncodedP12String: The base64 encoded p12 certificate bundle string.
+    ///   - passphrase: Passphrase for p12 bundle.
+    public init(
+        skipCertificateVerification: Bool,
+        hostnames: [String],
+        base64EncodedP12String: String?,
+        passphrase: String?
+    ) {
+        self.skipCertificateVerification = skipCertificateVerification
+        self.hostnames = hostnames
+        self.passphrase = passphrase
+        self.base64EncodedP12String = base64EncodedP12String
+    }
+
+    /// Initialize an instance of `Configuration`.
+    ///
+    /// Calling this method is equivalent to calling
+    /// `init(skipCertificateVerification:hostnames:base64EncodedP12String:passphrase:)`
+    /// with a default skipCertificateVerification, hostnames, base64EncodedP12String and passphrase values.
+    public init() {
+        self.init(
+            skipCertificateVerification: false,
+            hostnames: [],
+            base64EncodedP12String: nil,
+            passphrase: nil
+        )
     }
 }
 

@@ -20,10 +20,19 @@ final public class NIOSSLDetectionHandler: ChannelInboundHandler, RemovableChann
 
     public typealias InboundIn = ByteBuffer
 
-    /// The `ByteBuffer` used to store channel read buffer.
-    private var byteBuffer: ByteBuffer!
+    /// The `CircularBuffer<NIOAny>` used to store channel read buffer.
+    private var eventBuffer: CircularBuffer<NIOAny> = .init(initialCapacity: 6)
 
     private let completion: (Bool, Channel) -> EventLoopFuture<Void>
+
+    private enum DetectionState {
+        case idle
+        case waitingForData(ByteBuffer)
+        case waitingForComplete
+        case completed
+    }
+
+    private var state = DetectionState.idle
 
     /// Initialize an instance of `NIOSSLDetectionHandler` with specified tls configuration.
     /// - Parameter context: The context object for `NIOSSLServerHandler`.
@@ -31,22 +40,43 @@ final public class NIOSSLDetectionHandler: ChannelInboundHandler, RemovableChann
         self.completion = completion
     }
 
+    public func handlerAdded(context: ChannelHandlerContext) {
+        state = .waitingForData(context.channel.allocator.buffer(capacity: 6))
+    }
+
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        byteBuffer.setOrWriteImmutableBuffer(unwrapInboundIn(data))
+        switch state {
+            case .idle:
+                preconditionFailure("ChannelRead called before added.")
+            case .waitingForData(var byteBuffer):
+                eventBuffer.append(data)
+                byteBuffer.writeImmutableBuffer(unwrapInboundIn(data))
 
-        guard byteBuffer.readableBytes >= 6 else {
-            // Need more data
-            return
-        }
+                guard byteBuffer.readableBytes >= 6 else {
+                    state = .waitingForData(byteBuffer)
+                    return
+                }
+                state = .waitingForComplete
+                completion(containsSSLHandshake(in: byteBuffer), context.channel).whenComplete {
+                    _ in
+                    self.state = .completed
+                    while !self.eventBuffer.isEmpty {
+                        let data = self.eventBuffer.removeFirst()
+                        context.pipeline.fireChannelRead(data)
+                    }
+                    context.pipeline.removeHandler(context: context, promise: nil)
+                }
 
-        completion(containsSSLHandshake(), context.channel).whenComplete { _ in
-            context.fireChannelRead(NIOAny(self.byteBuffer))
-            context.pipeline.removeHandler(context: context, promise: nil)
+            case .waitingForComplete:
+                eventBuffer.append(data)
+
+            case .completed:
+                context.fireChannelRead(data)
         }
     }
 
-    private func containsSSLHandshake() -> Bool {
-        precondition(byteBuffer != nil)
+    private func containsSSLHandshake(in buffer: ByteBuffer) -> Bool {
+        var byteBuffer = buffer
 
         // Byte   0  = SSL record type = 22 (SSL3_RT_HANDSHAKE)
         // Bytes 1-2 = SSL version (major/minor)

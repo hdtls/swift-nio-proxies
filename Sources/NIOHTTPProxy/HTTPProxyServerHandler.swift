@@ -47,11 +47,11 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     /// During the request is established, we need to buffer events.
     private var eventBuffer: CircularBuffer<Event> = .init(initialCapacity: 0)
 
-    /// The completion handler when proxy connection established.
-    private let completion: (Request, Channel) throws -> Void
-
     /// The `EventLoopFuture<Channel>` to used when creating outbound client channel.
     private var channelInitializer: (Request) -> EventLoopFuture<Channel>
+
+    /// The completion handler when proxy connection established.
+    private let completion: (Request, Channel) -> EventLoopFuture<Void>
 
     /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
     ///
@@ -66,7 +66,7 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
         passwordReference: String,
         authenticationRequired: Bool,
         channelInitializer: @escaping (Request) -> EventLoopFuture<Channel>,
-        completion: @escaping (Request, Channel) throws -> Void
+        completion: @escaping (Request, Channel) -> EventLoopFuture<Void>
     ) {
         self.username = username
         self.passwordReference = passwordReference
@@ -209,9 +209,11 @@ extension HTTPProxyServerHandler {
 
         let (localGlue, peerGlue) = GlueHandler.matchedPair()
         promise.futureResult
+            .flatMap {
+                self.completion(userInfo, channel)
+            }
             .flatMapThrowing {
                 self.state = .active
-                try self.completion(userInfo, channel)
                 context.fireUserInboundEventTriggered(UserEvent.established(channel: channel))
                 try context.pipeline.syncOperations.addHandler(localGlue)
                 try channel.pipeline.syncOperations.addHandler(peerGlue)
