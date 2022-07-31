@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import XCTest
+
 @testable import NIOHTTPMitM
 
 final class CertificateStoreTests: XCTestCase {
@@ -26,15 +27,28 @@ final class CertificateStoreTests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.
-        try store = CertificateStore(passphrase: passphrase, base64EncodedP12String: base64EncodedP12String)
+        try store = CertificateStore(
+            passphrase: passphrase,
+            base64EncodedP12String: base64EncodedP12String
+        )
     }
 
     func testInitializeWithWrongPassphrase() {
-        XCTAssertThrowsError(try CertificateStore(passphrase: "wrong passphrase", base64EncodedP12String: base64EncodedP12String))
+        XCTAssertThrowsError(
+            try CertificateStore(
+                passphrase: "wrong passphrase",
+                base64EncodedP12String: base64EncodedP12String
+            )
+        )
     }
 
     func testInitializeWithInvalidP12String() {
-        XCTAssertThrowsError(try CertificateStore(passphrase: passphrase, base64EncodedP12String: "base64EncodedP12String"))
+        XCTAssertThrowsError(
+            try CertificateStore(
+                passphrase: passphrase,
+                base64EncodedP12String: "base64EncodedP12String"
+            )
+        )
     }
 
     func testShouldPerfomMitMIfPossible() async {

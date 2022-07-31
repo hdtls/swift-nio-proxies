@@ -30,16 +30,16 @@ import NIOTransportServices
 func makeClientTCPBootstrap(group: EventLoopGroup, serverHostname: String? = nil) throws
     -> NIOClientTCPBootstrap
 {
-    #if canImport(Network)
-    if #available(macOS 10.14, iOS 12, tvOS 12, watchOS 3, *) {
-        // We run on a new-enough Darwin so we can use Network.framework
-        let bootstrap = NIOClientTCPBootstrap(
-            NIOTSConnectionBootstrap(group: group),
-            tls: NIOTSClientTLSProvider()
-        )
-        return bootstrap
-    }
-    #endif
+    //    #if canImport(Network)
+    //    if #available(macOS 10.14, iOS 12, tvOS 12, watchOS 3, *) {
+    //        // We run on a new-enough Darwin so we can use Network.framework
+    //        let bootstrap = NIOClientTCPBootstrap(
+    //            NIOTSConnectionBootstrap(group: group),
+    //            tls: NIOTSClientTLSProvider()
+    //        )
+    //        return bootstrap
+    //    }
+    //    #endif
     // We are on a non-Darwin platform, so we'll use BSD sockets.
     let sslContext = try NIOSSLContext(configuration: TLSConfiguration.makeClientConfiguration())
     return try NIOClientTCPBootstrap(
@@ -59,7 +59,7 @@ extension DirectPolicy: ConnectionPoolSource {
             guard case .domainPort(let serverHostname, let serverPort) = destinationAddress else {
                 throw SocketAddressError.unsupported
             }
-            return ClientBootstrap.init(group: eventLoop.next())
+            return try makeClientTCPBootstrap(group: eventLoop)
                 .connect(host: serverHostname, port: serverPort)
         } catch {
             return eventLoop.makeFailedFuture(error)
@@ -91,7 +91,7 @@ extension ProxyPolicy: ConnectionPoolSource {
             precondition(destinationAddress != nil)
             let destinationAddress = destinationAddress!
 
-            var bootstrap = try makeClientTCPBootstrap(group: eventLoop.next())
+            var bootstrap = try makeClientTCPBootstrap(group: eventLoop)
 
             if proxy.overTls {
                 bootstrap = bootstrap.enableTLS()

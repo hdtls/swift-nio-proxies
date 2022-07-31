@@ -482,7 +482,7 @@ final class ProfileTests: XCTestCase {
 
         let result = profile.mitm
 
-        XCTAssertTrue(result.skipServerCertificateVerification)
+        XCTAssertTrue(result.skipCertificateVerification)
         XCTAssertEqual(result.hostnames, ["*.google.com", "*.ietf.org"])
         XCTAssertEqual(result.passphrase, "CS2UNBDR")
         XCTAssertEqual(

@@ -14,8 +14,10 @@
 
 import NIOSS
 
+/// A wrapper object use to decoding and encoding proxy settings.
 public struct Proxy: Codable, Equatable, Hashable {
 
+    /// Proxy protocol definition.
     public enum `Protocol`: String, CaseIterable, Codable, CustomStringConvertible {
         case http
         case socks5
@@ -42,6 +44,7 @@ public struct Proxy: Codable, Equatable, Hashable {
     /// Proxy server port.
     public var port: Int
 
+    /// Proxy protocol.
     public var `protocol`: `Protocol`
 
     /// Username for proxy authentication.
@@ -51,6 +54,8 @@ public struct Proxy: Codable, Equatable, Hashable {
 
     /// Password for HTTP basic authentication and SOCKS5 username password authentication.
     public var password: String
+
+    /// Password field for this proxy settings. For now just return password instead.
     public var passwordReference: String { password }
 
     /// A boolean value determinse whether connection should perform username password authentication.
@@ -122,8 +127,13 @@ public struct Proxy: Codable, Equatable, Hashable {
         self.sni = try container.decodeIfPresent(String.self, forKey: .sni) ?? ""
         self.certificatePinning =
             try container.decodeIfPresent(String.self, forKey: .certificatePinning) ?? ""
-        self.algorithm =
-            try container.decodeIfPresent(Algorithm.self, forKey: .algorithm) ?? .aes128Gcm
+        if let algorithmRawValue =
+            try container.decodeIfPresent(String.self, forKey: .algorithm)
+        {
+            self.algorithm = .init(rawValue: algorithmRawValue) ?? .aes128Gcm
+        } else {
+            self.algorithm = .aes128Gcm
+        }
         self.overTls = try container.decodeIfPresent(Bool.self, forKey: .overTls) ?? false
     }
 
@@ -173,11 +183,9 @@ public struct Proxy: Codable, Equatable, Hashable {
             forKey: .certificatePinning
         )
         try container.encodeIfPresent(
-            self.algorithm != .aes128Gcm ? self.algorithm : nil,
+            self.algorithm != .aes128Gcm ? self.algorithm.rawValue : nil,
             forKey: .algorithm
         )
         try container.encodeIfPresent(self.overTls ? self.overTls : nil, forKey: .overTls)
     }
 }
-
-extension Algorithm: Codable {}

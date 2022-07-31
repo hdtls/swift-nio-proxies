@@ -67,7 +67,7 @@ public protocol Rule {
     init(string: String) throws
 }
 
-public struct AnyRule: Rule {
+public struct AnyRule: Rule, CustomStringConvertible {
 
     public var id: UUID = UUID()
 
@@ -108,6 +108,14 @@ public struct AnyRule: Rule {
         }
         dstURL.appendPathComponent(filename)
         return dstURL
+    }
+
+    public var description: String {
+        var literals = [type.rawValue, policy]
+        if !expression.isEmpty {
+            literals.insert(expression, at: 1)
+        }
+        return literals.joined(separator: " ")
     }
 
     /// Initialize an instance of `AnyRule` with specified type, expression, policy and comment.

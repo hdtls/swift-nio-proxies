@@ -129,7 +129,7 @@ public class App {
                         // This results will be used for rule matching.
                         let dnsLookupPromise = eventLoop.makePromise(of: [NetAddress].self)
 
-                        let dnsLookupStartTimeInterval = DispatchTime.now().uptimeNanoseconds
+                        let dnsLookupStartTime = DispatchTime.now()
 
                         switch taskAddress {
                             case .domainPort(let domain, let port):
@@ -158,7 +158,7 @@ public class App {
                         return dnsLookupPromise.futureResult
                             .map { addresses -> [String] in
                                 self.logger.info(
-                                    "DNS Lookup end with \((DispatchTime.now().uptimeNanoseconds - dnsLookupStartTimeInterval) / 1000)ms.",
+                                    "DNS Lookup end with \(dnsLookupStartTime.distance(to: .now())).",
                                     metadata: ["Request": "\(taskAddress)"]
                                 )
                                 return addresses.map {
@@ -176,15 +176,14 @@ public class App {
                                 // Rule evaluating.
                                 var savedFinalRule: AnyRule?
 
-                                let startTime = DispatchTime.now().uptimeNanoseconds
-
+                                let startTime = DispatchTime.now()
                                 defer {
                                     self.logger.info(
-                                        "Rule evaluating - \(savedFinalRule!)",
+                                        "Rule evaluating - \(savedFinalRule!.description)",
                                         metadata: ["Request": "\(taskAddress)"]
                                     )
                                     self.logger.info(
-                                        "Rule evaluating end with \((DispatchTime.now().uptimeNanoseconds - startTime) / 1000)ms.",
+                                        "Rule evaluating end with \(startTime.distance(to: .now())).",
                                         metadata: ["Request": "\(taskAddress)"]
                                     )
                                 }
