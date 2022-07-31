@@ -21,7 +21,7 @@ import FoundationNetworking
 #endif
 
 @main
-public struct NetbotCLITool: ParsableCommand {
+public struct NetbotCLITool: AsyncParsableCommand {
 
     #if os(macOS)
     /// A configuration object use for config this command.
@@ -79,7 +79,7 @@ public struct NetbotCLITool: ParsableCommand {
     /// Initialize an instance of `NetbotCLITool`.
     public init() {}
 
-    public func run() throws {
+    public func run() async throws {
         var profile: Profile = .init()
 
         if let path = profileFile {
@@ -153,73 +153,39 @@ public struct NetbotCLITool: ParsableCommand {
         }()
 
         if !FileManager.default.fileExists(atPath: dstURL.path) {
-            let g = DispatchGroup.init()
-            g.enter()
+            let _: Void = try await withCheckedThrowingContinuation { continuation in
+                URLSession(configuration: .ephemeral).downloadTask(
+                    with: URL(string: "https://git.io/GeoLite2-Country.mmdb")!
+                ) { url, response, error in
+                    guard let url = url, error == nil else {
+                        continuation.resume(throwing: error!)
+                        return
+                    }
 
-            print("Downloading https://git.io/GeoLite2-Country.mmdb")
-            let totalSize: Double = 60
-            var prettyPrint = String.init(repeating: "-", count: Int(totalSize))
-            print("\r[\(prettyPrint)] 0%", terminator: "")
-            fflush(stdout)
-
-            let task = URLSession(configuration: .ephemeral).downloadTask(
-                with: URL(string: "https://git.io/GeoLite2-Country.mmdb")!
-            ) { url, response, error in
-                defer {
-                    g.leave()
+                    do {
+                        let supportDirectory = dstURL.deletingLastPathComponent()
+                        try FileManager.default.createDirectory(
+                            at: supportDirectory,
+                            withIntermediateDirectories: true
+                        )
+                        try FileManager.default.moveItem(at: url, to: dstURL)
+                        continuation.resume()
+                    } catch {
+                        assertionFailure(error.localizedDescription)
+                        continuation.resume(throwing: error)
+                    }
                 }
-                guard let url = url, error == nil else {
-                    return
-                }
-
-                do {
-                    let supportDirectory = dstURL.deletingLastPathComponent()
-                    try FileManager.default.createDirectory(
-                        at: supportDirectory,
-                        withIntermediateDirectories: true
-                    )
-                    try FileManager.default.moveItem(at: url, to: dstURL)
-                } catch {
-                    assertionFailure(error.localizedDescription)
-                }
+                .resume()
             }
-
-            task.resume()
-
-            #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
-            let observation = task.progress.observe(\.fractionCompleted, options: .new) {
-                progress,
-                _ in
-                let range = Range.init(
-                    .init(location: 0, length: Int(progress.fractionCompleted * totalSize)),
-                    in: prettyPrint
-                )
-                prettyPrint = prettyPrint.replacingOccurrences(of: "-", with: "#", range: range)
-
-                print(
-                    "\r[\(prettyPrint)] \(Int(progress.fractionCompleted * 100))%",
-                    terminator: progress.fractionCompleted < 1 ? "" : "\n"
-                )
-                fflush(__stdoutp)
-            }
-            #endif
-
-            // Wait downloading done.
-            g.wait()
-
-            #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
-            observation.invalidate()
-            #endif
         }
 
-        let netbot = App.init(
+        try await App.init(
             profile: profile,
             outboundMode: outboundMode,
             enableHTTPCapture: enableHTTPCapture,
             enableMitm: enableMitm,
-            geoLite2: try .init(file: dstURL.path)
+            maxMindDB: .init(file: dstURL.path)
         )
-
-        try netbot.run()
+        .run()
     }
 }
