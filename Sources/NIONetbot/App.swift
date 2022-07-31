@@ -111,91 +111,49 @@ public class App {
                 }
                 .childChannelInitializer { channel in
                     channel.pipeline.configureHTTPProxyServerPipeline { req in
-                        let eventLoop = channel.eventLoop.next()
+                        let promise = channel.eventLoop.makePromise(of: Channel.self)
+                        promise.completeWithTask {
+                            let eventLoop = channel.eventLoop.next()
 
-                        let taskAddress: NetAddress
-                        do {
-                            taskAddress = try req.address
-                        } catch {
-                            return eventLoop.makeFailedFuture(error)
-                        }
-
-                        guard self.outboundMode != .direct else {
-                            return DirectPolicy()
-                                .makeConnection(logger: self.logger, on: eventLoop)
-                        }
-
-                        // DNS lookup for taskAddress.
-                        // This results will be used for rule matching.
-                        let dnsLookupPromise = eventLoop.makePromise(of: [NetAddress].self)
-
-                        let dnsLookupStartTime = DispatchTime.now()
-
-                        switch taskAddress {
-                            case .domainPort(let domain, let port):
-                                let resolver = GetaddrinfoResolver(eventLoop: eventLoop)
-                                let dnsLookup = EventLoopFuture.whenAllSucceed(
-                                    [
-                                        resolver.initiateAQuery(host: domain, port: port)
-                                            .flatMapErrorThrowing { _ in [SocketAddress]() },
-                                        resolver.initiateAAAAQuery(host: domain, port: port)
-                                            .flatMapErrorThrowing { _ in [SocketAddress]() },
-                                    ],
+                            guard self.outboundMode != .direct else {
+                                return try await DirectPolicy().makeConnection(
+                                    logger: self.logger,
                                     on: eventLoop
-                                )
+                                ).get()
+                            }
 
-                                dnsLookup
-                                    .map {
-                                        $0.joined().map {
-                                            NetAddress.socketAddress($0)
-                                        } + [taskAddress]
-                                    }
-                                    .cascade(to: dnsLookupPromise)
-                            case .socketAddress:
-                                dnsLookupPromise.succeed([taskAddress])
-                        }
+                            // DNS lookup for `req.address`.
+                            // This results will be used for rule matching.
+                            let patterns: [String]
+                            let address = try req.address
+                            var startTime = DispatchTime.now()
+                            switch address {
+                                case .domainPort(let host, let port):
+                                    let resolver = GetaddrinfoResolver(eventLoop: eventLoop)
+                                    async let a = resolver.initiateAQuery(host: host, port: port).get()
+                                    async let aaaa = resolver.initiateAAAAQuery(host: host, port: port).get()
+                                    let dnsResults = try await a + aaaa
+                                    patterns = dnsResults.map { $0.ipAddress ?? $0.pathname! } + [host]
+                                case .socketAddress(let addrinfo):
+                                    patterns = [addrinfo.ipAddress ?? addrinfo.pathname!]
+                            }
+                            self.logger.info(
+                                "DNS Lookup end with \(startTime.distance(to: .now())).",
+                                metadata: ["Request": "\(address)"]
+                            )
 
-                        return dnsLookupPromise.futureResult
-                            .map { addresses -> [String] in
-                                self.logger.info(
-                                    "DNS Lookup end with \(dnsLookupStartTime.distance(to: .now())).",
-                                    metadata: ["Request": "\(taskAddress)"]
-                                )
-                                return addresses.map {
-                                    // Map domainPort address to domain
-                                    // and socketAddress to pathname if is unixDomainSocket else ipAddress.
-                                    switch $0 {
-                                        case .domainPort(let domain, _):
-                                            return domain
-                                        case .socketAddress(let addrinfo):
-                                            return addrinfo.ipAddress ?? addrinfo.pathname!
-                                    }
+                            var savedFinalRule: AnyRule!
+                            startTime = DispatchTime.now()
+
+                            // Fetch rule from LRU cache.
+                            for pattern in patterns {
+                                savedFinalRule = self.cache.value(forKey: pattern)
+                                if savedFinalRule != nil {
+                                    break
                                 }
                             }
-                            .map { patterns -> AnyRule in
-                                // Rule evaluating.
-                                var savedFinalRule: AnyRule?
 
-                                let startTime = DispatchTime.now()
-                                defer {
-                                    self.logger.info(
-                                        "Rule evaluating - \(savedFinalRule!.description)",
-                                        metadata: ["Request": "\(taskAddress)"]
-                                    )
-                                    self.logger.info(
-                                        "Rule evaluating end with \(startTime.distance(to: .now())).",
-                                        metadata: ["Request": "\(taskAddress)"]
-                                    )
-                                }
-
-                                // Fetch rule from LRU cache.
-                                for pattern in patterns {
-                                    savedFinalRule = self.cache.value(forKey: pattern)
-                                    if savedFinalRule != nil {
-                                        return savedFinalRule!
-                                    }
-                                }
-
+                            if savedFinalRule == nil {
                                 for rule in self.profile.rules {
                                     guard patterns.first(where: rule.match) == nil else {
                                         savedFinalRule = rule
@@ -211,60 +169,67 @@ public class App {
                                 patterns.forEach { pattern in
                                     self.cache.setValue(savedFinalRule, forKey: pattern)
                                 }
-                                precondition(
-                                    savedFinalRule != nil,
-                                    "Rules defined in profile MUST contain one and only one FinalRule."
-                                )
-                                return savedFinalRule!
                             }
-                            .map { rule -> Policy in
-                                // Policy evaluating.
-                                let fallback = DirectPolicy()
 
-                                var preferred: String?
+                            precondition(
+                                savedFinalRule != nil,
+                                "Rules defined in profile MUST contain one and only one FinalRule."
+                            )
+                            self.logger.info(
+                                "Rule evaluating - \(savedFinalRule.description)",
+                                metadata: ["Request": "\(address)"]
+                            )
+                            self.logger.info(
+                                "Rule evaluating end with \(startTime.distance(to: .now())).",
+                                metadata: ["Request": "\(address)"]
+                            )
 
-                                // Check whether there is a `PolicyGroup`
-                                // with then same name as the rule's policy in
-                                // `policyGroups`, if group exists use group's
-                                // `selected` as policy ID else use rule's policy as ID.
-                                if let policyGroup =
-                                    (self.profile.policyGroups.first {
-                                        $0.name == rule.policy
-                                    })
-                                {
-                                    preferred = policyGroup.policies.first?.name
-                                } else {
-                                    preferred = rule.policy
-                                }
+                            // Policy evaluating.
+                            var fallback: Policy! = DirectPolicy()
 
-                                // The user may not have preferred policy, so if not
-                                // we should fallback.
-                                guard let preferred = preferred else {
-                                    return fallback
-                                }
+                            var preferred: String?
 
-                                let policy =
+                            // Check whether there is a `PolicyGroup`
+                            // with then same name as the rule's policy in
+                            // `policyGroups`, if group exists use group's
+                            // `selected` as policy ID else use rule's policy as ID.
+                            if let policyGroup =
+                                (self.profile.policyGroups.first {
+                                    $0.name == savedFinalRule.policy
+                                })
+                            {
+                                preferred = policyGroup.policies.first?.name
+                            } else {
+                                preferred = savedFinalRule.policy
+                            }
+
+                            // The user may not have preferred policy, so if not
+                            // we should fallback.
+                            if let preferred = preferred {
+                                fallback =
                                     (self.profile.policies + Builtin.policies)
                                     .first {
                                         $0.name == preferred
                                     }
-
-                                assert(
-                                    policy != nil,
-                                    "Illegal selectable policy groups, all policies group should be one of the policies in same profile."
-                                )
-                                return policy!
                             }
-                            .flatMap {
-                                self.logger.info(
-                                    "Policy evaluating - \($0.name)",
-                                    metadata: ["Request": "\(taskAddress)"]
-                                )
-                                var policy = $0
-                                policy.destinationAddress = taskAddress
 
-                                return policy.makeConnection(logger: self.logger, on: eventLoop)
-                            }
+                            precondition(
+                                fallback != nil,
+                                "Illegal selectable policy groups, all policies group should be one of the policies in same profile."
+                            )
+                            self.logger.info(
+                                "Policy evaluating - \(fallback.name)",
+                                metadata: ["Request": "\(address)"]
+                            )
+
+                            // Create peer channel.
+                            fallback.destinationAddress = address
+                            return try await fallback.makeConnection(
+                                logger: self.logger,
+                                on: eventLoop
+                            ).get()
+                        }
+                        return promise.futureResult
                     } completion: { req, peer in
                         channel.pipeline.addHandler(
                             NIOSSLDetectionHandler { result, channel -> EventLoopFuture<Void> in
