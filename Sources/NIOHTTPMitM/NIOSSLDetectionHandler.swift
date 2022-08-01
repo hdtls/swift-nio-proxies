@@ -20,8 +20,13 @@ final public class NIOSSLDetectionHandler: ChannelInboundHandler, RemovableChann
 
     public typealias InboundIn = ByteBuffer
 
-    /// The `CircularBuffer<NIOAny>` used to store channel read buffer.
-    private var eventBuffer: CircularBuffer<NIOAny> = .init(initialCapacity: 6)
+    private enum Event {
+        case channelRead(NIOAny)
+        case channelReadComplete
+    }
+
+    /// The `CircularBuffer<Event>` used to store channel read buffer.
+    private var eventBuffer: CircularBuffer<Event> = .init(initialCapacity: 6)
 
     private let completion: (Bool, Channel) -> EventLoopFuture<Void>
 
@@ -49,7 +54,7 @@ final public class NIOSSLDetectionHandler: ChannelInboundHandler, RemovableChann
             case .idle:
                 preconditionFailure("ChannelRead called before added.")
             case .waitingForData(var byteBuffer):
-                eventBuffer.append(data)
+                eventBuffer.append(.channelRead(data))
                 byteBuffer.writeImmutableBuffer(unwrapInboundIn(data))
 
                 guard byteBuffer.readableBytes >= 6 else {
@@ -58,21 +63,35 @@ final public class NIOSSLDetectionHandler: ChannelInboundHandler, RemovableChann
                 }
                 state = .waitingForComplete
                 completion(containsSSLHandshake(in: byteBuffer), context.channel).whenComplete {
-                    _ in
-                    self.state = .completed
-                    while !self.eventBuffer.isEmpty {
-                        let data = self.eventBuffer.removeFirst()
-                        context.pipeline.fireChannelRead(data)
+                    switch $0 {
+                        case .success:
+                            while !self.eventBuffer.isEmpty {
+                                let event = self.eventBuffer.removeFirst()
+                                switch event {
+                                    case .channelRead(let data):
+                                        context.fireChannelRead(data)
+                                    case .channelReadComplete:
+                                        context.fireChannelReadComplete()
+                                }
+                            }
+                            self.state = .completed
+                            context.pipeline.removeHandler(context: context, promise: nil)
+                        case .failure(let error):
+                            context.fireErrorCaught(error)
+                            context.close(promise: nil)
                     }
-                    context.pipeline.removeHandler(context: context, promise: nil)
                 }
 
             case .waitingForComplete:
-                eventBuffer.append(data)
+                eventBuffer.append(.channelRead(data))
 
             case .completed:
                 context.fireChannelRead(data)
         }
+    }
+
+    public func channelReadComplete(context: ChannelHandlerContext) {
+        eventBuffer.append(.channelReadComplete)
     }
 
     private func containsSSLHandshake(in buffer: ByteBuffer) -> Bool {

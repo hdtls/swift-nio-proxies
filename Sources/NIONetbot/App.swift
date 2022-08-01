@@ -153,121 +153,16 @@ import NIOSSL
                                 )
                             }
                             return promise.futureResult
-                        } completion: { req, peer in
+                        } completion: { req, c, peer in
                             channel.pipeline.addHandler(
-                                NIOSSLDetectionHandler { result, channel -> EventLoopFuture<Void> in
+                                NIOSSLDetectionHandler { ssl, channel in
                                     let promise = channel.eventLoop.makePromise(of: Void.self)
                                     promise.completeWithTask {
-                                        let detectHandler = try await channel.pipeline.handler(
-                                            type: NIOSSLDetectionHandler.self
-                                        ).get()
-
-                                        // Those handlers will be added to `self` to enable HTTP capture for request.
-                                        let handlers0: [ChannelHandler] = [
-                                            HTTPResponseCompressor(),
-                                            HTTPCaptureHandler<HTTPRequestHead>(
-                                                logger: Logger(label: "http.capture")
-                                            ),
-                                            HTTPIOTransformer<HTTPRequestHead>(),
-                                        ]
-
-                                        // Those handlers will be added to the channel to enable HTTP capture for response.
-                                        let handlers1: [ChannelHandler] = [
-                                            NIOHTTPResponseDecompressor(limit: .none),
-                                            HTTPCaptureHandler<HTTPResponseHead>(
-                                                logger: Logger(label: "http.capture")
-                                            ),
-                                            HTTPIOTransformer<HTTPResponseHead>(),
-                                        ]
-
-                                        // If detect SSL handshake then setup SSL pipeline to decode SSL stream.
-                                        guard result else {
-                                            guard await self.isHTTPCaptureEnabled else {
-                                                return
-                                            }
-
-                                            try await channel.pipeline.addHandlers(
-                                                handlers0,
-                                                position: .after(detectHandler)
-                                            )
-                                            try await peer.pipeline.addHandlers(
-                                                handlers1,
-                                                position: .first
-                                            )
-                                            return
-                                        }
-
-                                        guard
-                                            let base64EncodedP12String = await self.profile.mitm
-                                                .base64EncodedP12String
-                                        else {
-                                            // To enable the HTTP MitM feature, you must provide the corresponding configuration.
-                                            throw NIOSSLError.failedToLoadCertificate
-                                        }
-
-                                        let store = try CertificateStore(
-                                            passphrase: await self.profile.mitm.passphrase,
-                                            base64EncodedP12String: base64EncodedP12String
-                                        )
-
-                                        await store.setUpMitMHosts(self.profile.mitm.hostnames)
-
-                                        guard
-                                            let p12 = try await store.certificate(
-                                                identifiedBy: req.serverHostname
-                                            )
-                                        else {
-                                            return
-                                        }
-
-                                        let certificateChain = p12.certificateChain.map(
-                                            NIOSSLCertificateSource.certificate
-                                        )
-                                        let privateKey = NIOSSLPrivateKeySource.privateKey(
-                                            p12.privateKey
-                                        )
-                                        var configuration =
-                                            TLSConfiguration.makeServerConfiguration(
-                                                certificateChain: certificateChain,
-                                                privateKey: privateKey
-                                            )
-                                        configuration.certificateVerification =
-                                            await self.profile.mitm.skipCertificateVerification
-                                            ? .none : .fullVerification
-                                        var sslContext = try NIOSSLContext(
-                                            configuration: configuration
-                                        )
-                                        var handlers: [ChannelHandler] = [
-                                            NIOSSLServerHandler(context: sslContext),
-                                            HTTPResponseEncoder(),
-                                            ByteToMessageHandler(HTTPRequestDecoder()),
-                                        ]
-                                        if await self.isHTTPCaptureEnabled {
-                                            handlers.append(contentsOf: handlers0)
-                                        }
-                                        try await channel.pipeline.addHandlers(
-                                            handlers,
-                                            position: .after(detectHandler)
-                                        )
-
-                                        // Peer channel pipeline setup.
-                                        configuration = TLSConfiguration.makeClientConfiguration()
-                                        sslContext = try NIOSSLContext(configuration: configuration)
-                                        let sslHandler = try NIOSSLClientHandler(
-                                            context: sslContext,
-                                            serverHostname: req.serverHostname
-                                        )
-                                        handlers = [
-                                            sslHandler,
-                                            HTTPRequestEncoder(),
-                                            ByteToMessageHandler(HTTPResponseDecoder()),
-                                        ]
-                                        if await self.isHTTPCaptureEnabled {
-                                            handlers.append(contentsOf: handlers1)
-                                        }
-                                        try await peer.pipeline.addHandlers(
-                                            handlers,
-                                            position: .first
+                                        try await self.configureHTTPMitmPipeline(
+                                            on: channel,
+                                            peer: peer,
+                                            serverHostname: req.serverHostname,
+                                            tls: ssl
                                         )
                                     }
                                     return promise.futureResult
@@ -431,6 +326,90 @@ import NIOSSL
         // Create peer channel.
         fallback.destinationAddress = address
         return try await fallback.makeConnection(logger: self.logger, on: eventLoop).get()
+    }
+
+    private func configureHTTPMitmPipeline(
+        on channel: Channel,
+        peer: Channel,
+        serverHostname: String,
+        tls: Bool
+    ) async throws {
+        let position = try await channel.pipeline.handler(
+            type: NIOSSLDetectionHandler.self
+        ).map(ChannelPipeline.Position.after).get()
+
+        // Those handlers will be added to `self` to enable HTTP capture for request.
+        let handlers0: [ChannelHandler] = [
+            HTTPResponseCompressor(),
+            HTTPCaptureHandler<HTTPRequestHead>(
+                logger: Logger(label: "http.capture")
+            ),
+            HTTPIOTransformer<HTTPRequestHead>(),
+        ]
+
+        // Those handlers will be added to the channel to enable HTTP capture for response.
+        let handlers1: [ChannelHandler] = [
+            NIOHTTPResponseDecompressor(limit: .none),
+            HTTPCaptureHandler<HTTPResponseHead>(
+                logger: Logger(label: "http.capture")
+            ),
+            HTTPIOTransformer<HTTPResponseHead>(),
+        ]
+
+        // If detect SSL handshake then setup SSL pipeline to decode SSL stream.
+        guard tls else {
+            guard await self.isHTTPCaptureEnabled else {
+                return
+            }
+
+            try await channel.pipeline.addHandlers(handlers0, position: position)
+            try await peer.pipeline.addHandlers(handlers1, position: .first)
+            return
+        }
+
+        guard let base64EncodedP12String = await self.profile.mitm.base64EncodedP12String else {
+            // To enable the HTTP MitM feature, you must provide the corresponding configuration.
+            throw NIOSSLError.failedToLoadCertificate
+        }
+
+        let store = try CertificateStore(
+            passphrase: await self.profile.mitm.passphrase,
+            base64EncodedP12String: base64EncodedP12String
+        )
+        await store.setUpMitMHosts(self.profile.mitm.hostnames)
+
+        guard let p12 = try await store.certificate(identifiedBy: serverHostname) else {
+            return
+        }
+
+        let certificateChain = p12.certificateChain.map(NIOSSLCertificateSource.certificate)
+        let privateKey = NIOSSLPrivateKeySource.privateKey(p12.privateKey)
+        var configuration = TLSConfiguration.makeServerConfiguration(
+            certificateChain: certificateChain,
+            privateKey: privateKey
+        )
+        configuration.certificateVerification =
+            await self.profile.mitm.skipCertificateVerification ? .none : .fullVerification
+        var context = try NIOSSLContext(configuration: configuration)
+        var handlers: [ChannelHandler] = [
+            NIOSSLServerHandler(context: context),
+            HTTPResponseEncoder(),
+            ByteToMessageHandler(HTTPRequestDecoder()),
+        ]
+        if await self.isHTTPCaptureEnabled {
+            handlers.append(contentsOf: handlers0)
+        }
+        try await channel.pipeline.addHandlers(handlers, position: position)
+
+        // Peer channel pipeline setup.
+        configuration = TLSConfiguration.makeClientConfiguration()
+        context = try NIOSSLContext(configuration: configuration)
+        let sslHandler = try NIOSSLClientHandler(context: context, serverHostname: serverHostname)
+        handlers = [sslHandler, HTTPRequestEncoder(), ByteToMessageHandler(HTTPResponseDecoder())]
+        if await self.isHTTPCaptureEnabled {
+            handlers.append(contentsOf: handlers1)
+        }
+        try await peer.pipeline.addHandlers(handlers, position: .first)
     }
 
     public func shutdown() {

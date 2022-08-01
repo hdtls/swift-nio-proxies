@@ -66,7 +66,7 @@ extension ChannelPipeline {
         passwordReference: String = "",
         authenticationRequired: Bool = false,
         channelInitializer: @escaping (Request) -> EventLoopFuture<Channel>,
-        completion: @escaping (Request, Channel) -> EventLoopFuture<Void>
+        completion: @escaping (Request, Channel, Channel) -> EventLoopFuture<Void>
     ) -> EventLoopFuture<Void> {
         let execute = {
             try self.syncOperations.configureHTTPProxyServerPipeline(
@@ -133,7 +133,7 @@ extension ChannelPipeline.SynchronousOperations {
         passwordReference: String = "",
         authenticationRequired: Bool = false,
         channelInitializer: @escaping (Request) -> EventLoopFuture<Channel>,
-        completion: @escaping (Request, Channel) -> EventLoopFuture<Void>
+        completion: @escaping (Request, Channel, Channel) -> EventLoopFuture<Void>
     ) throws {
         self.eventLoop.assertInEventLoop()
 

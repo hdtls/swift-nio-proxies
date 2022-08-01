@@ -51,7 +51,7 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     private var channelInitializer: (Request) -> EventLoopFuture<Channel>
 
     /// The completion handler when proxy connection established.
-    private let completion: (Request, Channel) -> EventLoopFuture<Void>
+    private let completion: (Request, Channel, Channel) -> EventLoopFuture<Void>
 
     /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
     ///
@@ -66,7 +66,7 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
         passwordReference: String,
         authenticationRequired: Bool,
         channelInitializer: @escaping (Request) -> EventLoopFuture<Channel>,
-        completion: @escaping (Request, Channel) -> EventLoopFuture<Void>
+        completion: @escaping (Request, Channel, Channel) -> EventLoopFuture<Void>
     ) {
         self.username = username
         self.passwordReference = passwordReference
@@ -210,7 +210,7 @@ extension HTTPProxyServerHandler {
         let (localGlue, peerGlue) = GlueHandler.matchedPair()
         promise.futureResult
             .flatMap {
-                self.completion(userInfo, channel)
+                self.completion(userInfo, context.channel, channel)
             }
             .flatMapThrowing {
                 self.state = .active
