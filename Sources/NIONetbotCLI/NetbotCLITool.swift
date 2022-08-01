@@ -14,6 +14,7 @@
 
 import ArgumentParser
 import Foundation
+import Logging
 import NIONetbot
 
 #if canImport(FoundationNetworking)
@@ -177,6 +178,12 @@ public struct NetbotCLITool: AsyncParsableCommand {
                 }
                 .resume()
             }
+        }
+
+        LoggingSystem.bootstrap { label in
+            var handler = StreamLogHandler.standardOutput(label: label)
+            handler.logLevel = profile.general.logLevel
+            return handler
         }
 
         try await App.init(

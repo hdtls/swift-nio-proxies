@@ -27,73 +27,105 @@ import NIOPosix
 import NIOSOCKS5
 import NIOSSL
 
-@MainActor public class App {
+public class App {
 
-    public let logger: Logger
+    private actor Storage {
 
-    public var profile: Profile
+        var profile: Profile
 
-    public var outboundMode: OutboundMode
+        var outboundMode: OutboundMode
 
-    public var isHTTPCaptureEnabled: Bool = false
+        var isHTTPCaptureEnabled: Bool = false
 
-    public var isMitmEnabled: Bool = false
+        var isMitmEnabled: Bool = false
 
-    public var maxMindDB: MaxMindDB
+        var maxMindDB: MaxMindDB
+
+        var serverQuiesces: [(ServerQuiescingHelper, EventLoopPromise<Void>)]
+
+        init(
+            profile: Profile,
+            outboundMode: OutboundMode = .direct,
+            enableHTTPCapture: Bool = false,
+            enableMitm: Bool = false,
+            maxMindDB: MaxMindDB
+        ) {
+            self.profile = profile
+            self.outboundMode = outboundMode
+            self.isHTTPCaptureEnabled = enableHTTPCapture
+            self.isMitmEnabled = enableMitm
+            self.maxMindDB = maxMindDB
+            self.serverQuiesces = []
+        }
+
+        func enableHTTPCapture(_ isEnabled: Bool) {
+            isHTTPCaptureEnabled = isEnabled
+        }
+
+        func enableHTTPMitM(_ isEnabled: Bool) {
+            isMitmEnabled = isEnabled
+        }
+
+        func appendServerQuiesces(_ sq: (ServerQuiescingHelper, EventLoopPromise<Void>)) {
+            serverQuiesces.append(sq)
+        }
+    }
+
+    private let logger: Logger
+
+    private let storage: Storage
 
     private let eventLoopGroup: EventLoopGroup
-
-    private var serverQuiesces: [(ServerQuiescingHelper, EventLoopPromise<Void>)]
 
     private let cache: LRUCache<String, AnyRule> = .init(capacity: 100)
 
     private var isRunning = true
 
     public init(
+        logger: Logger = .init(label: "io.tenbits.Netbot"),
         profile: Profile,
         outboundMode: OutboundMode = .direct,
         enableHTTPCapture: Bool = false,
         enableMitm: Bool = false,
         maxMindDB: MaxMindDB
     ) {
-        LoggingSystem.bootstrap { label in
-            var handler = StreamLogHandler.standardOutput(label: label)
-            handler.logLevel = profile.general.logLevel
-            return handler
-        }
-
-        self.logger = .init(label: "io.tenbits.Netbot")
-        self.profile = profile
-        self.outboundMode = outboundMode
-        self.isHTTPCaptureEnabled = enableHTTPCapture
-        self.isMitmEnabled = enableMitm
+        self.logger = logger
         self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
-        self.serverQuiesces = []
-        self.maxMindDB = maxMindDB
+        self.storage = .init(
+            profile: profile,
+            outboundMode: outboundMode,
+            enableHTTPCapture: enableHTTPCapture,
+            enableMitm: enableMitm,
+            maxMindDB: maxMindDB
+        )
     }
 
     public func run() async throws {
         do {
-            if let address = profile.general.httpListenAddress,
-                let port = profile.general.httpListenPort
+            if let address = await storage.profile.general.httpListenAddress,
+                let port = await storage.profile.general.httpListenPort
             {
                 let (_, quiesce) = try await startVPNTunnel(
                     protocol: .http,
                     bindAddress: address,
                     bindPort: port
                 )
-                self.serverQuiesces.append((quiesce, eventLoopGroup.next().makePromise()))
+                await self.storage.appendServerQuiesces(
+                    (quiesce, eventLoopGroup.next().makePromise())
+                )
             }
 
-            if let address = profile.general.socksListenAddress,
-                let port = profile.general.socksListenPort
+            if let address = await storage.profile.general.socksListenAddress,
+                let port = await storage.profile.general.socksListenPort
             {
                 let (_, quiesce) = try await startVPNTunnel(
                     protocol: .socks5,
                     bindAddress: address,
                     bindPort: port
                 )
-                self.serverQuiesces.append((quiesce, eventLoopGroup.next().makePromise()))
+                await self.storage.appendServerQuiesces(
+                    (quiesce, eventLoopGroup.next().makePromise())
+                )
             }
         } catch {
             try await eventLoopGroup.shutdownGracefully()
@@ -107,13 +139,15 @@ import NIOSSL
             self.logger.trace(
                 "received signal, initiating shutdown which should complete after the last request finished."
             )
-            self.shutdown()
+            Task {
+                await self.shutdown()
+            }
         }
         signal(SIGINT, SIG_IGN)
         signalSource.resume()
 
         do {
-            for (_, promise) in serverQuiesces {
+            for (_, promise) in await storage.serverQuiesces {
                 try await promise.futureResult.get()
             }
             try await eventLoopGroup.shutdownGracefully()
@@ -153,12 +187,12 @@ import NIOSSL
                                 )
                             }
                             return promise.futureResult
-                        } completion: { req, c, peer in
+                        } completion: { req, channel, peer in
                             channel.pipeline.addHandler(
                                 NIOSSLDetectionHandler { ssl, channel in
                                     let promise = channel.eventLoop.makePromise(of: Void.self)
                                     promise.completeWithTask {
-                                        try await self.configureHTTPMitmPipeline(
+                                        try await self.configureHTTPMitmAndCapturePipeline(
                                             on: channel,
                                             peer: peer,
                                             serverHostname: req.serverHostname,
@@ -214,14 +248,15 @@ import NIOSSL
         return (channel, quiesce)
     }
 
-    private func initializePeer(forTarget address: NetAddress, eventLoop: EventLoop) async throws
-        -> Channel
-    {
-        guard self.outboundMode != .direct else {
-            return try await DirectPolicy().makeConnection(
-                logger: self.logger,
-                on: eventLoop
-            ).get()
+    /* private but tests */ func initializePeer(
+        forTarget address: NetAddress,
+        eventLoop: EventLoop
+    ) async throws -> Channel {
+
+        let profile = await storage.profile
+
+        guard await storage.outboundMode != .direct else {
+            return try await DirectPolicy().makeConnection(logger: logger, on: eventLoop).get()
         }
 
         // DNS lookup for `req.address`.
@@ -255,7 +290,7 @@ import NIOSSL
         }
 
         if savedFinalRule == nil {
-            for rule in self.profile.rules {
+            for rule in profile.rules {
                 guard patterns.first(where: rule.match) == nil else {
                     savedFinalRule = rule
                     break
@@ -295,7 +330,7 @@ import NIOSSL
         // `policyGroups`, if group exists use group's
         // `selected` as policy ID else use rule's policy as ID.
         if let policyGroup =
-            (self.profile.policyGroups.first {
+            (profile.policyGroups.first {
                 $0.name == savedFinalRule.policy
             })
         {
@@ -307,38 +342,43 @@ import NIOSSL
         // The user may not have preferred policy, so if not
         // we should fallback.
         if let preferred = preferred {
-            fallback =
-                (self.profile.policies + Builtin.policies)
-                .first {
-                    $0.name == preferred
-                }
+            fallback = (profile.policies + Builtin.policies).first { $0.name == preferred }
         }
 
         precondition(
             fallback != nil,
             "Illegal selectable policy groups, all policies group should be one of the policies in same profile."
         )
-        self.logger.info(
-            "Policy evaluating - \(fallback.name)",
-            metadata: ["Request": "\(address)"]
-        )
+
+        logger.info("Policy evaluating - \(fallback.name)", metadata: ["Request": "\(address)"])
 
         // Create peer channel.
         fallback.destinationAddress = address
         return try await fallback.makeConnection(logger: self.logger, on: eventLoop).get()
     }
 
-    private func configureHTTPMitmPipeline(
+    /* private but tests */ func configureHTTPMitmAndCapturePipeline(
         on channel: Channel,
         peer: Channel,
         serverHostname: String,
         tls: Bool
     ) async throws {
+        guard await storage.isMitmEnabled else {
+            return
+        }
+
+        let profile = await storage.profile
+        let enableHTTPCapture = await storage.isHTTPCaptureEnabled
+
+        guard tls || enableHTTPCapture else {
+            return
+        }
+
         let position = try await channel.pipeline.handler(
             type: NIOSSLDetectionHandler.self
         ).map(ChannelPipeline.Position.after).get()
 
-        // Those handlers will be added to `self` to enable HTTP capture for request.
+        // Those handlers will be added to channel to enable HTTP capture for request.
         let handlers0: [ChannelHandler] = [
             HTTPResponseCompressor(),
             HTTPCaptureHandler<HTTPRequestHead>(
@@ -347,7 +387,7 @@ import NIOSSL
             HTTPIOTransformer<HTTPRequestHead>(),
         ]
 
-        // Those handlers will be added to the channel to enable HTTP capture for response.
+        // Those handlers will be added to the peer to enable HTTP capture for response.
         let handlers1: [ChannelHandler] = [
             NIOHTTPResponseDecompressor(limit: .none),
             HTTPCaptureHandler<HTTPResponseHead>(
@@ -356,27 +396,23 @@ import NIOSSL
             HTTPIOTransformer<HTTPResponseHead>(),
         ]
 
-        // If detect SSL handshake then setup SSL pipeline to decode SSL stream.
         guard tls else {
-            guard await self.isHTTPCaptureEnabled else {
-                return
-            }
-
             try await channel.pipeline.addHandlers(handlers0, position: position)
             try await peer.pipeline.addHandlers(handlers1, position: .first)
             return
         }
 
-        guard let base64EncodedP12String = await self.profile.mitm.base64EncodedP12String else {
+        // If detect SSL handshake then setup SSL pipeline to decrypt SSL.
+        guard let base64EncodedP12String = profile.mitm.base64EncodedP12String else {
             // To enable the HTTP MitM feature, you must provide the corresponding configuration.
             throw NIOSSLError.failedToLoadCertificate
         }
 
         let store = try CertificateStore(
-            passphrase: await self.profile.mitm.passphrase,
+            passphrase: profile.mitm.passphrase,
             base64EncodedP12String: base64EncodedP12String
         )
-        await store.setUpMitMHosts(self.profile.mitm.hostnames)
+        await store.setUpMitMHosts(profile.mitm.hostnames)
 
         guard let p12 = try await store.certificate(identifiedBy: serverHostname) else {
             return
@@ -389,34 +425,34 @@ import NIOSSL
             privateKey: privateKey
         )
         configuration.certificateVerification =
-            await self.profile.mitm.skipCertificateVerification ? .none : .fullVerification
+            profile.mitm.skipCertificateVerification ? .none : .fullVerification
         var context = try NIOSSLContext(configuration: configuration)
-        var handlers: [ChannelHandler] = [
-            NIOSSLServerHandler(context: context),
-            HTTPResponseEncoder(),
-            ByteToMessageHandler(HTTPRequestDecoder()),
-        ]
-        if await self.isHTTPCaptureEnabled {
-            handlers.append(contentsOf: handlers0)
-        }
+        var handlers: [ChannelHandler] =
+            [
+                NIOSSLServerHandler(context: context),
+                HTTPResponseEncoder(),
+                ByteToMessageHandler(HTTPRequestDecoder()),
+            ] + handlers0
         try await channel.pipeline.addHandlers(handlers, position: position)
 
         // Peer channel pipeline setup.
         configuration = TLSConfiguration.makeClientConfiguration()
         context = try NIOSSLContext(configuration: configuration)
-        let sslHandler = try NIOSSLClientHandler(context: context, serverHostname: serverHostname)
-        handlers = [sslHandler, HTTPRequestEncoder(), ByteToMessageHandler(HTTPResponseDecoder())]
-        if await self.isHTTPCaptureEnabled {
-            handlers.append(contentsOf: handlers1)
-        }
+        handlers =
+            [
+                try NIOSSLClientHandler(context: context, serverHostname: serverHostname),
+                HTTPRequestEncoder(),
+                ByteToMessageHandler(HTTPResponseDecoder()),
+            ] + handlers1
+
         try await peer.pipeline.addHandlers(handlers, position: .first)
     }
 
-    public func shutdown() {
+    public func shutdown() async {
         logger.debug("Netbot shutting down.")
         logger.trace("Shutting down eventLoopGroup \(String(describing: eventLoopGroup)).")
 
-        for (quiesce, promise) in serverQuiesces {
+        for (quiesce, promise) in await self.storage.serverQuiesces {
             quiesce.initiateShutdown(promise: promise)
         }
     }
