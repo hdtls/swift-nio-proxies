@@ -14,15 +14,13 @@
 
 import Foundation
 
-public struct LRUCache<Key: Hashable, Value> {
+public actor LRUCache<Key: Hashable, Value> {
 
     private var entries: [Key: CacheEntry] = [:]
 
     private unowned(unsafe) var head: CacheEntry?
 
     private unowned(unsafe) var tail: CacheEntry?
-
-    private let lock: NSLock = .init()
 
     /// The current total cost of values in the cache
     public private(set) var totalCost: Int = 0
@@ -57,12 +55,12 @@ extension LRUCache {
     }
 
     /// Insert a value into the cache with optional `cost`
-    public mutating func setValue(_ value: Value?, forKey key: Key, cost: Int = 0) {
+    public func setValue(_ value: Value?, forKey key: Key, cost: Int = 0) {
         guard let value = value else {
             removeValue(forKey: key)
             return
         }
-        lock.lock()
+
         if let entry = entries[key] {
             entry.value = value
             totalCost -= entry.cost
@@ -79,15 +77,12 @@ extension LRUCache {
             append(entry)
         }
         totalCost += cost
-        lock.unlock()
         clean()
     }
 
     /// Remove a value  from the cache and return it
     @discardableResult
-    public mutating func removeValue(forKey key: Key) -> Value? {
-        lock.lock()
-        defer { lock.unlock() }
+    public func removeValue(forKey key: Key) -> Value? {
         guard let entry = entries.removeValue(forKey: key) else {
             return nil
         }
@@ -97,9 +92,7 @@ extension LRUCache {
     }
 
     /// Fetch a value from the cache
-    public mutating func value(forKey key: Key) -> Value? {
-        lock.lock()
-        defer { lock.unlock() }
+    public func value(forKey key: Key) -> Value? {
         if let entry = entries[key] {
             remove(entry)
             append(entry)
@@ -109,12 +102,10 @@ extension LRUCache {
     }
 
     /// Remove all values from the cache
-    public mutating func removeAllValues() {
-        lock.lock()
+    public func removeAllValues() {
         entries.removeAll()
         head = nil
         tail = nil
-        lock.unlock()
     }
 }
 
@@ -139,7 +130,7 @@ extension LRUCache {
         }
     }
 
-    private mutating func remove(_ entry: CacheEntry) {
+    private func remove(_ entry: CacheEntry) {
         if head === entry {
             head = entry.next
         }
@@ -151,7 +142,7 @@ extension LRUCache {
         entry.next = nil
     }
 
-    private mutating func append(_ entry: CacheEntry) {
+    private func append(_ entry: CacheEntry) {
         assert(entry.next == nil)
         if head == nil {
             head = entry
@@ -161,9 +152,7 @@ extension LRUCache {
         tail = entry
     }
 
-    private mutating func clean() {
-        lock.lock()
-        defer { lock.unlock() }
+    private func clean() {
         while totalCost > totalCostLimit || count > capacity,
             let entry = head
         {

@@ -27,7 +27,7 @@ import NIOPosix
 import NIOSOCKS5
 import NIOSSL
 
-public class App {
+@MainActor public class App {
 
     public let logger: Logger
 
@@ -39,20 +39,13 @@ public class App {
 
     public var isMitmEnabled: Bool = false
 
-    public var maxMindDB: MaxMindDB {
-        set { AnyRule.db = newValue }
-        get { AnyRule.db! }
-    }
+    public var maxMindDB: MaxMindDB
 
     private let eventLoopGroup: EventLoopGroup
 
-    public let threadPool: NIOThreadPool
+    private var serverQuiesces: [(ServerQuiescingHelper, EventLoopPromise<Void>)]
 
-    private var quiesce: ServerQuiescingHelper!
-
-    private var shutdownPromise: EventLoopPromise<Void>!
-
-    private var cache: LRUCache<String, AnyRule> = .init(capacity: 100)
+    private let cache: LRUCache<String, AnyRule> = .init(capacity: 100)
 
     private var isRunning = true
 
@@ -75,31 +68,37 @@ public class App {
         self.isHTTPCaptureEnabled = enableHTTPCapture
         self.isMitmEnabled = enableMitm
         self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
-        self.threadPool = NIOThreadPool(numberOfThreads: System.coreCount)
+        self.serverQuiesces = []
         self.maxMindDB = maxMindDB
     }
 
     public func run() async throws {
-        threadPool.start()
-
         do {
             if let address = profile.general.httpListenAddress,
                 let port = profile.general.httpListenPort
             {
                 let (_, quiesce) = try await startVPNTunnel(
                     protocol: .http,
-                    httpListenAddress: address,
-                    httpListenPort: port
+                    bindAddress: address,
+                    bindPort: port
                 )
-                self.quiesce = quiesce
+                self.serverQuiesces.append((quiesce, eventLoopGroup.next().makePromise()))
+            }
+
+            if let address = profile.general.socksListenAddress,
+                let port = profile.general.socksListenPort
+            {
+                let (_, quiesce) = try await startVPNTunnel(
+                    protocol: .socks5,
+                    bindAddress: address,
+                    bindPort: port
+                )
+                self.serverQuiesces.append((quiesce, eventLoopGroup.next().makePromise()))
             }
         } catch {
             try await eventLoopGroup.shutdownGracefully()
-            try threadPool.syncShutdownGracefully()
             throw error
         }
-
-        shutdownPromise = eventLoopGroup.next().makePromise(of: Void.self)
 
         let signalQueue = DispatchQueue(label: "io.tenbits.Netbot.signalHandlingQueue")
         let signalSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: signalQueue)
@@ -114,9 +113,10 @@ public class App {
         signalSource.resume()
 
         do {
-            try await shutdownPromise.futureResult.get()
+            for (_, promise) in serverQuiesces {
+                try await promise.futureResult.get()
+            }
             try await eventLoopGroup.shutdownGracefully()
-            try threadPool.syncShutdownGracefully()
 
             logger.trace("Netbot shutdown complete.")
         } catch {
@@ -126,8 +126,8 @@ public class App {
 
     private func startVPNTunnel(
         `protocol`: Proxy.`Protocol`,
-        httpListenAddress: String,
-        httpListenPort: Int
+        bindAddress: String,
+        bindPort: Int
     ) async throws -> (Channel, ServerQuiescingHelper) {
         let quiesce = ServerQuiescingHelper(group: eventLoopGroup)
 
@@ -182,7 +182,7 @@ public class App {
 
                                         // If detect SSL handshake then setup SSL pipeline to decode SSL stream.
                                         guard result else {
-                                            guard self.isHTTPCaptureEnabled else {
+                                            guard await self.isHTTPCaptureEnabled else {
                                                 return
                                             }
 
@@ -198,7 +198,7 @@ public class App {
                                         }
 
                                         guard
-                                            let base64EncodedP12String = self.profile.mitm
+                                            let base64EncodedP12String = await self.profile.mitm
                                                 .base64EncodedP12String
                                         else {
                                             // To enable the HTTP MitM feature, you must provide the corresponding configuration.
@@ -206,7 +206,7 @@ public class App {
                                         }
 
                                         let store = try CertificateStore(
-                                            passphrase: self.profile.mitm.passphrase,
+                                            passphrase: await self.profile.mitm.passphrase,
                                             base64EncodedP12String: base64EncodedP12String
                                         )
 
@@ -232,7 +232,7 @@ public class App {
                                                 privateKey: privateKey
                                             )
                                         configuration.certificateVerification =
-                                            self.profile.mitm.skipCertificateVerification
+                                            await self.profile.mitm.skipCertificateVerification
                                             ? .none : .fullVerification
                                         var sslContext = try NIOSSLContext(
                                             configuration: configuration
@@ -242,7 +242,7 @@ public class App {
                                             HTTPResponseEncoder(),
                                             ByteToMessageHandler(HTTPRequestDecoder()),
                                         ]
-                                        if self.isHTTPCaptureEnabled {
+                                        if await self.isHTTPCaptureEnabled {
                                             handlers.append(contentsOf: handlers0)
                                         }
                                         try await channel.pipeline.addHandlers(
@@ -262,7 +262,7 @@ public class App {
                                             HTTPRequestEncoder(),
                                             ByteToMessageHandler(HTTPResponseDecoder()),
                                         ]
-                                        if self.isHTTPCaptureEnabled {
+                                        if await self.isHTTPCaptureEnabled {
                                             handlers.append(contentsOf: handlers1)
                                         }
                                         try await peer.pipeline.addHandlers(
@@ -304,7 +304,7 @@ public class App {
             )
             .childChannelOption(ChannelOptions.maxMessagesPerRead, value: 1)
 
-        let channel = try await bootstrap.bind(host: httpListenAddress, port: httpListenPort).get()
+        let channel = try await bootstrap.bind(host: bindAddress, port: bindPort).get()
 
         guard let localAddress = channel.localAddress else {
             fatalError(
@@ -332,7 +332,7 @@ public class App {
         // DNS lookup for `req.address`.
         // This results will be used for rule matching.
         let patterns: [String]
-        var startTime = DispatchTime.now()
+        var startTime = DispatchTime.now().uptimeNanoseconds
         switch address {
             case .domainPort(let host, let port):
                 let resolver = GetaddrinfoResolver(eventLoop: eventLoop)
@@ -344,16 +344,16 @@ public class App {
                 patterns = [addrinfo.ipAddress ?? addrinfo.pathname!]
         }
         self.logger.info(
-            "DNS Lookup end with \(startTime.distance(to: .now())).",
+            "DNS Lookup end with \(DispatchTime.now().uptimeNanoseconds - startTime).",
             metadata: ["Request": "\(address)"]
         )
 
         var savedFinalRule: AnyRule!
-        startTime = DispatchTime.now()
+        startTime = DispatchTime.now().uptimeNanoseconds
 
         // Fetch rule from LRU cache.
         for pattern in patterns {
-            savedFinalRule = self.cache.value(forKey: pattern)
+            savedFinalRule = await self.cache.value(forKey: pattern)
             if savedFinalRule != nil {
                 break
             }
@@ -372,8 +372,8 @@ public class App {
             }
 
             // Cache rule evaluating result.
-            patterns.forEach { pattern in
-                self.cache.setValue(savedFinalRule, forKey: pattern)
+            for pattern in patterns {
+                await self.cache.setValue(savedFinalRule, forKey: pattern)
             }
         }
 
@@ -386,7 +386,7 @@ public class App {
             metadata: ["Request": "\(address)"]
         )
         self.logger.info(
-            "Rule evaluating end with \(startTime.distance(to: .now())).",
+            "Rule evaluating end with \(DispatchTime.now().uptimeNanoseconds - startTime).",
             metadata: ["Request": "\(address)"]
         )
 
@@ -434,18 +434,15 @@ public class App {
     }
 
     public func shutdown() {
-        assert(self.isRunning, "Netbot has already shut down.")
-
         logger.debug("Netbot shutting down.")
         logger.trace("Shutting down eventLoopGroup \(String(describing: eventLoopGroup)).")
 
-        quiesce.initiateShutdown(promise: shutdownPromise)
+        for (quiesce, promise) in serverQuiesces {
+            quiesce.initiateShutdown(promise: promise)
+        }
     }
 
     deinit {
         logger.trace("Netbot deinitialized, goodbye!")
-        if isRunning {
-            assertionFailure("App.shutdown() was not called before deinitialized.")
-        }
     }
 }
