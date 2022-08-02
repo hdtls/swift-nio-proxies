@@ -189,7 +189,7 @@ public class App {
                             return promise.futureResult
                         } completion: { req, channel, peer in
                             channel.pipeline.addHandler(
-                                NIOSSLDetectionHandler { ssl, channel in
+                                NIOTLSRecognizer { ssl, channel in
                                     let promise = channel.eventLoop.makePromise(of: Void.self)
                                     promise.completeWithTask {
                                         try await self.configureHTTPMitmAndCapturePipeline(
@@ -373,7 +373,7 @@ public class App {
         }
 
         let position = try await channel.pipeline.handler(
-            type: NIOSSLDetectionHandler.self
+            type: NIOTLSRecognizer.self
         ).map(ChannelPipeline.Position.after).get()
 
         // Those handlers will be added to channel to enable HTTP capture for request.
@@ -395,8 +395,16 @@ public class App {
         ]
 
         guard tls else {
-            try await channel.pipeline.addHandlers(handlers0, position: position)
-            try await peer.pipeline.addHandlers(handlers1, position: .first)
+            try await channel.pipeline.addHandler(
+                PlainHTTPRecognizer(completion: { http, channel in
+                    let promise = channel.eventLoop.makePromise(of: Void.self)
+                    promise.completeWithTask {
+                        try await channel.pipeline.addHandlers(handlers0, position: position)
+                        try await peer.pipeline.addHandlers(handlers1, position: .first)
+                    }
+                    return promise.futureResult
+                })
+            )
             return
         }
 
