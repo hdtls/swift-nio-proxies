@@ -248,7 +248,7 @@ public class App {
         return (channel, quiesce)
     }
 
-    /* private but tests */ func initializePeer(
+    private func initializePeer(
         forTarget address: NetAddress,
         eventLoop: EventLoop
     ) async throws -> Channel {
@@ -355,7 +355,7 @@ public class App {
         return try await fallback.makeConnection(logger: logger, on: eventLoop).get()
     }
 
-    /* private but tests */ func configureHTTPMitmAndCapturePipeline(
+    private func configureHTTPMitmAndCapturePipeline(
         on channel: Channel,
         peer: Channel,
         serverHostname: String,
@@ -368,42 +368,18 @@ public class App {
         let profile = await storage.profile
         let enableHTTPCapture = await storage.isHTTPCaptureEnabled
 
+        // If we don't need MitM and HTTP capture just return.
         guard tls || enableHTTPCapture else {
             return
         }
 
-        let position = try await channel.pipeline.handler(
-            type: NIOTLSRecognizer.self
-        ).map(ChannelPipeline.Position.after).get()
-
-        // Those handlers will be added to channel to enable HTTP capture for request.
-        let handlers0: [ChannelHandler] = [
-            HTTPResponseCompressor(),
-            HTTPCaptureHandler<HTTPRequestHead>(
-                logger: Logger(label: "http.capture")
-            ),
-            HTTPIOTransformer<HTTPRequestHead>(),
-        ]
-
-        // Those handlers will be added to the peer to enable HTTP capture for response.
-        let handlers1: [ChannelHandler] = [
-            NIOHTTPResponseDecompressor(limit: .none),
-            HTTPCaptureHandler<HTTPResponseHead>(
-                logger: Logger(label: "http.capture")
-            ),
-            HTTPIOTransformer<HTTPResponseHead>(),
-        ]
-
         guard tls else {
-            try await channel.pipeline.addHandler(
-                PlainHTTPRecognizer(completion: { http, channel in
-                    let promise = channel.eventLoop.makePromise(of: Void.self)
-                    promise.completeWithTask {
-                        try await channel.pipeline.addHandlers(handlers0, position: position)
-                        try await peer.pipeline.addHandlers(handlers1, position: .first)
-                    }
-                    return promise.futureResult
-                })
+            // This we don't need MitM but need enable HTTP capture.
+            let recognizer = try await channel.pipeline.handler(type: NIOTLSRecognizer.self).get()
+            let glue = try await peer.pipeline.handler(type: GlueHandler.self).get()
+            try await configureHTTPCapturePipeline(
+                on: (channel, .after(recognizer)),
+                peer: (peer, .after(glue))
             )
             return
         }
@@ -433,25 +409,72 @@ public class App {
         configuration.certificateVerification =
             profile.mitm.skipCertificateVerification ? .none : .fullVerification
         var context = try NIOSSLContext(configuration: configuration)
-        var handlers: [ChannelHandler] =
-            [
-                NIOSSLServerHandler(context: context),
-                HTTPResponseEncoder(),
-                ByteToMessageHandler(HTTPRequestDecoder()),
-            ] + handlers0
-        try await channel.pipeline.addHandlers(handlers, position: position)
+        let ssl0 = NIOSSLServerHandler(context: context)
+        let recognizer = try await channel.pipeline.handler(type: NIOTLSRecognizer.self).get()
+        try await channel.pipeline.addHandler(ssl0, position: .after(recognizer))
 
         // Peer channel pipeline setup.
         configuration = TLSConfiguration.makeClientConfiguration()
         context = try NIOSSLContext(configuration: configuration)
-        handlers =
-            [
-                try NIOSSLClientHandler(context: context, serverHostname: serverHostname),
-                HTTPRequestEncoder(),
-                ByteToMessageHandler(HTTPResponseDecoder()),
-            ] + handlers1
+        let ssl1 = try NIOSSLClientHandler(context: context, serverHostname: serverHostname)
+        let glue = try await peer.pipeline.handler(type: GlueHandler.self).get()
+        try await peer.pipeline.addHandler(ssl1, position: .before(glue))
 
-        try await peer.pipeline.addHandlers(handlers, position: .first)
+        guard enableHTTPCapture else {
+            return
+        }
+
+        try await configureHTTPCapturePipeline(
+            on: (channel, .after(ssl0)),
+            peer: (peer, .after(ssl1))
+        )
+    }
+
+    private func configureHTTPCapturePipeline(
+        on channel: (Channel, ChannelPipeline.Position),
+        peer: (Channel, ChannelPipeline.Position)
+    ) async throws {
+        // As we know HTTP capture only supported for HTTP protocols so we need a
+        // `PlainHTTPRecognizer` to recognize if this is HTTP request.
+        try await channel.0.pipeline.addHandler(
+            PlainHTTPRecognizer { http, channel in
+                guard http else {
+                    return channel.eventLoop.makeSucceededVoidFuture()
+                }
+
+                let promise = channel.eventLoop.makePromise(of: Void.self)
+                promise.completeWithTask {
+                    let recognizer = try await channel.pipeline.handler(
+                        type: PlainHTTPRecognizer.self
+                    ).get()
+                    var handlers: [ChannelHandler] =
+                        [
+                            HTTPResponseEncoder(),
+                            ByteToMessageHandler(HTTPRequestDecoder()),
+                            HTTPResponseCompressor(),
+                            HTTPCaptureHandler<HTTPRequestHead>(
+                                logger: Logger(label: "io.HTTP.capture")
+                            ),
+                            HTTPIOTransformer<HTTPRequestHead>(),
+                        ]
+                    try await channel.pipeline.addHandlers(handlers, position: .after(recognizer))
+
+                    handlers =
+                        [
+                            HTTPRequestEncoder(),
+                            ByteToMessageHandler(HTTPResponseDecoder()),
+                            NIOHTTPResponseDecompressor(limit: .none),
+                            HTTPCaptureHandler<HTTPResponseHead>(
+                                logger: Logger(label: "io.HTTP.capture")
+                            ),
+                            HTTPIOTransformer<HTTPResponseHead>(),
+                        ]
+                    try await peer.0.pipeline.addHandlers(handlers, position: peer.1)
+                }
+                return promise.futureResult
+            },
+            position: channel.1
+        )
     }
 
     public func shutdown() async {
