@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -262,24 +262,25 @@ public class App {
         // DNS lookup for `req.address`.
         // This results will be used for rule matching.
         let patterns: [String]
-        var startTime = DispatchTime.now().uptimeNanoseconds
+        var startTime = DispatchTime.now()
         switch address {
             case .domainPort(let host, let port):
                 let resolver = GetaddrinfoResolver(eventLoop: eventLoop)
                 async let a = resolver.initiateAQuery(host: host, port: port).get()
                 async let aaaa = resolver.initiateAAAAQuery(host: host, port: port).get()
-                let dnsResults = try await a + aaaa
-                patterns = dnsResults.map { $0.ipAddress ?? $0.pathname! } + [host]
+                let addresses = try await a + aaaa
+                patterns = [host] + addresses.map { $0.ipAddress ?? $0.pathname! }
             case .socketAddress(let addrinfo):
                 patterns = [addrinfo.ipAddress ?? addrinfo.pathname!]
         }
-        self.logger.info(
-            "DNS Lookup end with \(DispatchTime.now().uptimeNanoseconds - startTime).",
+
+        logger.info(
+            "DNS Lookup end with \(startTime.distance(to: .now()).prettyPrinted).",
             metadata: ["Request": "\(address)"]
         )
 
         var savedFinalRule: AnyRule!
-        startTime = DispatchTime.now().uptimeNanoseconds
+        startTime = .now()
 
         // Fetch rule from LRU cache.
         for pattern in patterns {
@@ -291,11 +292,12 @@ public class App {
 
         if savedFinalRule == nil {
             for rule in profile.rules {
-                guard patterns.first(where: rule.match) == nil else {
+                guard !patterns.contains(where: rule.match(_:)) else {
                     savedFinalRule = rule
                     break
                 }
 
+                // TODO: Store FinalRule unless Profile.rules changed.
                 if rule.type == .final {
                     savedFinalRule = rule
                 }
@@ -311,12 +313,12 @@ public class App {
             savedFinalRule != nil,
             "Rules defined in profile MUST contain one and only one FinalRule."
         )
-        self.logger.info(
+        logger.info(
             "Rule evaluating - \(savedFinalRule.description)",
             metadata: ["Request": "\(address)"]
         )
-        self.logger.info(
-            "Rule evaluating end with \(DispatchTime.now().uptimeNanoseconds - startTime).",
+        logger.info(
+            "Rule evaluating end with \(startTime.distance(to: .now()).prettyPrinted).",
             metadata: ["Request": "\(address)"]
         )
 
@@ -329,12 +331,8 @@ public class App {
         // with then same name as the rule's policy in
         // `policyGroups`, if group exists use group's
         // `selected` as policy ID else use rule's policy as ID.
-        if let policyGroup =
-            (profile.policyGroups.first {
-                $0.name == savedFinalRule.policy
-            })
-        {
-            preferred = policyGroup.policies.first?.name
+        if let g = profile.policyGroups.first(where: { $0.name == savedFinalRule.policy }) {
+            preferred = g.policies.first?.name
         } else {
             preferred = savedFinalRule.policy
         }
@@ -354,7 +352,7 @@ public class App {
 
         // Create peer channel.
         fallback.destinationAddress = address
-        return try await fallback.makeConnection(logger: self.logger, on: eventLoop).get()
+        return try await fallback.makeConnection(logger: logger, on: eventLoop).get()
     }
 
     /* private but tests */ func configureHTTPMitmAndCapturePipeline(
