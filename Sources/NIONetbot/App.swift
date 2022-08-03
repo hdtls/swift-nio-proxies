@@ -29,7 +29,7 @@ import NIOSSL
 
 public class App {
 
-    private actor Storage {
+    private actor MutableStorage {
 
         var profile: Profile
 
@@ -73,7 +73,7 @@ public class App {
 
     private let logger: Logger
 
-    private let storage: Storage
+    private let storage: MutableStorage
 
     private let eventLoopGroup: EventLoopGroup
 
@@ -431,12 +431,12 @@ public class App {
     }
 
     private func configureHTTPCapturePipeline(
-        on channel: (Channel, ChannelPipeline.Position),
-        peer: (Channel, ChannelPipeline.Position)
+        on master: (channel: Channel, position: ChannelPipeline.Position),
+        peer: (channel: Channel, position: ChannelPipeline.Position)
     ) async throws {
         // As we know HTTP capture only supported for HTTP protocols so we need a
         // `PlainHTTPRecognizer` to recognize if this is HTTP request.
-        try await channel.0.pipeline.addHandler(
+        try await master.channel.pipeline.addHandler(
             PlainHTTPRecognizer { http, channel in
                 guard http else {
                     return channel.eventLoop.makeSucceededVoidFuture()
@@ -469,11 +469,11 @@ public class App {
                             ),
                             HTTPIOTransformer<HTTPResponseHead>(),
                         ]
-                    try await peer.0.pipeline.addHandlers(handlers, position: peer.1)
+                    try await peer.channel.pipeline.addHandlers(handlers, position: peer.position)
                 }
                 return promise.futureResult
             },
-            position: channel.1
+            position: master.position
         )
     }
 

@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_implementationOnly import CCryptoBoringSSL
 import Crypto
 import Foundation
 import NIOCore
@@ -171,47 +170,17 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
                 return nil
             }
 
-            let symmetricKey = UnsafeMutablePointer<AES_KEY>.allocate(
-                capacity: MemoryLayout<AES_KEY>.size
-            )
-            symmetricKey.initialize(to: .init())
-            defer {
-                symmetricKey.deinitialize(count: MemoryLayout<AES_KEY>.size)
-                symmetricKey.deallocate()
-            }
-
-            try self.symmetricKey.withUnsafeBytes {
-                guard
-                    CCryptoBoringSSL_AES_set_encrypt_key(
-                        $0.bindMemory(to: UInt8.self).baseAddress,
-                        128,
-                        symmetricKey
-                    ) == 0
-                else {
-                    throw CryptoKitError.underlyingCoreCryptoError(
-                        error: Int32(CCryptoBoringSSL_ERR_get_error())
-                    )
-                }
-            }
-
             var headPartData = Data(repeating: 0, count: 4)
             var outLength: Int32 = 0
-            var _nonce = self.nonce
 
-            let nonce = _nonce.withUnsafeMutableBytes {
-                $0.bindMemory(to: UInt8.self).baseAddress
-            }
-
-            data.withUnsafeReadableBytes { inPtr in
-                headPartData.withUnsafeMutableBytes { outPtr in
-                    CCryptoBoringSSL_AES_cfb128_encrypt(
-                        inPtr.bindMemory(to: UInt8.self).baseAddress,
-                        outPtr.bindMemory(to: UInt8.self).baseAddress,
-                        4,
-                        symmetricKey,
-                        nonce,
-                        &outLength,
-                        AES_DECRYPT
+            try data.withUnsafeReadableBytes { inPtr in
+                try headPartData.withUnsafeMutableBytes { dataOut in
+                    try common_AES_cfb128_decrypt(
+                        nonce: Array(nonce),
+                        key: symmetricKey,
+                        dataIn: inPtr,
+                        dataOut: dataOut,
+                        dataOutAvailable: 4
                     )
                 }
             }
@@ -250,16 +219,14 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
             headPartData = Data(repeating: 0, count: commandLength)
             outLength = 0
-            data.withUnsafeReadableBytes { inPtr in
-                headPartData.withUnsafeMutableBytes { outPtr in
-                    CCryptoBoringSSL_AES_cfb128_encrypt(
-                        inPtr.bindMemory(to: UInt8.self).baseAddress,
-                        outPtr.bindMemory(to: UInt8.self).baseAddress,
-                        commandLength,
-                        symmetricKey,
-                        nonce,
-                        &outLength,
-                        AES_DECRYPT
+            try data.withUnsafeReadableBytes { inPtr in
+                try headPartData.withUnsafeMutableBytes { dataOut in
+                    try common_AES_cfb128_decrypt(
+                        nonce: Array(nonce),
+                        key: symmetricKey,
+                        dataIn: inPtr,
+                        dataOut: dataOut,
+                        dataOutAvailable: commandLength
                     )
                 }
             }
@@ -296,9 +263,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
             $0.load(as: UInt32.self).bigEndian
         }
 
-        let expectedAuthCode = mutableData[4...].withUnsafeBytes {
-            CCryptoBoringSSL_OPENSSL_hash32($0.baseAddress, $0.count)
-        }
+        let expectedAuthCode = common_FNV1a(mutableData[4...])
 
         if actualAuthCode != expectedAuthCode {
             // TODO: Specified Verify Error

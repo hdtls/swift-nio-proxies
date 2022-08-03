@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_implementationOnly import CCryptoBoringSSL
 import Crypto
 import Foundation
 import NIOCore
@@ -196,7 +195,7 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
 
         buffer.writeInteger(
             buffer.withUnsafeReadableBytes {
-                CCryptoBoringSSL_OPENSSL_hash32($0.baseAddress, $0.count)
+                common_FNV1a($0)
             }
         )
 
@@ -262,43 +261,20 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
                 }
             }
 
-            let symmetricKey = UnsafeMutablePointer<AES_KEY>.allocate(
-                capacity: MemoryLayout<AES_KEY>.size
-            )
-            symmetricKey.initialize(to: .init())
-            defer {
-                symmetricKey.deinitialize(count: MemoryLayout<AES_KEY>.size)
-                symmetricKey.deallocate()
-            }
-
-            inputKeyMaterial.withUnsafeBytes {
-                _ = CCryptoBoringSSL_AES_set_encrypt_key(
-                    $0.bindMemory(to: UInt8.self).baseAddress,
-                    128,
-                    symmetricKey
-                )
-            }
-
-            var l: Int32 = 0
-            var result = Array<UInt8>.init(repeating: 0, count: buffer.readableBytes)
-            result.withUnsafeMutableBufferPointer { outPtr in
-                buffer.withUnsafeReadableBytes { inPtr in
-                    hasher.finalize().withUnsafeBytes { ivPtr in
-                        CCryptoBoringSSL_AES_cfb128_encrypt(
-                            inPtr.bindMemory(to: UInt8.self).baseAddress,
-                            outPtr.baseAddress,
-                            inPtr.count,
-                            symmetricKey,
-                            UnsafeMutablePointer(
-                                mutating: ivPtr.bindMemory(to: UInt8.self).baseAddress
-                            ),
-                            &l,
-                            AES_ENCRYPT
-                        )
-                    }
+            var result = Data(repeating: 0, count: buffer.readableBytes)
+            try buffer.withUnsafeReadableBytes { inPtr in
+                try result.withUnsafeMutableBytes { dataOut in
+                    try common_AES_cfb128_encrypt(
+                        nonce: Array(hasher.finalize()),
+                        key: inputKeyMaterial,
+                        dataIn: inPtr,
+                        dataOut: dataOut,
+                        dataOutAvailable: buffer.readableBytes
+                    )
                 }
             }
-            return Data(result)
+
+            return result
         }
     }
 
@@ -318,35 +294,19 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
             info: [Array(KDFSaltConstAuthIDEncryptionKey)]
         )
 
-        let symmetricKey = UnsafeMutablePointer<AES_KEY>.allocate(
-            capacity: MemoryLayout<AES_KEY>.size
-        )
-        symmetricKey.initialize(to: .init())
-        defer {
-            symmetricKey.deinitialize(count: MemoryLayout<AES_KEY>.size)
-            symmetricKey.deallocate()
-        }
+        var result = [UInt8](repeating: 0, count: byteBuffer.count + 16)
 
-        try inputKeyMaterial.withUnsafeBytes {
-            guard
-                CCryptoBoringSSL_AES_set_encrypt_key(
-                    $0.bindMemory(to: UInt8.self).baseAddress,
-                    128,
-                    symmetricKey
-                ) == 0
-            else {
-                throw CryptoKitError.incorrectKeySize
+        try byteBuffer.withUnsafeBytes { inPtr in
+            try result.withUnsafeMutableBytes { outPtr in
+                try common_AES_encrypt(
+                    key: inputKeyMaterial,
+                    dataIn: inPtr,
+                    dataOut: outPtr,
+                    dataOutAvailable: byteBuffer.count + 16
+                )
             }
         }
 
-        var result = Array<UInt8>.init(repeating: 0, count: 16)
-
-        byteBuffer.withUnsafeBufferPointer { inPtr in
-            result.withUnsafeMutableBufferPointer { outPtr in
-                CCryptoBoringSSL_AES_encrypt(inPtr.baseAddress, outPtr.baseAddress, symmetricKey)
-            }
-        }
-
-        return result
+        return Array(result.prefix(16))
     }
 }

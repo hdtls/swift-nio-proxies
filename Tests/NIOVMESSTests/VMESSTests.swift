@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NIONetbotMisc
 import XCTest
 
 @testable import NIOVMESS
@@ -38,10 +39,47 @@ class VMESSTests: XCTestCase {
         }
     }
 
-    func testPerformanceExample() throws {
-        // This is an example of a performance test case.
-        self.measure {
-            // Put the code you want to measure the time of here.
+    func testAESCFB128EncryptionWorks() throws {
+        let k = "0000000000000000".data(using: .utf8)!
+        let i = "8000000000000000".data(using: .utf8)!
+        let data = "00000000000000000000000000000000".data(using: .utf8)!
+        let expected = "aebe0ec9f0d09b08a0dea6828afc93b3d2487b472cb143aca0307f81e1cd5c9f"
+
+        var result = Array(repeating: UInt8.zero, count: data.count)
+        try data.withUnsafeBytes { inPtr in
+            try result.withUnsafeMutableBytes { dataOut in
+                try common_AES_cfb128_encrypt(
+                    nonce: Array(i),
+                    key: k,
+                    dataIn: inPtr,
+                    dataOut: dataOut,
+                    dataOutAvailable: data.count
+                )
+            }
         }
+
+        XCTAssertEqual(result.hexString, expected)
+    }
+
+    func testAESECBEncryptionWorks() throws {
+        let k = "73941db4cb79371f".data(using: .utf8)!
+        let data = "00000000000000000000000000000000".data(using: .utf8)!
+        let expected = "edc855576a902fb1613be4b269b3d69d"
+
+        var result = [UInt8](repeating: 0, count: data.count + 16)
+        var outLength = 0
+        try data.withUnsafeBytes { inPtr in
+            try result.withUnsafeMutableBytes { buffer in
+                try common_AES_encrypt(
+                    key: k,
+                    dataIn: inPtr,
+                    dataOut: buffer,
+                    dataOutAvailable: data.count + 16,
+                    dataOutMoved: &outLength
+                )
+            }
+        }
+
+        XCTAssertEqual(result.prefix(16).hexString, expected)
     }
 }

@@ -35,7 +35,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.0.1"),
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "1.1.6"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "2.1.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.4.2"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
@@ -73,7 +73,7 @@ let package = Package(
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 .product(name: "NIOHTTP1", package: "swift-nio"),
-                .product(name: "Logging", package: "swift-log")
+                .product(name: "Logging", package: "swift-log"),
             ]
         ),
         .target(
@@ -118,7 +118,7 @@ let package = Package(
             name: "NIOSOCKS5",
             dependencies: [
                 "NIONetbotMisc",
-                .product(name: "NIOCore", package: "swift-nio")
+                .product(name: "NIOCore", package: "swift-nio"),
             ]
         ),
         .target(
