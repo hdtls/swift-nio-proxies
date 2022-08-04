@@ -12,16 +12,27 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
+        swift-version: [5]
+
     runs-on: ${{ matrix.os }}
         
     steps:
-    - uses: swift-actions/setup-swift@v1
+    - name: Update Xcode to latest...
+      if: runner.os == 'macOS'
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest
 
-    - name: Checkout repository
+    - name: Update Swift to latest...
+      uses: swift-actions/setup-swift@v1
+      with:
+        swift-version: ${{ matrix.swift-version }}
+
+    - name: Checkout repository...
       uses: actions/checkout@v3
     
-    - name: Build the projects in verbose mode.
-      run: swift build --verbose
+    - name: Build the projects...
+      run: swift build
       
-    - name: Run tests in verbose mode.
-      run: swift test --verbose
+    - name: Run tests...
+      run: swift test -Xswiftc -warnings-as-errors
