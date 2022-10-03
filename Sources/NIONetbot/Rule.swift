@@ -39,6 +39,37 @@ public enum RuleType: String, CaseIterable {
     }
 }
 
+#if swift(>=5.5) && canImport(_Concurrency)
+extension RuleType: Sendable {}
+
+/// `Rule` protocol define basic rule object protocol.
+public protocol Rule: Sendable {
+
+    /// Identifier for this rule.
+    var id: UUID { get }
+
+    /// The rule type.
+    var type: RuleType { get }
+
+    /// The expression fot this rule.
+    ///
+    /// If rule is collection expression is used to save external resources url string.
+    var expression: String { get set }
+
+    /// The policy pointed to by the rule.
+    var policy: String { get set }
+
+    /// The comment for this rule, if no comment return empty string.
+    var comment: String { get set }
+
+    /// Rule evaluating function to determinse whether this rule match the given expression.
+    /// - Returns: True if match else false.
+    func match(_ pattern: String) -> Bool
+
+    /// Initialize an instance of `Rule` with specified string.
+    init(string: String) throws
+}
+#else
 /// `Rule` protocol define basic rule object protocol.
 public protocol Rule {
 
@@ -66,6 +97,7 @@ public protocol Rule {
     /// Initialize an instance of `Rule` with specified string.
     init(string: String) throws
 }
+#endif
 
 public struct AnyRule: Rule, CustomStringConvertible {
 
@@ -274,7 +306,7 @@ public struct AnyRule: Rule, CustomStringConvertible {
         }.resume()
     }
 
-    public func reloadData() {
+    public mutating func reloadData() {
         switch type {
             case .domainSet:
                 guard let dstURL = dstURL,
@@ -332,3 +364,7 @@ extension AnyRule: Codable {
         try container.encode(string)
     }
 }
+
+#if swift(>=5.5) && canImport(_Concurrency)
+extension AnyRule: Sendable {}
+#endif

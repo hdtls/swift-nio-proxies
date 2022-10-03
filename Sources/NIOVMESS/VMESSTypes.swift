@@ -120,3 +120,13 @@ extension StreamOptions {
     /// Turn on packet length authentication.
     public static let authenticatedLength = StreamOptions.init(rawValue: 0x10)
 }
+
+#if swift(>=5.5) && canImport(_Concurrency)
+extension ProtocolVersion: Sendable {}
+
+extension Algorithm: Sendable {}
+
+extension Command: Sendable {}
+
+extension StreamOptions: Sendable {}
+#endif

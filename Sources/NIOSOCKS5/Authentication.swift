@@ -129,3 +129,15 @@ extension Authentication.Method {
         }
     }
 }
+
+#if swift(>=5.5) && canImport(_Concurrency)
+extension Authentication.Method: Sendable {}
+
+extension Authentication.UsernameAuthenticationRequest: Sendable {}
+
+extension Authentication.UsernameAuthenticationResponse: Sendable {}
+
+extension Authentication.Method.Request: Sendable {}
+
+extension Authentication.Method.Response: Sendable {}
+#endif

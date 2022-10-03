@@ -35,7 +35,13 @@ public struct Response {
     public var body: ByteBuffer?
 }
 
+#if swift(>=5.5) && canImport(_Concurrency)
+extension Response: Sendable {}
+
+public protocol ResponseCommand: Sendable {}
+#else
 public protocol ResponseCommand {}
+#endif
 
 public struct SwitchAccountCommand: ResponseCommand {
 

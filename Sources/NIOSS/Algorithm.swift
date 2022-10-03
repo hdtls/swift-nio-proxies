@@ -32,3 +32,7 @@ public enum Algorithm: String, CaseIterable, Equatable {
         }
     }
 }
+
+#if swift(>=5.5) && canImport(_Concurrency)
+extension Algorithm: Sendable {}
+#endif

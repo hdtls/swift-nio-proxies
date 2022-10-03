@@ -105,3 +105,9 @@ extension Response {
         }
     }
 }
+
+#if swift(>=5.5) && canImport(_Concurrency)
+extension Response: Sendable {}
+
+extension Response.Reply: Sendable {}
+#endif

@@ -38,3 +38,7 @@ extension OutboundMode: CustomStringConvertible {
         }
     }
 }
+
+#if swift(>=5.5) && canImport(_Concurrency)
+extension OutboundMode: Sendable {}
+#endif

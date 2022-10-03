@@ -80,3 +80,9 @@ struct Command: Hashable, RawRepresentable {
         self.rawValue = rawValue
     }
 }
+
+#if swift(>=5.5) && canImport(_Concurrency)
+extension Request: Sendable {}
+
+extension Command: Sendable {}
+#endif

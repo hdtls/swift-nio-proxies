@@ -61,3 +61,7 @@ public struct Configuration {
         self.options = options
     }
 }
+
+#if swift(>=5.5) && canImport(_Concurrency)
+extension Configuration: Sendable {}
+#endif

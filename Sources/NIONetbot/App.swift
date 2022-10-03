@@ -27,7 +27,7 @@ import NIOPosix
 import NIOSOCKS5
 import NIOSSL
 
-public class App {
+final public class App {
 
     private actor MutableStorage {
 
@@ -78,8 +78,6 @@ public class App {
     private let eventLoopGroup: EventLoopGroup
 
     private let cache: LRUCache<String, AnyRule> = .init(capacity: 100)
-
-    private var isRunning = true
 
     public init(
         logger: Logger = .init(label: "io.tenbits.Netbot"),
@@ -390,13 +388,13 @@ public class App {
             throw NIOSSLError.failedToLoadCertificate
         }
 
-        let store = try CertificateStore(
+        let trustStore = try CertificateStore(
             passphrase: profile.mitm.passphrase,
             base64EncodedP12String: base64EncodedP12String
         )
-        await store.setUpMitMHosts(profile.mitm.hostnames)
+        await trustStore.setUpMitMHosts(profile.mitm.hostnames)
 
-        guard let p12 = try await store.certificate(identifiedBy: serverHostname) else {
+        guard let p12 = try await trustStore.certificate(identifiedBy: serverHostname) else {
             return
         }
 

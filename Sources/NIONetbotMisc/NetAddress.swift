@@ -21,6 +21,10 @@ public enum NetAddress: Equatable, Hashable {
     case socketAddress(SocketAddress)
 }
 
+#if swift(>=5.5) && canImport(_Concurrency)
+extension NetAddress: Sendable {}
+#endif
+
 /// SOCKS address type defined in RFC 1928.
 private enum SOCKSAddressType: UInt8, CaseIterable {
     /// IP V4 address: X'01'

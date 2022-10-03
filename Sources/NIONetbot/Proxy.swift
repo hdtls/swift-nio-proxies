@@ -189,3 +189,9 @@ public struct Proxy: Codable, Equatable, Hashable {
         try container.encodeIfPresent(self.overTls ? self.overTls : nil, forKey: .overTls)
     }
 }
+
+#if swift(>=5.5) && canImport(_Concurrency)
+extension Proxy: Sendable {}
+
+extension Proxy.`Protocol`: Sendable {}
+#endif

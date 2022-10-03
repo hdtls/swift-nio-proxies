@@ -38,7 +38,7 @@
 
 import Foundation
 
-private protocol Lock {
+private protocol Lock: Sendable {
     func lock()
     func unlock()
 }
@@ -99,7 +99,7 @@ final class UnfairLock: Lock {
 /// A thread-safe wrapper around a value.
 @propertyWrapper
 @dynamicMemberLookup
-public final class Protected<T> {
+public struct Protected<T>: Sendable where T: Sendable {
     #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
     private let lock = UnfairLock()
     #elseif os(Linux) || os(Windows)
@@ -138,7 +138,7 @@ public final class Protected<T> {
     ///
     /// - Returns:           The modified value.
     @discardableResult
-    public func write<U>(_ closure: (inout T) -> U) -> U {
+    public mutating func write<U>(_ closure: (inout T) -> U) -> U {
         lock.around { closure(&self.value) }
     }
 
@@ -152,7 +152,7 @@ extension Protected where T: RangeReplaceableCollection {
     /// Adds a new element to the end of this protected collection.
     ///
     /// - Parameter newElement: The `Element` to append.
-    public func append(_ newElement: T.Element) {
+    public mutating func append(_ newElement: T.Element) {
         write { (ward: inout T) in
             ward.append(newElement)
         }
@@ -161,7 +161,7 @@ extension Protected where T: RangeReplaceableCollection {
     /// Adds the elements of a sequence to the end of this protected collection.
     ///
     /// - Parameter newElements: The `Sequence` to append.
-    public func append<S: Sequence>(contentsOf newElements: S) where S.Element == T.Element {
+    public mutating func append<S: Sequence>(contentsOf newElements: S) where S.Element == T.Element {
         write { (ward: inout T) in
             ward.append(contentsOf: newElements)
         }
@@ -170,7 +170,7 @@ extension Protected where T: RangeReplaceableCollection {
     /// Add the elements of a collection to the end of the protected collection.
     ///
     /// - Parameter newElements: The `Collection` to append.
-    public func append<C: Collection>(contentsOf newElements: C) where C.Element == T.Element {
+    public mutating func append<C: Collection>(contentsOf newElements: C) where C.Element == T.Element {
         write { (ward: inout T) in
             ward.append(contentsOf: newElements)
         }
@@ -181,7 +181,7 @@ extension Protected where T == Data? {
     /// Adds the contents of a `Data` value to the end of the protected `Data`.
     ///
     /// - Parameter data: The `Data` to be appended.
-    public func append(_ data: Data) {
+    public mutating func append(_ data: Data) {
         write { (ward: inout T) in
             ward?.append(data)
         }

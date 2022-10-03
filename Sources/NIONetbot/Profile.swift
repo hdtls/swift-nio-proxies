@@ -82,19 +82,20 @@ extension Profile: Codable {
             try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
         self.general =
             try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
-        let anyPolicies = try container.decodeIfPresent([__Policy].self, forKey: .policies) ?? []
-        self.policies = anyPolicies.map { $0.base }
+        
+        let policies = try container.decodeIfPresent([__Policy].self, forKey: .policies) ?? []
+        self.policies = policies.map { $0.base }
 
         let policyGroups =
             try container.decodeIfPresent([__PolicyGroup].self, forKey: .policyGroups) ?? []
 
-        let policies = Builtin.policies + self.policies
+        let supportedPolicies = Builtin.policies + self.policies
 
         self.policyGroups = policyGroups.map {
             PolicyGroup(
                 name: $0.name,
                 policies: $0.policies.compactMap { policy in
-                    policies.first {
+                    supportedPolicies.first {
                         $0.name == policy
                     }
                 }
@@ -305,3 +306,13 @@ struct __PolicyGroup: Codable {
         case policies
     }
 }
+
+#if swift(>=5.5) && canImport(_Concurrency)
+extension Profile: Sendable {}
+
+extension BasicConfiguration: Sendable {}
+
+extension MitMConfiguration: Sendable {}
+
+extension PolicyGroup: Sendable {}
+#endif

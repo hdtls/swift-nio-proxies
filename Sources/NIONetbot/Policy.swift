@@ -16,6 +16,19 @@ import ConnectionPool
 import Foundation
 import NIONetbotMisc
 
+#if swift(>=5.5) && canImport(_Concurrency)
+/// Policy protocol representation a policy object.
+public protocol Policy: ConnectionPoolSource, Sendable {
+
+    var id: UUID { get }
+
+    /// The name of the policy.
+    var name: String { get set }
+
+    /// Destination address.
+    var destinationAddress: NetAddress? { get set }
+}
+#else
 /// Policy protocol representation a policy object.
 public protocol Policy: ConnectionPoolSource {
 
@@ -27,6 +40,7 @@ public protocol Policy: ConnectionPoolSource {
     /// Destination address.
     var destinationAddress: NetAddress? { get set }
 }
+#endif
 
 /// DirectPolicy will tunnel connection derectly.
 public struct DirectPolicy: Policy {
@@ -107,9 +121,13 @@ public struct ProxyPolicy: Policy {
 
 public enum Builtin {
 
-    public static var policies: [any Policy] = [
+    public static let policies: [any Policy] = [
         DirectPolicy(),
         RejectPolicy(),
         RejectTinyGifPolicy(),
     ]
 }
+
+#if swift(>=5.5) && canImport(_Concurrency)
+extension Builtin: Sendable {}
+#endif
