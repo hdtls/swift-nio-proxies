@@ -1,4 +1,6 @@
-FROM swift
+ARG swift_version=5.7
+
+FROM swift:$swift_version
 
 RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true
 
@@ -11,3 +13,9 @@ RUN apt-get update -q \
 ENV LC_ALL en_US.UTF-8
 ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US.UTF-8
+
+ARG swift_format_version=0.50700.0
+RUN git clone --branch $swift_format_version --depth 1 https://github.com/apple/swift-format $HOME/.tools/swift-format
+RUN swift build --package-path $HOME/.tools/swift-format -c release
+RUN cp "$(swift build --package-path $HOME/.tools/swift-format -c release --show-bin-path)/swift-format" /usr/local/bin/
+RUN rm -rf $HOME/.tools/swift-format

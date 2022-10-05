@@ -1,8 +1,3 @@
-# this file is not designed to be run directly
-# instead, use the docker-compose.<os>.<swift> files
-# eg docker-compose -f docker/docker-compose.yaml -f docker/docker-compose.1604.41.yaml run test
-version: "3.9"
-
 services:
 
   runtime-setup:
@@ -24,10 +19,13 @@ services:
 
   test:
     <<: *common
-    command: /bin/bash -xcl "swift test -Xswiftc -warnings-as-errors $${SANITIZER_ARG-}"
+    command: /bin/bash -xcl "swift test -Xswiftc -warnings-as-errors"
 
   # util
-
   shell:
     <<: *common
     entrypoint: /bin/bash
+
+  formatting:
+    <<: *common
+    entrypoint: /bin/bash -xcl "swift-format --configuration ./.swift-format --in-place --recursive --parallel ./Sources ./Tests"
