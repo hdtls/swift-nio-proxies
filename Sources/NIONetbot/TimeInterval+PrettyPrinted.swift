@@ -15,11 +15,16 @@
 import Dispatch
 import Foundation
 
-#if !(os(iOS) || os(macOS) || os(tvOS) || os(watchOS))
+// remove when available to all platforms
+#if os(Linux) || os(Windows) || os(Android) || os(OpenBSD)
 extension DispatchTime {
-
     public func distance(to other: DispatchTime) -> DispatchTimeInterval {
-        .nanoseconds(Int(truncatingIfNeeded: other.uptimeNanoseconds - uptimeNanoseconds))
+        let final = other.uptimeNanoseconds
+        let point = self.uptimeNanoseconds
+        let duration: Int64 = Int64(
+            bitPattern: final.subtractingReportingOverflow(point).partialValue
+        )
+        return .nanoseconds(duration >= Int.max ? Int.max : Int(duration))
     }
 }
 
@@ -57,11 +62,10 @@ extension DispatchTimeInterval {
                 }
                 return "\(int / 1_000_000_000) s"
             case .never:
-                return "never"
-            #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+                return "n/a"
+            #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
                 @unknown default:
-                    assertionFailure()
-                    return ""
+                    return "n/a"
             #endif
         }
     }

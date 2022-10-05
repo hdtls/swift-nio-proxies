@@ -80,7 +80,8 @@ extension ProxyConfigCommand {
         }
 
         @Option(
-            help: "The web and secure web proxy server listen authority. (e.g., 127.0.0.1:10000)"
+            help:
+                "The web and secure web proxy server listen authority. (e.g., 127.0.0.1:10000)"
         )
         public var httpListen: String?
 
@@ -94,7 +95,9 @@ extension ProxyConfigCommand {
 
         public func run() throws {
             var authRef: AuthorizationRef!
-            let authFlags: AuthorizationFlags = [.extendRights, .interactionAllowed, .preAuthorize]
+            let authFlags: AuthorizationFlags = [
+                .extendRights, .interactionAllowed, .preAuthorize,
+            ]
             let authError = AuthorizationCreate(nil, nil, authFlags, &authRef)
 
             guard authError == noErr, authRef != nil else {
@@ -122,7 +125,9 @@ extension ProxyConfigCommand {
                 settings[kCFNetworkProxiesSOCKSEnable] = true
             }
 
-            if let httpListenAddress = __httpListenAddress, let httpListenPort = __httpListenPort {
+            if let httpListenAddress = __httpListenAddress,
+                let httpListenPort = __httpListenPort
+            {
                 settings[kCFNetworkProxiesHTTPProxy] = httpListenAddress
                 settings[kCFNetworkProxiesHTTPPort] = httpListenPort
                 settings[kCFNetworkProxiesHTTPEnable] = true
@@ -145,7 +150,8 @@ extension ProxyConfigCommand {
                 }
 
                 guard
-                    let hardware = keyValuePairs.value(forKeyPath: "Interface.Hardware") as? String
+                    let hardware = keyValuePairs.value(forKeyPath: "Interface.Hardware")
+                        as? String
                 else {
                     return
                 }
@@ -179,7 +185,9 @@ extension ProxyConfigCommand {
 
         public func run() throws {
             var authRef: AuthorizationRef!
-            let authFlags: AuthorizationFlags = [.extendRights, .interactionAllowed, .preAuthorize]
+            let authFlags: AuthorizationFlags = [
+                .extendRights, .interactionAllowed, .preAuthorize,
+            ]
             let authError = AuthorizationCreate(nil, nil, authFlags, &authRef)
 
             guard authError == noErr, authRef != nil else {
@@ -208,7 +216,8 @@ extension ProxyConfigCommand {
                 }
 
                 guard
-                    let hardware = keyValuePairs.value(forKeyPath: "Interface.Hardware") as? String
+                    let hardware = keyValuePairs.value(forKeyPath: "Interface.Hardware")
+                        as? String
                 else {
                     return
                 }

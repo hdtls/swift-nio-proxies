@@ -82,7 +82,7 @@ extension Profile: Codable {
             try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
         self.general =
             try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
-        
+
         let policies = try container.decodeIfPresent([__Policy].self, forKey: .policies) ?? []
         self.policies = policies.map { $0.base }
 
