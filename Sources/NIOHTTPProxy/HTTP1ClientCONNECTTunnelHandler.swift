@@ -215,6 +215,12 @@ extension HTTP1ClientCONNECTTunnelHandler {
             .flatMap {
                 context.pipeline.removeHandler($0)
             }
+            .flatMap {
+                context.pipeline.handler(type: NIOHTTPRequestHeadersValidator.self)
+            }
+            .flatMap {
+                context.pipeline.removeHandler($0)
+            }
             .whenComplete {
                 switch $0 {
                     case .success:
