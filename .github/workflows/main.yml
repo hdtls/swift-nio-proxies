@@ -20,11 +20,20 @@ jobs:
       if: runner.os == 'macOS'
       uses: maxim-lobanov/setup-xcode@v1
 
+    - name: Setup Python to latest...
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10' 
+
     - name: Checkout repository...
       uses: actions/checkout@v3
     
+    - name: Generate boilerplate files...
+      run: bash scripts/generate_boilerplate_files_with_gyb.sh
+
     - name: Build the projects...
       run: swift build
       
     - name: Run tests...
       run: swift test -Xswiftc -warnings-as-errors
+
