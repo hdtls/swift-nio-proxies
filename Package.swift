@@ -3,7 +3,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -14,6 +14,42 @@
 //===----------------------------------------------------------------------===//
 
 import PackageDescription
+
+let swiftArgumentParser: Target.Dependency = .product(name: "ArgumentParser", package: "swift-argument-parser")
+
+let swiftNIO: Target.Dependency = .product(name: "NIO", package: "swift-nio")
+
+let swiftNIOCore: Target.Dependency = .product(
+    name: "NIOCore",
+    package: "swift-nio"
+)
+
+let swiftNIOHTTP1: Target.Dependency = .product(
+    name: "NIOHTTP1",
+    package: "swift-nio"
+)
+
+let swiftNIOPosix: Target.Dependency = .product(
+    name: "NIOPosix",
+    package: "swift-nio"
+)
+
+let swiftNIOSSL: Target.Dependency = .product(
+    name: "NIOSSL",
+    package: "swift-nio-ssl"
+)
+
+let swiftNIOTransportServices: Target.Dependency = .product(name: "NIOTransportServices", package: "swift-nio-transport-services")
+
+let swiftCrypto: Target.Dependency = .product(
+    name: "Crypto",
+    package: "swift-crypto"
+)
+
+let swiftLog: Target.Dependency = .product(
+    name: "Logging",
+    package: "swift-log"
+)
 
 let package = Package(
     name: "swift-nio-netbot",
@@ -41,49 +77,20 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
         .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0"),
-        .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0"),
+        .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0")
     ],
     targets: [
-        .target(
-            name: "ConnectionPool",
-            dependencies: [
-                .product(name: "Logging", package: "swift-log"),
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOPosix", package: "swift-nio"),
-            ]
-        ),
+        .target(name: "ConnectionPool", dependencies: [swiftNIOCore, swiftNIOPosix, swiftLog]),
         .target(name: "CSHAKE128"),
-        .target(
-            name: "SHAKE128",
-            dependencies: [
-                "CSHAKE128",
-                .product(name: "Crypto", package: "swift-crypto"),
-            ]
-        ),
-        .target(
-            name: "NIODNS",
-            dependencies: [
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOPosix", package: "swift-nio"),
-            ]
-        ),
-        .target(
-            name: "NIOHTTPMitM",
-            dependencies: [
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOSSL", package: "swift-nio-ssl"),
-                .product(name: "NIOHTTP1", package: "swift-nio"),
-                .product(name: "Logging", package: "swift-log"),
-            ]
-        ),
-        .target(
-            name: "NIOHTTPProxy",
-            dependencies: [
-                "NIONetbotMisc",
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOHTTP1", package: "swift-nio"),
-            ]
-        ),
+        .target(name: "SHAKE128", dependencies: ["CSHAKE128", swiftCrypto]),
+        .target(name: "NIODNS", dependencies: [swiftNIOCore, swiftNIOPosix]),
+        .target(name: "NIOHTTPMitM", dependencies: [swiftNIOCore, swiftNIOHTTP1, swiftNIOSSL, swiftLog]),
+        .target(name: "NIOHTTPProxy", dependencies: ["NIONetbotMisc", swiftNIOCore, swiftNIOHTTP1]),
+        .target(name: "NIONetbotMisc", dependencies: [swiftNIOCore, swiftNIOPosix]),
+        .target(name: "NIOSOCKS5", dependencies: ["NIONetbotMisc", swiftNIOCore]),
+        .target(name: "NIOSS", dependencies: ["NIONetbotMisc", swiftCrypto, swiftNIOCore]),
+        .target(name: "NIOTrojan", dependencies: ["NIONetbotMisc", swiftCrypto, swiftNIOCore, swiftNIOSSL]),
+        .target(name: "NIOVMESS", dependencies: ["NIONetbotMisc", "SHAKE128", swiftCrypto, swiftNIOCore]),
         .target(
             name: "NIONetbot",
             dependencies: [
@@ -96,73 +103,27 @@ let package = Package(
                 "NIOSS",
                 "NIOTrojan",
                 "NIOVMESS",
-                .product(name: "Logging", package: "swift-log"),
+                swiftCrypto,
+                swiftNIOCore,
+                swiftNIOPosix,
+                swiftLog,
+                swiftNIOSSL,
+                swiftNIOHTTP1,
+                swiftNIOTransportServices,
                 .product(name: "MaxMindDB", package: "swift-maxminddb"),
-                .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
-                .product(name: "NIOPosix", package: "swift-nio"),
-                .product(name: "NIOHTTP1", package: "swift-nio"),
                 .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
-                .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 .product(name: "NIOExtras", package: "swift-nio-extras"),
-                .product(name: "NIOTransportServices", package: "swift-nio-transport-services"),
             ]
         ),
-        .target(
-            name: "NIONetbotMisc",
-            dependencies: [
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOPosix", package: "swift-nio"),
-            ]
-        ),
-        .target(
-            name: "NIOSOCKS5",
-            dependencies: [
-                "NIONetbotMisc",
-                .product(name: "NIOCore", package: "swift-nio"),
-            ]
-        ),
-        .target(
-            name: "NIOSS",
-            dependencies: [
-                "NIONetbotMisc",
-                .product(name: "Crypto", package: "swift-crypto"),
-                .product(name: "NIOCore", package: "swift-nio"),
-            ]
-        ),
-        .target(
-            name: "NIOTrojan",
-            dependencies: [
-                "NIONetbotMisc",
-                .product(name: "Crypto", package: "swift-crypto"),
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOSSL", package: "swift-nio-ssl"),
-            ]
-        ),
-        .target(
-            name: "NIOVMESS",
-            dependencies: [
-                "NIONetbotMisc",
-                "SHAKE128",
-                .product(name: "Crypto", package: "swift-crypto"),
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOWebSocket", package: "swift-nio"),
-            ]
-        ),
-        .executableTarget(
-            name: "NIONetbotCLI",
-            dependencies: [
-                "NIONetbot",
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-            ]
-        ),
-        .testTarget(
-            name: "NIOHTTPMitMTests",
-            dependencies: [
-                "NIOHTTPMitM",
-                .product(name: "NIOEmbedded", package: "swift-nio"),
-            ]
-        ),
+        .executableTarget(name: "NIONetbotCLI", dependencies: ["NIONetbot", swiftArgumentParser]),
+        .testTarget(name: "NIOHTTPMitMTests", dependencies: ["NIOHTTPMitM", swiftNIO]),
+        .testTarget(name: "NIONetbotMiscTests", dependencies: ["NIONetbotMisc", swiftNIO]),
+        .testTarget(name: "NIOHTTPProxyTests", dependencies: ["NIOHTTPProxy", swiftNIO, swiftNIOHTTP1, swiftNIOSSL]),
+        .testTarget(name: "NIOTrojanTests", dependencies: ["NIOTrojan", swiftNIO]),
+        .testTarget(name: "SHAKE128Tests", dependencies: ["SHAKE128"]),
+        .testTarget(name: "NIOSOCKS5Tests", dependencies: ["NIOSOCKS5", swiftNIO]),
+        .testTarget(name: "NIOVMESSTests", dependencies: ["NIOVMESS", swiftNIO]),
         .testTarget(
             name: "NIONetbotTests",
             dependencies: [
@@ -172,50 +133,13 @@ let package = Package(
                 "NIOSOCKS5",
                 "NIOSS",
                 "NIOVMESS",
-                .product(name: "NIO", package: "swift-nio"),
-                .product(name: "NIOHTTP1", package: "swift-nio"),
-                .product(name: "NIOSSL", package: "swift-nio-ssl"),
-                .product(name: "NIOTransportServices", package: "swift-nio-transport-services"),
+                swiftNIO,
+                swiftNIOSSL,
+                swiftNIOHTTP1,
+                swiftNIOTransportServices
             ],
-            exclude: ["RuleTests.swift.gyb"]
-        ),
-        .testTarget(
-            name: "NIONetbotMiscTests",
-            dependencies: [
-                "NIONetbotMisc",
-                .product(name: "NIO", package: "swift-nio"),
-            ]
-        ),
-        .testTarget(
-            name: "NIOHTTPProxyTests",
-            dependencies: [
-                "NIOHTTPProxy",
-                .product(name: "NIO", package: "swift-nio"),
-                .product(name: "NIOHTTP1", package: "swift-nio"),
-                .product(name: "NIOSSL", package: "swift-nio-ssl"),
-            ]
-        ),
-        .testTarget(
-            name: "NIOTrojanTests",
-            dependencies: [
-                "NIOTrojan"
-            ]
-        ),
-        .testTarget(
-            name: "SHAKE128Tests",
-            dependencies: ["SHAKE128"]
-        ),
-        .testTarget(
-            name: "NIOSOCKS5Tests",
-            dependencies: [
-                "NIOSOCKS5",
-                .product(name: "NIOEmbedded", package: "swift-nio"),
-            ]
-        ),
-        .testTarget(
-            name: "NIOVMESSTests",
-            dependencies: ["NIOVMESS"]
-        ),
+            exclude: ["RuleTests.g.swift.gyb"]
+        )
     ],
     swiftLanguageVersions: [.v5]
 )
