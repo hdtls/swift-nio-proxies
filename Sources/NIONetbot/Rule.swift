@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -15,356 +15,445 @@
 import Crypto
 import Foundation
 import MaxMindDB
+import NIOConcurrencyHelpers
 
-#if canImport(FoundationNetworking)
-import FoundationNetworking
+#if swift(>=5.5) && canImport(_Concurrency)
+/// A `ParsableRule` is a route that define matching conditions and policies for proxy routing
+public protocol ParsableRule: LosslessStringConvertible, Sendable {
+
+    /// The expression fot this rule.
+    ///
+    /// If rule is collection expression is used to save external resources url string.
+    var expression: String { get set }
+
+    /// The policy pointed to by the rule.
+    var policy: String { get set }
+
+    /// Initialize an instance of `ParsableRule` with specified expression and policy.
+    init(expression: String, policy: String)
+
+    /// Rule evaluating function to determinse whether this rule match the given expression.
+    /// - Returns: True if match else false.
+    func match(_ expression: String) -> Bool
+
+    /// Validate whether given description can be parsed as `Self`.
+    /// - Parameter description: The value to validate.
+    static func validate(_ description: String) throws
+}
+#else
+/// A `ParsableRule` is a route that define matching conditions and policies for proxy routing
+public protocol ParsableRule: LosslessStringConvertible {
+
+    /// The expression fot this rule.
+    ///
+    /// If rule is collection expression is used to save external resources url string.
+    var expression: String { get set }
+
+    /// The policy pointed to by the rule.
+    var policy: String { get set }
+
+    /// Initialize an instance of `ParsableRule` with specified expression and policy.
+    init(expression: String, policy: String)
+
+    /// Rule evaluating function to determinse whether this rule match the given expression.
+    /// - Returns: True if match else false.
+    func match(_ expression: String) -> Bool
+
+    /// Validate whether given description can be parsed as `Self`.
+    /// - Parameter description: The value to validate.
+    static func validate(_ description: String) throws
+}
 #endif
 
-public enum RuleType: String, CaseIterable {
-    case domain = "DOMAIN"
-    case domainSuffix = "DOMAIN-SUFFIX"
-    case domainKeyword = "DOMAIN-KEYWORD"
-    case domainSet = "DOMAIN-SET"
-    case ruleSet = "RULE-SET"
-    case geoIp = "GEOIP"
-    case final = "FINAL"
+private protocol ParsableRulePrivate: ParsableRule {
 
-    fileprivate var containsExternalResources: Bool {
-        switch self {
-            case .domainSet, .ruleSet:
-                return true
-            default:
-                return false
+    static var label: RuleSystem.Label { get }
+}
+
+extension ParsableRulePrivate {
+
+    public init?(_ description: String) {
+        // Rule definitions are comma-separated except comments, and comment are
+        // always at the end of the rule and followed by //.
+        //
+        // Becase comments may contain commas, so we parse comments first.
+        var components = description.split(separator: ",").map {
+            $0.trimmingCharacters(in: .whitespaces)
+        }
+
+        let type = components.removeFirst()
+
+        guard type == Self.label.rawValue else {
+            return nil
+        }
+
+        let countOfRequiredFields = type == RuleSystem.Label.final.rawValue ? 1 : 2
+        guard components.count >= countOfRequiredFields else {
+            return nil
+        }
+
+        let expression = type != RuleSystem.Label.final.rawValue ? components.removeFirst() : ""
+
+        let policy = components.removeFirst()
+
+        self.init(expression: expression, policy: policy)
+    }
+
+    public static func validate(_ description: String) throws {
+        let components = description.split(separator: ",").map {
+            $0.trimmingCharacters(in: .whitespaces)
+        }
+
+        guard components.first == label.rawValue else {
+            guard RuleSystem.labels.contains(.init(rawValue: components.first!)) else {
+                throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
+            }
+            let canBeParsedAs = RuleSystem.factory(for: .init(rawValue: components.first!))!
+            throw ProfileSerializationError.failedToParseRule(
+                reason: .failedToParseAs(Self.self, butCanBeParsedAs: canBeParsedAs)
+            )
+        }
+
+        guard components.count >= 3 else {
+            throw ProfileSerializationError.failedToParseRule(reason: .missingField)
         }
     }
 }
 
-#if swift(>=5.5) && canImport(_Concurrency)
-extension RuleType: Sendable {}
+/// A `ExternalRuleResources` is an object protocol that contains external resources
+public protocol ExternalRuleResources {
 
-/// `Rule` protocol define basic rule object protocol.
-public protocol Rule: Sendable {
+    /// The external resources url.
+    var externalResourcesURL: URL { get throws }
 
-    /// Identifier for this rule.
-    var id: UUID { get }
+    /// The filename for this resources that been saved to local storage.
+    var externalResourcesStorageName: String { get }
 
-    /// The rule type.
-    var type: RuleType { get }
-
-    /// The expression fot this rule.
-    ///
-    /// If rule is collection expression is used to save external resources url string.
-    var expression: String { get set }
-
-    /// The policy pointed to by the rule.
-    var policy: String { get set }
-
-    /// The comment for this rule, if no comment return empty string.
-    var comment: String { get set }
-
-    /// Rule evaluating function to determinse whether this rule match the given expression.
-    /// - Returns: True if match else false.
-    func match(_ pattern: String) -> Bool
-
-    /// Initialize an instance of `Rule` with specified string.
-    init(string: String) throws
+    /// Load all external resources from file url.
+    /// - Parameter file: The file url contains external resources.
+    mutating func loadAllRules(from file: URL)
 }
-#else
-/// `Rule` protocol define basic rule object protocol.
-public protocol Rule {
 
-    /// Identifier for this rule.
-    var id: UUID { get }
+extension ExternalRuleResources where Self: ParsableRule {
 
-    /// The rule type.
-    var type: RuleType { get }
+    public var externalResourcesURL: URL {
+        get throws {
+            guard let url = URL(string: expression) else {
+                throw ProfileSerializationError.failedToParseRule(reason: .invalidExternalResources)
+            }
+            return url
+        }
+    }
 
-    /// The expression fot this rule.
-    ///
-    /// If rule is collection expression is used to save external resources url string.
-    var expression: String { get set }
+    public var externalResourcesStorageName: String {
+        guard let url = try? externalResourcesURL else {
+            return ""
+        }
 
-    /// The policy pointed to by the rule.
-    var policy: String { get set }
-
-    /// The comment for this rule, if no comment return empty string.
-    var comment: String { get set }
-
-    /// Rule evaluating function to determinse whether this rule match the given expression.
-    /// - Returns: True if match else false.
-    func match(_ pattern: String) -> Bool
-
-    /// Initialize an instance of `Rule` with specified string.
-    init(string: String) throws
+        guard url.isFileURL else {
+            return Insecure.SHA1.hash(data: Data(expression.utf8))
+                .compactMap { String(format: "%02x", $0) }
+                .joined()
+        }
+        return url.lastPathComponent
+    }
 }
-#endif
 
-public struct AnyRule: Rule, CustomStringConvertible {
+public struct DomainKeywordRule: ParsableRule, ParsableRulePrivate {
 
-    public var id: UUID = UUID()
-
-    @Protected static var db: MaxMindDB?
-
-    public var type: RuleType
+    static var label: RuleSystem.Label = .domainKeyword
 
     public var expression: String
 
     public var policy: String
 
-    public var comment: String
-
-    @Protected private var standardRules: [AnyRule] = []
-
-    /// External resources storage url.
-    public var dstURL: URL? {
-        guard type == .domainSet || type == .ruleSet else {
-            return nil
-        }
-
-        if let url = URL(string: expression), url.isFileURL {
-            return url
-        }
-
-        let filename = Insecure.SHA1.hash(data: Data(expression.utf8))
-            .compactMap { String(format: "%02x", $0) }
-            .joined()
-
-        var dstURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-
-        dstURL.appendPathComponent("io.tenbits.Netbot")
-        dstURL.appendPathComponent("External Resources")
-        do {
-            try FileManager.default.createDirectory(at: dstURL, withIntermediateDirectories: true)
-        } catch {
-            assertionFailure(error.localizedDescription)
-        }
-        dstURL.appendPathComponent(filename)
-        return dstURL
-    }
-
     public var description: String {
-        var literals = [type.rawValue, policy]
-        if !expression.isEmpty {
-            literals.insert(expression, at: 1)
-        }
-        return literals.joined(separator: " ")
+        "\(Self.label.rawValue),\(expression),\(policy)"
     }
 
-    /// Initialize an instance of `AnyRule` with specified type, expression, policy and comment.
-    public init(type: RuleType, expression: String, policy: String, comment: String) {
-        self.type = type
+    public init(expression: String, policy: String) {
         self.expression = expression
         self.policy = policy
-        self.comment = comment
-    }
-
-    /// Initialize an instance of `AnyRule` with default values..
-    ///
-    /// Calling this method is equivalent to calling `init(type:domain:expression:policy:comment:)`
-    /// with `.domain` type empty expression `DIRECT` policy and empty comment.
-    public init() {
-        self.init(type: .domain, expression: "", policy: "DIRECT", comment: "")
-    }
-
-    public init(string: String) throws {
-        // Rule definitions are comma-separated except comments, and comment are
-        // always at the end of the rule and followed by //.
-        //
-        // Becase comments may contain commas, so we parse comments first.
-        var components = string.components(separatedBy: ",")
-
-        let rawValue = components.removeFirst().trimmingCharacters(in: .whitespaces)
-        guard let type = RuleType(rawValue: rawValue) else {
-            throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
-        }
-
-        self.type = type
-
-        let countOfRequiredFields = type == .final ? 1 : 2
-        guard components.count >= countOfRequiredFields else {
-            throw ProfileSerializationError.failedToParseRule(reason: .missingField)
-        }
-
-        if type != .final {
-            expression = components.removeFirst().trimmingCharacters(in: .whitespaces)
-        } else {
-            expression = ""
-        }
-
-        components = components.joined(separator: ",").components(separatedBy: "//")
-        if components.count > 1 {
-            policy = components.removeFirst().trimmingCharacters(in: .whitespaces)
-            comment = components.joined(separator: "//").trimmingCharacters(in: .whitespaces)
-        } else {
-            policy = components.removeFirst().trimmingCharacters(in: .whitespaces)
-            comment = ""
-        }
-
-        reloadData()
     }
 
     public func match(_ pattern: String) -> Bool {
-        switch type {
-            case .domain:
-                return expression == pattern
-            case .domainSuffix:
-                // e.g. apple.com should match *.apple.com and apple.com
-                // should not match *apple.com.
-                return expression == pattern || ".\(pattern)".hasSuffix(expression)
-            case .domainKeyword:
-                return pattern.contains(expression)
-            case .domainSet, .ruleSet:
-                return standardRules.first {
-                    $0.match(pattern)
-                } != nil
-            case .geoIp:
-                do {
-                    let dictionary =
-                        try AnyRule.db?.lookup(ipAddress: pattern) as? [String: [String: Any]]
-                    let country = dictionary?["country"]
-                    let countryCode = country?["iso_code"] as? String
-                    return self.expression == countryCode
-                } catch {
-                    return false
-                }
-            case .final:
-                return true
-        }
+        pattern.contains(expression)
+    }
+}
+
+public struct DomainRule: ParsableRule, ParsableRulePrivate {
+
+    static var label: RuleSystem.Label = .domain
+
+    public var expression: String
+
+    public var policy: String
+
+    public var description: String {
+        "\(Self.label.rawValue),\(expression),\(policy)"
     }
 
-    /// Load external resources from url resolved with expression, throws errors when failed.
-    ///
-    /// If expression is not a valid url string loading will finished with `.invalidExteranlResources` error.
-    /// else start downloading resources from that url and save downloaded file to `dstURL`.
-    public func performExternalResourcesLoading() async throws {
-        guard type.containsExternalResources, let dstURL = dstURL else {
+    public init(expression: String, policy: String) {
+        self.expression = expression
+        self.policy = policy
+    }
+
+    public func match(_ pattern: String) -> Bool {
+        expression == pattern
+    }
+}
+
+public struct DomainSetRule: ExternalRuleResources, ParsableRule, ParsableRulePrivate {
+
+    static var label: RuleSystem.Label = .domainSet
+
+    public var expression: String
+
+    public var policy: String
+
+    public var standardRules: [ParsableRule] {
+        get { lock.withLock { _standardRules } }
+        set { lock.withLockVoid { _standardRules = newValue } }
+    }
+    private var _standardRules: [ParsableRule] = []
+
+    private let lock = NIOLock()
+
+    public var description: String {
+        "\(Self.label.rawValue),\(expression),\(policy)"
+    }
+
+    public init(expression: String, policy: String) {
+        self.expression = expression
+        self.policy = policy
+    }
+
+    public func match(_ expression: String) -> Bool {
+        standardRules.first(where: { $0.match(expression) }) != nil
+    }
+
+    public mutating func loadAllRules(from file: URL) {
+        guard let data = try? Data(contentsOf: file),
+            let file = String(data: data, encoding: .utf8)
+        else {
             return
         }
+        standardRules = file.split(separator: "\n")
+            .compactMap {
+                let literal = $0.trimmingCharacters(in: .whitespaces)
+                guard !literal.isEmpty else {
+                    return nil
+                }
 
-        guard let url = URL(string: expression), !url.isFileURL else {
+                let description = "\(RuleSystem.Label.domainSuffix.rawValue),\(literal),\(policy)"
+                return DomainSuffixRule.init(description)
+            }
+    }
+}
+
+public struct DomainSuffixRule: ParsableRule, ParsableRulePrivate {
+
+    static var label: RuleSystem.Label = .domainSuffix
+
+    public var expression: String
+
+    public var policy: String
+
+    public var description: String {
+        "\(Self.label.rawValue),\(expression),\(policy)"
+    }
+
+    public init(expression: String, policy: String) {
+        self.expression = expression
+        self.policy = policy
+    }
+
+    public func match(_ pattern: String) -> Bool {
+        // e.g. apple.com should match *.apple.com and apple.com
+        // should not match *apple.com.
+        expression == pattern || ".\(pattern)".hasSuffix(expression)
+    }
+}
+
+public struct FinalRule: ParsableRule, ParsableRulePrivate {
+
+    static var label: RuleSystem.Label = .final
+
+    public var expression: String
+
+    public var policy: String
+
+    public var description: String {
+        "\(Self.label.rawValue),\(policy)"
+    }
+
+    public init(expression: String, policy: String) {
+        self.expression = expression
+        self.policy = policy
+    }
+
+    public init?(_ description: String) {
+        // Rule definitions are comma-separated.
+        let components = description.components(separatedBy: ",").map {
+            $0.trimmingCharacters(in: .whitespaces)
+        }
+
+        guard components.count == 2, components.first == Self.label.rawValue else {
+            return nil
+        }
+
+        expression = ""
+        policy = components.last!
+    }
+
+    public func match(_ pattern: String) -> Bool {
+        true
+    }
+
+    public static func validate(_ description: String) throws {
+        let components = description.split(separator: ",").map {
+            $0.trimmingCharacters(in: .whitespaces)
+        }
+
+        guard components.first == label.rawValue else {
+            guard RuleSystem.labels.contains(.init(rawValue: components.first!)) else {
+                throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
+            }
+            let canBeParsedAs = RuleSystem.factory(for: .init(rawValue: components.first!))!
             throw ProfileSerializationError.failedToParseRule(
-                reason: .invalidExternalResources
+                reason: .failedToParseAs(Self.self, butCanBeParsedAs: canBeParsedAs)
             )
         }
 
-        let resources: (URL, URLResponse) = try await withCheckedThrowingContinuation {
-            continuation in
-            URLSession.shared.downloadTask(with: url) { dst, response, error in
-                guard error == nil else {
-                    continuation.resume(throwing: error!)
-                    return
-                }
-
-                continuation.resume(returning: (dst!, response!))
-            }.resume()
-        }
-
-        // Remove older file first if exists.
-        if FileManager.default.fileExists(atPath: dstURL.path) {
-            try FileManager.default.removeItem(at: dstURL)
-        }
-        try FileManager.default.moveItem(at: resources.0, to: dstURL)
-    }
-
-    /// Load external resources from url resolved with expression.
-    /// - Parameter completion: The completion handler.
-    public func performExternalResourcesLoading(completion: @escaping (Error?) -> Void) {
-        guard type.containsExternalResources, let dstURL = dstURL else {
-            completion(nil)
-            return
-        }
-
-        guard let url = URL(string: expression), !url.isFileURL else {
-            completion(
-                ProfileSerializationError.failedToParseRule(reason: .invalidExternalResources)
-            )
-            return
-        }
-
-        URLSession.shared.downloadTask(with: url) { srcURL, response, error in
-            guard error == nil else {
-                completion(error!)
-                return
-            }
-
-            guard let srcURL = srcURL else {
-                completion(nil)
-                return
-            }
-
-            do {
-                // Remove older file first if exists.
-                if FileManager.default.fileExists(atPath: dstURL.path) {
-                    try FileManager.default.removeItem(at: dstURL)
-                }
-                try FileManager.default.moveItem(at: srcURL, to: dstURL)
-                completion(nil)
-            } catch {
-                completion(error)
-                assertionFailure(error.localizedDescription)
-            }
-        }.resume()
-    }
-
-    public mutating func reloadData() {
-        switch type {
-            case .domainSet:
-                guard let dstURL = dstURL,
-                    let data = try? Data(contentsOf: dstURL),
-                    let file = String(data: data, encoding: .utf8)
-                else {
-                    return
-                }
-                standardRules = file.split(separator: "\n")
-                    .compactMap {
-                        let literal = $0.trimmingCharacters(in: .whitespaces)
-                        guard !literal.isEmpty else {
-                            return nil
-                        }
-                        return try? AnyRule(
-                            string: "\(RuleType.domainSuffix.rawValue),\(literal),\(policy)"
-                        )
-                    }
-            case .ruleSet:
-                guard let dstURL = dstURL,
-                    let data = try? Data(contentsOf: dstURL),
-                    let file = String(data: data, encoding: .utf8)
-                else {
-                    return
-                }
-                standardRules = file.split(separator: "\n")
-                    .compactMap {
-                        let literal = $0.trimmingCharacters(in: .whitespaces)
-                        guard !literal.isEmpty else {
-                            return nil
-                        }
-                        return try? AnyRule(string: literal + ",\(policy)")
-                    }
-            default:
-                break
+        guard components.count >= 2 else {
+            throw ProfileSerializationError.failedToParseRule(reason: .missingField)
         }
     }
 }
 
-extension AnyRule: Codable {
+public struct GeoIPRule: ParsableRule, ParsableRulePrivate {
 
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        try self.init(string: container.decode(String.self))
+    static var label: RuleSystem.Label = .geoIp
+
+    public var expression: String
+
+    public var policy: String
+
+    public static var database: MaxMindDB? {
+        get { lock.withLock { _database } }
+        set { lock.withLockVoid { _database = newValue } }
+    }
+    private static var _database: MaxMindDB?
+
+    private static let lock: NIOLock = .init()
+
+    public var description: String {
+        "\(Self.label.rawValue),\(expression),\(policy)"
     }
 
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        var string =
-            type == .final
-            ? "\(type.rawValue),\(policy)" : "\(type.rawValue),\(expression),\(policy)"
-        if !comment.isEmpty {
-            string.append(" // \(comment)")
+    public init(expression: String, policy: String) {
+        self.expression = expression
+        self.policy = policy
+    }
+
+    public func match(_ pattern: String) -> Bool {
+        do {
+            let dictionary =
+                try Self.database?.lookup(ipAddress: pattern) as? [String: [String: Any]]
+            let country = dictionary?["country"]
+            let countryCode = country?["iso_code"] as? String
+            return self.expression == countryCode
+        } catch {
+            return false
         }
-        try container.encode(string)
     }
 }
 
-#if swift(>=5.5) && canImport(_Concurrency)
-extension AnyRule: Sendable {}
-#endif
+//public struct IPRangeRule: ParsableRule, Equatable, Hashable, Identifiable {
+//
+//    public let id: UUID = .init()
+//
+//    var type: String
+//
+//    public var expression: String
+//
+//    public var policy: String
+//
+//    public var description: String {
+//        "\(type),\(expression),\(policy)"
+//    }
+//
+//    public mutating func validate() throws {
+//        guard RuleType(rawValue: type) != nil else {
+//            throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
+//        }
+//    }
+//
+//    public func match(_ pattern: String) -> Bool {
+//        pattern.contains(expression)
+//    }
+//
+//    public init?(_ description: String) {
+//        // Rule definitions are comma-separated.
+//        let components = description.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+//
+//        guard components.count == 3 else {
+//            return nil
+//        }
+//
+//        type = components.first!
+//        expression = components[1]
+//        policy = components.last!
+//    }
+//}
+
+public struct RuleSetRule: ExternalRuleResources, ParsableRule, ParsableRulePrivate {
+
+    static var label: RuleSystem.Label = .ruleSet
+
+    public var expression: String
+
+    public var policy: String
+
+    public var description: String {
+        "\(Self.label.rawValue),\(expression),\(policy)"
+    }
+
+    public var standardRules: [ParsableRule] {
+        get { lock.withLock { _standardRules } }
+        set { lock.withLockVoid { _standardRules = newValue } }
+    }
+    private var _standardRules: [ParsableRule] = []
+
+    private let lock = NIOLock()
+
+    public init(expression: String, policy: String) {
+        self.expression = expression
+        self.policy = policy
+    }
+
+    public func match(_ expression: String) -> Bool {
+        standardRules.first(where: { $0.match(expression) }) != nil
+    }
+
+    public mutating func loadAllRules(from file: URL) {
+        guard let data = try? Data(contentsOf: file),
+            let file = String(data: data, encoding: .utf8)
+        else {
+            return
+        }
+        standardRules = file.split(separator: "\n")
+            .compactMap {
+                let literal = $0.trimmingCharacters(in: .whitespaces)
+                guard !literal.isEmpty else {
+                    return nil
+                }
+                let label = String(literal.split(separator: ",").first!)
+                let description = literal + ",\(policy)"
+                guard let factory = RuleSystem.factory(for: .init(rawValue: label)) else {
+                    return nil
+                }
+                return factory.init(description)
+            }
+    }
+}

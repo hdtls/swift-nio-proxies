@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -55,7 +55,7 @@ public enum ProfileSerializationError: Error {
         case invalidExternalResources
 
         /// Error that failed to parse rule to specified type.
-        case failedToParseAs(Rule.Type, butCanBeParsedAs: Rule.Type)
+        case failedToParseAs(ParsableRule.Type, butCanBeParsedAs: ParsableRule.Type)
 
         public var description: String {
             switch self {
@@ -86,7 +86,7 @@ public enum ProfileSerializationError: Error {
 /// You use the JSONSerialization class to convert JSON to Foundation objects and convert Foundation
 /// objects to JSON.
 /// To convert a json object to data the object must is a NSDIctionary with String keys.
-final public class ProfileSerialization {
+open class ProfileSerialization {
 
     struct JSONKey: Equatable, RawRepresentable {
 
@@ -105,9 +105,7 @@ final public class ProfileSerialization {
             switch rawValue {
                 case "[General]":
                     self.rawValue = "general"
-                case "[Replica]":
-                    self.rawValue = "replica"
-                case "[Proxy Policy]":
+                case "[Policies]":
                     self.rawValue = "policies"
                 case "[Policy Group]":
                     self.rawValue = "policy_groups"
@@ -160,7 +158,7 @@ final public class ProfileSerialization {
     /// Create a Foundation object from configuration file data.
     /// - Parameter data: The configuration file byte buffer.
     /// - Returns: Foundation NSDictionary object.
-    public static func jsonObject(with data: ByteBuffer) throws -> Any {
+    open class func jsonObject(with data: ByteBuffer) throws -> Any {
         var __rulesKeyedByLine: [Int: String] = [:]
         var __groupKeyedByLine: [Int: [String: [String]]] = [:]
         var __policies: [String] = Builtin.policies.map { $0.name }
@@ -314,7 +312,10 @@ final public class ProfileSerialization {
 
         // All proxy label defined in rule should
         try __rulesKeyedByLine.forEach { (cursor, line) in
-            guard let rule = try? AnyRule.init(string: line) else {
+            let rawValue = line.split(separator: ",").first!.trimmingCharacters(in: .whitespaces)
+            guard let factory = RuleSystem.factory(for: .init(rawValue: rawValue)),
+                let rule = factory.init(line)
+            else {
                 throw ProfileSerializationError.invalidFile(
                     reason: .invalidLine(cursor: cursor, description: line)
                 )
@@ -345,7 +346,7 @@ final public class ProfileSerialization {
     /// Create a Foundation object from configuration file data.
     /// - Parameter data: The configuration file data.
     /// - Returns: Foundation NSDictionary object.
-    public static func jsonObject(with data: Data) throws -> Any {
+    open class func jsonObject(with data: Data) throws -> Any {
         try jsonObject(with: ByteBuffer.init(bytes: data))
     }
 
@@ -353,7 +354,7 @@ final public class ProfileSerialization {
     /// then an exception will be thrown.
     /// - Parameter obj: Foundation NSDictionary object.
     /// - Returns: Generated configuration file data.
-    public static func data(withJSONObject obj: Any) throws -> Data {
+    open class func data(withJSONObject obj: Any) throws -> Data {
         guard let json = obj as? [String: Any] else {
             throw ProfileSerializationError.dataCorrupted
         }
@@ -371,10 +372,8 @@ final public class ProfileSerialization {
             switch key {
                 case JSONKey.general.rawValue:
                     components.append("[General]")
-                case JSONKey.replica.rawValue:
-                    components.append("[Replica]")
                 case JSONKey.policies.rawValue:
-                    components.append("[Proxy Policy]")
+                    components.append("[Policies]")
                 case JSONKey.policyGroups.rawValue:
                     components.append("[Policy Group]")
                 case JSONKey.rules.rawValue:

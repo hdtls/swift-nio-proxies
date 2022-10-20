@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -158,23 +158,10 @@ extension ByteBuffer {
 extension UInt8 {
 
     internal static let space = UInt8(ascii: " ")
-    internal static let `return` = UInt8(ascii: "\r")
     internal static let newLine = UInt8(ascii: "\n")
-    internal static let tab = UInt8(ascii: "\t")
-
     internal static let octothorpe = UInt8(ascii: "#")
     internal static let semicolon = UInt8(ascii: ";")
-    internal static let colon = UInt8(ascii: ":")
-    internal static let comma = UInt8(ascii: ",")
-
-    internal static let openbrace = UInt8(ascii: "{")
-    internal static let closebrace = UInt8(ascii: "}")
-
     internal static let openbracket = UInt8(ascii: "[")
     internal static let closebracket = UInt8(ascii: "]")
-
-    internal static let quote = UInt8(ascii: "\"")
-    internal static let backslash = UInt8(ascii: "\\")
-
     internal static let equal = UInt8(ascii: "=")
 }

@@ -1,0 +1,129 @@
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
+// Licensed under Apache License v2.0
+//
+// See LICENSE for license information
+// See CONTRIBUTORS.txt for the list of Netbot project authors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
+import XCTest
+@testable import NIONetbot
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+%{
+    class Rule:
+        def __init__(self, tag, className, type, expression="swift.org", policy="DIRECT", standardRules=None):
+            self.tag = tag
+            self.className = className
+            self.type = type
+            self.expression = expression
+            self.policy = policy
+            self.standardRules = standardRules
+
+    pythonRules = [
+        Rule("DOMAIN", "DomainRule", ".domain"),
+        Rule("DOMAIN-SUFFIX", "DomainSuffixRule", ".domainSuffix"),
+        Rule("DOMAIN-KEYWORD", "DomainKeywordRule", ".domainKeyword"),
+        Rule("DOMAIN-SET", "DomainSetRule", ".domainSet", "http://domainset.com", standardRules=[
+            "swift.org",
+            ".apple.com"
+        ]),
+        Rule("GEOIP", "GeoIPRule", ".geoIp"),
+        Rule("FINAL", "FinalRule", ".final"),
+        Rule("RULE-SET", "RuleSetRule", ".ruleSet", "http://ruleset.com", standardRules=[
+            "DOMAIN,apple.com",
+            "DOMAIN-SUFFIX,apple.com",
+            "DOMAIN-KEYWORD,apple"
+        ]),
+    ]
+}%
+
+final class ParsableRuleTests: XCTestCase {
+    %for rule in pythonRules:
+
+    func testParsing${rule.className}() throws {
+        %if rule.tag == "FINAL":
+        let description = "${rule.tag},DIRECT"
+        %else:
+        let description = "${rule.tag},${rule.expression},DIRECT"
+        %end
+        XCTAssertNoThrow(try ${rule.className}.validate(description))
+        let standardRule = ${rule.className}.init(description)!
+        %if rule.tag == "FINAL":
+        XCTAssertEqual(standardRule.expression, "")
+        %else:
+        XCTAssertEqual(standardRule.expression, "${rule.expression}")
+        %end
+        XCTAssertEqual(standardRule.policy, "${rule.policy}")
+        XCTAssertEqual(standardRule.description, description)
+    }
+
+    func testAppropriateErrorWhenParsing${rule.className}WithInvalidSchema() {
+        %if rule.tag == "FINAL":
+        let description = "invalidSchema,DIRECT"
+        %else:
+        let description = "invalidSchema,${rule.expression},DIRECT"
+        %end
+
+        XCTAssertThrowsError(try ${rule.className}.validate(description)) { error in
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
+            let expectedErrorString = String(
+                describing: ProfileSerializationError.failedToParseRule(reason: .unsupported)
+            )
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+
+        let parsableRule = ${rule.className}.init(description)
+        XCTAssertNil(parsableRule)
+    }
+
+    func testAppropriateErrorWhenParsing${rule.className}WithIncompleteDescriptionString() {
+        let description = "${rule.tag}"
+
+        XCTAssertThrowsError(try ${rule.className}.validate(description)) { error in
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
+            let expectedErrorString = String(
+                describing: ProfileSerializationError.failedToParseRule(reason: .missingField)
+            )
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+
+        XCTAssertNil(${rule.className}.init("${rule.tag}"))
+    }
+    %for other in filter(lambda e: e != rule, pythonRules):
+
+    func testAppropriateErrorWhenParse${rule.className}As${other.className}() {
+        %if rule.tag == "FINAL":
+        let description = "${rule.tag},DIRECT"
+        %else:
+        let description = "${rule.tag},${rule.expression},DIRECT"
+        %end
+
+        XCTAssertThrowsError(try ${other.className}.validate(description)) { error in
+            XCTAssertTrue(error is ProfileSerializationError)
+            let actualErrorString = String(describing: error as! ProfileSerializationError)
+            let expectedErrorString = String(
+                describing: ProfileSerializationError.failedToParseRule(
+                    reason: .failedToParseAs(
+                        ${other.className}.self,
+                        butCanBeParsedAs: ${rule.className}.self
+                    )
+                )
+            )
+            XCTAssertEqual(actualErrorString, expectedErrorString)
+        }
+
+        XCTAssertNil(${rule.className}.init("${rule.tag}"))
+    }
+    %end
+    %end
+}

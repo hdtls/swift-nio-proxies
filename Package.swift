@@ -138,7 +138,7 @@ let package = Package(
                 swiftNIOHTTP1,
                 swiftNIOTransportServices
             ],
-            exclude: ["RuleTests.g.swift.gyb"]
+            exclude: ["ParsableRuleTests.g.swift.gyb"]
         )
     ],
     swiftLanguageVersions: [.v5]

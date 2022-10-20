@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -19,7 +19,7 @@ import Logging
 public struct Profile {
 
     /// The rules contains in this configuration.
-    public var rules: [AnyRule]
+    public var rules: [ParsableRule]
 
     /// A configuration object that provides HTTP MitM configuration for this process.
     public var mitm: MitMConfiguration
@@ -37,7 +37,7 @@ public struct Profile {
     /// polcies and policyGroups.
     public init(
         general: BasicConfiguration,
-        rules: [AnyRule],
+        rules: [ParsableRule],
         mitm: MitMConfiguration,
         policies: [any Policy],
         policyGroups: [PolicyGroup]
@@ -77,7 +77,17 @@ extension Profile: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.rules = try container.decodeIfPresent([AnyRule].self, forKey: .rules) ?? []
+        let ruleLiterals = try container.decodeIfPresent([String].self, forKey: .rules) ?? []
+        self.rules = try ruleLiterals.map {
+            var components = $0.split(separator: ",")
+            let id = String(components.removeFirst())
+            guard let factory = RuleSystem.factory(for: .init(rawValue: id)) else {
+                throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
+            }
+            try factory.validate($0)
+            return factory.init($0)!
+        }
+
         self.mitm =
             try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
         self.general =
@@ -105,7 +115,10 @@ extension Profile: Codable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(rules.isEmpty ? nil : rules, forKey: .rules)
+        try container.encodeIfPresent(
+            rules.isEmpty ? nil : rules.map { $0.description },
+            forKey: .rules
+        )
         try container.encode(mitm, forKey: .mitm)
         try container.encode(general, forKey: .general)
         try container.encodeIfPresent(

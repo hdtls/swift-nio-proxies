@@ -39,22 +39,18 @@ final public class App {
 
         var isMitmEnabled: Bool = false
 
-        var maxMindDB: MaxMindDB
-
         var serverQuiesces: [(ServerQuiescingHelper, EventLoopPromise<Void>)]
 
         init(
             profile: Profile,
             outboundMode: OutboundMode = .direct,
             enableHTTPCapture: Bool = false,
-            enableMitm: Bool = false,
-            maxMindDB: MaxMindDB
+            enableMitm: Bool = false
         ) {
             self.profile = profile
             self.outboundMode = outboundMode
             self.isHTTPCaptureEnabled = enableHTTPCapture
             self.isMitmEnabled = enableMitm
-            self.maxMindDB = maxMindDB
             self.serverQuiesces = []
         }
 
@@ -77,8 +73,6 @@ final public class App {
 
     private let eventLoopGroup: EventLoopGroup
 
-    private let cache: LRUCache<String, AnyRule> = .init(capacity: 100)
-
     public init(
         logger: Logger = .init(label: "io.tenbits.Netbot"),
         profile: Profile,
@@ -93,9 +87,9 @@ final public class App {
             profile: profile,
             outboundMode: outboundMode,
             enableHTTPCapture: enableHTTPCapture,
-            enableMitm: enableMitm,
-            maxMindDB: maxMindDB
+            enableMitm: enableMitm
         )
+        GeoIPRule.database = maxMindDB
     }
 
     public func run() async throws {
@@ -277,16 +271,10 @@ final public class App {
             metadata: ["Request": "\(address)"]
         )
 
-        var savedFinalRule: AnyRule!
+        var savedFinalRule: ParsableRule!
         startTime = .now()
 
-        // Fetch rule from LRU cache.
-        for pattern in patterns {
-            savedFinalRule = await self.cache.value(forKey: pattern)
-            if savedFinalRule != nil {
-                break
-            }
-        }
+        // TODO: Fetch rule from cache.
 
         if savedFinalRule == nil {
             for rule in profile.rules {
@@ -296,15 +284,12 @@ final public class App {
                 }
 
                 // TODO: Store FinalRule unless Profile.rules changed.
-                if rule.type == .final {
+                if rule is FinalRule {
                     savedFinalRule = rule
                 }
             }
 
-            // Cache rule evaluating result.
-            for pattern in patterns {
-                await self.cache.setValue(savedFinalRule, forKey: pattern)
-            }
+            // TODO: Cache rule evaluating result.
         }
 
         precondition(

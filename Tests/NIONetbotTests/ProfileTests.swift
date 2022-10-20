@@ -30,18 +30,8 @@ final class ProfileTests: XCTestCase {
         exclude-simple-hostnames = true
         """
 
-    let replicaString = """
-        [Replica]
-        hide-apple-requests = true
-        hide-crashlytics-requests = true
-        hide-udp = true
-        req-msg-filter-type = none
-        req-msg-filter = google.com
-        hide-crash-reporter-request = true
-        """
-
     let policiesString = """
-        [Proxy Policy]
+        [Policies]
         HTTP = http, server-address=127.0.0.1, port=8310
         HTTP BASIC = http, server-address=127.0.0.1, port=8311, username=Netbot, password=password
         SOCKS = socks5, server-address=127.0.0.1, port=8320, username=Netbot, password=password
@@ -113,7 +103,7 @@ final class ProfileTests: XCTestCase {
 
     func testHTTPProxyPolicySerializationAndDecoding() throws {
         let policiesString = """
-            [Proxy Policy]
+            [Policies]
             HTTP = http, server-address=127.0.0.1, port=8310, username=username, password=password, preferer-http-tunneling=true
             """
         let jsonObject = try ProfileSerialization.jsonObject(
@@ -143,7 +133,7 @@ final class ProfileTests: XCTestCase {
 
     func testHTTPProxyPolicyDefaultValueSerializationAndDecoding() throws {
         let policiesString = """
-            [Proxy Policy]
+            [Policies]
             HTTP = http, server-address=127.0.0.1, port=8310
             """
         let jsonObject = try ProfileSerialization.jsonObject(
@@ -167,7 +157,7 @@ final class ProfileTests: XCTestCase {
 
     func testHTTPSProxyPolicySerializationAndDecoding() throws {
         let policiesString = """
-            [Proxy Policy]
+            [Policies]
             HTTPS = http, server-address=127.0.0.1, port=8310, username=username, password=password, sni=sni, preferer-http-tunneling=true, skip-certificate-verification=true, over-tls=true
             """
         let jsonObject = try ProfileSerialization.jsonObject(
@@ -201,7 +191,7 @@ final class ProfileTests: XCTestCase {
 
     func testHTTPSProxyPolicyDefaultValueSerializationAndDecoding() throws {
         let policiesString = """
-            [Proxy Policy]
+            [Policies]
             HTTPS = http, server-address=127.0.0.1, port=8310, over-tls=true
             """
         let jsonObject = try ProfileSerialization.jsonObject(
@@ -226,7 +216,7 @@ final class ProfileTests: XCTestCase {
 
     func testSOCKS5PolicySerializationAndDecoding() throws {
         let policiesString = """
-            [Proxy Policy]
+            [Policies]
             SOCKS5 = socks5, server-address=127.0.0.1, port=8310, username=username, password=password
             """
         let jsonObject = try ProfileSerialization.jsonObject(
@@ -256,7 +246,7 @@ final class ProfileTests: XCTestCase {
 
     func testSOCKS5OverTLSPolicySerializationAndDecoding() throws {
         let policiesString = """
-            [Proxy Policy]
+            [Policies]
             SOCKS5OverTLS = socks5, server-address=127.0.0.1, port=8310, username=username, password=password, sni=sni, skip-certificate-verification=true, over-tls=true
             """
         let jsonObject = try ProfileSerialization.jsonObject(
@@ -289,7 +279,7 @@ final class ProfileTests: XCTestCase {
 
     func testSOCKS5OverTLSPolicyDefaultValueSerializationAndDecoding() throws {
         let policiesString = """
-            [Proxy Policy]
+            [Policies]
             SOCKS5OverTLS = socks5, server-address=127.0.0.1, port=8310, over-tls=true
             """
         let jsonObject = try ProfileSerialization.jsonObject(
@@ -313,7 +303,7 @@ final class ProfileTests: XCTestCase {
 
     func testShadowsocksPolicySerilizationAndDecoding() throws {
         let policiesString = """
-            [Proxy Policy]
+            [Policies]
             SHADOWSOCKS = ss, server-address=127.0.0.1, port=8310, algorithm=aes-128-gcm, password=password, enable-udp-relay=true, enable-tfo=true
             """
         let jsonObject = try ProfileSerialization.jsonObject(
@@ -343,7 +333,7 @@ final class ProfileTests: XCTestCase {
 
     func testShadowsocksPolicyDefualtValueSerilizationAndDecoding() throws {
         let policiesString = """
-            [Proxy Policy]
+            [Policies]
             SHADOWSOCKS = ss, server-address=127.0.0.1, port=8310, algorithm=aes-128-gcm, password=password
             """
         let jsonObject = try ProfileSerialization.jsonObject(
@@ -366,7 +356,7 @@ final class ProfileTests: XCTestCase {
     func testVMESSPolicySerilizationAndDecoding() throws {
         let uuid = UUID()
         let policiesString = """
-            [Proxy Policy]
+            [Policies]
             VMESS = vmess, server-address=127.0.0.1, port=8310, username=\(uuid)
             """
         let jsonObject = try ProfileSerialization.jsonObject(
@@ -394,7 +384,7 @@ final class ProfileTests: XCTestCase {
 
     func testUnsupportedPoliciesDecoding() throws {
         let policiesString = """
-            [Proxy Policy]
+            [Policies]
             HTTP = IKEv2, server-address=127.0.0.1, port=8310
             """
         let jsonObject = try ProfileSerialization.jsonObject(
@@ -465,10 +455,10 @@ final class ProfileTests: XCTestCase {
         let result = profile.rules
         XCTAssertEqual(result.count, 4)
 
-        XCTAssertTrue(result.first?.type == .domainSuffix)
-        XCTAssertTrue(result[1].type == .ruleSet)
-        XCTAssertTrue(result[2].type == .geoIp)
-        XCTAssertTrue(result[3].type == .final)
+        XCTAssertTrue(result[0] is DomainSuffixRule)
+        XCTAssertTrue(result[1] is RuleSetRule)
+        XCTAssertTrue(result[2] is GeoIPRule)
+        XCTAssertTrue(result[3] is FinalRule)
     }
 
     func testMitMDecoding() throws {
