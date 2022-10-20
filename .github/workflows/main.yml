@@ -29,11 +29,8 @@ jobs:
       uses: actions/checkout@v3
     
     - name: Generate boilerplate files...
-      run: bash scripts/generate_boilerplate_files_with_gyb.sh
+      run: bash scripts/generate_boilerplate_files.sh
 
-    - name: Build the projects...
-      run: swift build
-      
-    - name: Run tests...
+    - name: Build and tests...
       run: swift test -Xswiftc -warnings-as-errors
 

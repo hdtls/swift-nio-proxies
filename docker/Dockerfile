@@ -7,7 +7,7 @@ RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true
 # Install OS updates and set as UTF-8
 RUN apt-get update -q \
     && apt-get -q dist-upgrade -y \
-    && apt-get -q install -y locales locales-all \
+    && apt-get -q install -y locales locales-all python3 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV LC_ALL en_US.UTF-8
