@@ -9,4 +9,3 @@ DerivedData
 .swiftpm
 .deps
 **/*.pyc
-**/*.g.swift
