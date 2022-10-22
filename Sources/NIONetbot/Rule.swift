@@ -211,11 +211,7 @@ public struct DomainSetRule: ExternalRuleResources, ParsableRule, ParsableRulePr
 
     public var policy: String
 
-    public var standardRules: [ParsableRule] {
-        get { lock.withLock { _standardRules } }
-        set { lock.withLockVoid { _standardRules = newValue } }
-    }
-    private var _standardRules: [ParsableRule] = []
+    private var domains: [String] = []
 
     private let lock = NIOLock()
 
@@ -229,7 +225,11 @@ public struct DomainSetRule: ExternalRuleResources, ParsableRule, ParsableRulePr
     }
 
     public func match(_ expression: String) -> Bool {
-        standardRules.first(where: { $0.match(expression) }) != nil
+        lock.withLock {
+            domains.first {
+                $0 == expression || ".\(expression)".hasSuffix($0)
+            } != nil
+        }
     }
 
     public mutating func loadAllRules(from file: URL) {
@@ -238,16 +238,17 @@ public struct DomainSetRule: ExternalRuleResources, ParsableRule, ParsableRulePr
         else {
             return
         }
-        standardRules = file.split(separator: "\n")
-            .compactMap {
-                let literal = $0.trimmingCharacters(in: .whitespaces)
-                guard !literal.isEmpty else {
-                    return nil
-                }
 
-                let description = "\(RuleSystem.Label.domainSuffix.rawValue),\(literal),\(policy)"
-                return DomainSuffixRule.init(description)
-            }
+        lock.withLockVoid {
+            domains = file.split(separator: "\n")
+                .compactMap {
+                    let literal = $0.trimmingCharacters(in: .whitespaces)
+                    guard !literal.isEmpty, !literal.hasPrefix("#"), !literal.hasPrefix(";") else {
+                        return nil
+                    }
+                    return literal
+                }
+        }
     }
 }
 
@@ -288,7 +289,12 @@ public struct FinalRule: ParsableRule, ParsableRulePrivate {
     }
 
     public init(expression: String, policy: String) {
-        self.expression = expression
+        self.expression = ""
+        self.policy = policy
+    }
+
+    public init(policy: String) {
+        self.expression = ""
         self.policy = policy
     }
 
@@ -419,11 +425,7 @@ public struct RuleSetRule: ExternalRuleResources, ParsableRule, ParsableRulePriv
         "\(Self.label.rawValue),\(expression),\(policy)"
     }
 
-    public var standardRules: [ParsableRule] {
-        get { lock.withLock { _standardRules } }
-        set { lock.withLockVoid { _standardRules = newValue } }
-    }
-    private var _standardRules: [ParsableRule] = []
+    private var standardRules: [ParsableRule] = []
 
     private let lock = NIOLock()
 
@@ -433,7 +435,9 @@ public struct RuleSetRule: ExternalRuleResources, ParsableRule, ParsableRulePriv
     }
 
     public func match(_ expression: String) -> Bool {
-        standardRules.first(where: { $0.match(expression) }) != nil
+        lock.withLock {
+            standardRules.first(where: { $0.match(expression) }) != nil
+        }
     }
 
     public mutating func loadAllRules(from file: URL) {
@@ -442,18 +446,20 @@ public struct RuleSetRule: ExternalRuleResources, ParsableRule, ParsableRulePriv
         else {
             return
         }
-        standardRules = file.split(separator: "\n")
-            .compactMap {
-                let literal = $0.trimmingCharacters(in: .whitespaces)
-                guard !literal.isEmpty else {
-                    return nil
+        lock.withLockVoid {
+            standardRules = file.split(separator: "\n")
+                .compactMap {
+                    let literal = $0.trimmingCharacters(in: .whitespaces)
+                    guard !literal.isEmpty, !literal.hasPrefix("#"), !literal.hasPrefix(";") else {
+                        return nil
+                    }
+                    let label = String(literal.split(separator: ",").first!)
+                    let description = literal + ",\(policy)"
+                    guard let factory = RuleSystem.factory(for: .init(rawValue: label)) else {
+                        return nil
+                    }
+                    return factory.init(description)
                 }
-                let label = String(literal.split(separator: ",").first!)
-                let description = literal + ",\(policy)"
-                guard let factory = RuleSystem.factory(for: .init(rawValue: label)) else {
-                    return nil
-                }
-                return factory.init(description)
-            }
+        }
     }
 }
