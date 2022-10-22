@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -17,10 +17,10 @@ import ArgumentParser
 import Foundation
 import SystemConfiguration
 
-public struct ProxyConfigCommand: ParsableCommand {
+public struct SystemProxyConfigCommand: ParsableCommand {
     public static var configuration: CommandConfiguration = .init(
-        commandName: "proxycfg",
-        abstract: "System Proxies Settings Command Line Tool",
+        commandName: "sysproxycfg",
+        abstract: "System Proxies Config Command Line Tool",
         discussion:
             "This command help user update system proxies settings for SOCKS, web and secure web proxy.",
         subcommands: [InstallCommand.self, UninstallCommand.self]
@@ -29,7 +29,7 @@ public struct ProxyConfigCommand: ParsableCommand {
     public init() {}
 }
 
-extension ProxyConfigCommand {
+extension SystemProxyConfigCommand {
 
     public struct InstallCommand: ParsableCommand {
 

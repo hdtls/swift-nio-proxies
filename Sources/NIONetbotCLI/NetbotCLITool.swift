@@ -32,7 +32,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
         discussion: "",
         version: "1.0.0",
         subcommands: [
-            ProxyConfigCommand.self
+            SystemProxyConfigCommand.self
         ]
     )
     #else
@@ -138,7 +138,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
         if !proxyctl.isEmpty {
             proxyctl.insert("install", at: 0)
 
-            //            ProxyConfigCommand.main(proxyctl)
+            //            SystemProxyConfigCommand.main(proxyctl)
         }
         #endif
 
