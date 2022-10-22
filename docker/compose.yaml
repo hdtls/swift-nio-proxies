@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        swift_version: "5.7"
 
   common:
     &common
@@ -24,7 +26,7 @@ services:
   test:
     <<: *common
     depends_on: [generate]
-    command: /bin/bash -xcl "swift test -Xswiftc -warnings-as-errors"
+    command: /bin/bash -xcl "swift test --sanitize thread -Xswiftc -warnings-as-errors"
 
   # util
   shell:
