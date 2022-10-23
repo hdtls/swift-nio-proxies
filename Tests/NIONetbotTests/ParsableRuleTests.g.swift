@@ -116,7 +116,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(DomainSetRule.self, butCanBeParsedAs: DomainRule.self)
+                    reason: .failedToParseAs(
+                        DomainSetRule.self,
+                        butCanBeParsedAs: DomainRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -133,7 +136,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(GeoIPRule.self, butCanBeParsedAs: DomainRule.self)
+                    reason: .failedToParseAs(
+                        GeoIPRule.self,
+                        butCanBeParsedAs: DomainRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -150,7 +156,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(FinalRule.self, butCanBeParsedAs: DomainRule.self)
+                    reason: .failedToParseAs(
+                        FinalRule.self,
+                        butCanBeParsedAs: DomainRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -167,7 +176,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(RuleSetRule.self, butCanBeParsedAs: DomainRule.self)
+                    reason: .failedToParseAs(
+                        RuleSetRule.self,
+                        butCanBeParsedAs: DomainRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -544,7 +556,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(DomainRule.self, butCanBeParsedAs: DomainSetRule.self)
+                    reason: .failedToParseAs(
+                        DomainRule.self,
+                        butCanBeParsedAs: DomainSetRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -601,7 +616,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(GeoIPRule.self, butCanBeParsedAs: DomainSetRule.self)
+                    reason: .failedToParseAs(
+                        GeoIPRule.self,
+                        butCanBeParsedAs: DomainSetRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -618,7 +636,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(FinalRule.self, butCanBeParsedAs: DomainSetRule.self)
+                    reason: .failedToParseAs(
+                        FinalRule.self,
+                        butCanBeParsedAs: DomainSetRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -635,7 +656,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(RuleSetRule.self, butCanBeParsedAs: DomainSetRule.self)
+                    reason: .failedToParseAs(
+                        RuleSetRule.self,
+                        butCanBeParsedAs: DomainSetRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -692,7 +716,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(DomainRule.self, butCanBeParsedAs: GeoIPRule.self)
+                    reason: .failedToParseAs(
+                        DomainRule.self,
+                        butCanBeParsedAs: GeoIPRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -749,7 +776,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(DomainSetRule.self, butCanBeParsedAs: GeoIPRule.self)
+                    reason: .failedToParseAs(
+                        DomainSetRule.self,
+                        butCanBeParsedAs: GeoIPRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -766,7 +796,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(FinalRule.self, butCanBeParsedAs: GeoIPRule.self)
+                    reason: .failedToParseAs(
+                        FinalRule.self,
+                        butCanBeParsedAs: GeoIPRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -783,7 +816,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(RuleSetRule.self, butCanBeParsedAs: GeoIPRule.self)
+                    reason: .failedToParseAs(
+                        RuleSetRule.self,
+                        butCanBeParsedAs: GeoIPRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -840,7 +876,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(DomainRule.self, butCanBeParsedAs: FinalRule.self)
+                    reason: .failedToParseAs(
+                        DomainRule.self,
+                        butCanBeParsedAs: FinalRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -897,7 +936,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(DomainSetRule.self, butCanBeParsedAs: FinalRule.self)
+                    reason: .failedToParseAs(
+                        DomainSetRule.self,
+                        butCanBeParsedAs: FinalRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -914,7 +956,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(GeoIPRule.self, butCanBeParsedAs: FinalRule.self)
+                    reason: .failedToParseAs(
+                        GeoIPRule.self,
+                        butCanBeParsedAs: FinalRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -931,7 +976,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(RuleSetRule.self, butCanBeParsedAs: FinalRule.self)
+                    reason: .failedToParseAs(
+                        RuleSetRule.self,
+                        butCanBeParsedAs: FinalRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -988,7 +1036,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(DomainRule.self, butCanBeParsedAs: RuleSetRule.self)
+                    reason: .failedToParseAs(
+                        DomainRule.self,
+                        butCanBeParsedAs: RuleSetRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -1045,7 +1096,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(DomainSetRule.self, butCanBeParsedAs: RuleSetRule.self)
+                    reason: .failedToParseAs(
+                        DomainSetRule.self,
+                        butCanBeParsedAs: RuleSetRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -1062,7 +1116,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(GeoIPRule.self, butCanBeParsedAs: RuleSetRule.self)
+                    reason: .failedToParseAs(
+                        GeoIPRule.self,
+                        butCanBeParsedAs: RuleSetRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)
@@ -1079,7 +1136,10 @@ final class ParsableRuleTests: XCTestCase {
             let actualErrorString = String(describing: error as! ProfileSerializationError)
             let expectedErrorString = String(
                 describing: ProfileSerializationError.failedToParseRule(
-                    reason: .failedToParseAs(FinalRule.self, butCanBeParsedAs: RuleSetRule.self)
+                    reason: .failedToParseAs(
+                        FinalRule.self,
+                        butCanBeParsedAs: RuleSetRule.self
+                    )
                 )
             )
             XCTAssertEqual(actualErrorString, expectedErrorString)

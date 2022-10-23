@@ -65,6 +65,12 @@ public struct NetbotCLITool: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "The proxy profile file.")
     public var profileFile: String?
 
+    /// The log level for logger.
+    ///
+    /// Has higher priority than the loglevel defined in the profile file.
+    @Option(help: "The log level for logger.")
+    public var logLevel: Logger.Level?
+
     /// The proxy outbound mode.
     @Option(help: "The proxy outbound mode.")
     public var outboundMode: OutboundMode = .direct
@@ -104,9 +110,11 @@ public struct NetbotCLITool: AsyncParsableCommand {
 
         var profile: Profile = try await loadProfile()
 
+        let logLevel = logLevel ?? profile.general.logLevel
+
         LoggingSystem.bootstrap { label in
             var handler = StreamLogHandler.standardOutput(label: label)
-            handler.logLevel = profile.general.logLevel
+            handler.logLevel = logLevel
             return handler
         }
 
