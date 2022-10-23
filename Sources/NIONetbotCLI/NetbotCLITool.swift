@@ -27,7 +27,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
     #if os(macOS)
     /// A configuration object use for config this command.
     public static var configuration: CommandConfiguration = .init(
-        commandName: "netbot",
+        commandName: "netbotcli",
         abstract: "",
         discussion: "",
         version: "1.0.0",
@@ -38,7 +38,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
     #else
     /// A configuration object use for config this command.
     public static var configuration: CommandConfiguration = .init(
-        commandName: "netbot",
+        commandName: "netbotcli",
         abstract: "",
         discussion: "",
         version: "1.0.0"
@@ -81,19 +81,76 @@ public struct NetbotCLITool: AsyncParsableCommand {
     public init() {}
 
     public func run() async throws {
-        var profile: Profile = .init()
+        // Downloading external resources...
+        let supportDirectory: URL = {
+            let url = FileManager.default.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            )[0]
+            return url.appendingPathComponent("io.tenbits.Netbot")
+        }()
 
-        if let path = profileFile {
-            let data = try Data(contentsOf: URL(fileURLWithPath: path))
-            let jsonObject = try ProfileSerialization.jsonObject(with: data)
-            let jsonData = try JSONSerialization.data(
-                withJSONObject: jsonObject,
-                options: .fragmentsAllowed
-            )
-            let jsonDecoder = JSONDecoder()
-            jsonDecoder.keyDecodingStrategy = .convertFromSnakeCase
-            profile = try jsonDecoder.decode(Profile.self, from: jsonData)
+        // Default GeoLite2 database file url.
+        let maxminddbURL = supportDirectory.appendingPathComponent("GeoLite2-Country.mmdb")
+
+        let externalResourcesDirectory = supportDirectory.appendingPathComponent(
+            "External Resources"
+        )
+
+        try FileManager.default.createDirectory(
+            at: externalResourcesDirectory,
+            withIntermediateDirectories: true
+        )
+
+        var profile: Profile = try await loadProfile()
+
+        LoggingSystem.bootstrap { label in
+            var handler = StreamLogHandler.standardOutput(label: label)
+            handler.logLevel = profile.general.logLevel
+            return handler
         }
+
+        let logger = Logger(label: "io.tenbits.Netbot")
+
+        // Perform GeoLite2-Country.mmdb downloading...
+        if !FileManager.default.fileExists(atPath: maxminddbURL.path) {
+            logger.trace("Downloading GeoLite2-Country.mmdb")
+            logger.trace("Downloading from https://git.io/GeoLite2-Country.mmdb")
+            let (url, _) = try await URLSession(configuration: .ephemeral).download(
+                from: URL(string: "https://git.io/GeoLite2-Country.mmdb")!
+            )
+
+            try FileManager.default.moveItem(at: url, to: maxminddbURL)
+        }
+
+        let filtered = profile.rules.filter({ $0 is ExternalRuleResources })
+        if filtered.isEmpty {
+            do {
+                // Perform proxy rule external resources downloading...
+                logger.trace("Downloading external resources")
+                for e in filtered {
+                    let resources = e as! ParsableRule & ExternalRuleResources
+                    let externalResourcesURL = try resources.externalResourcesURL
+
+                    logger.trace("Downloading from \(externalResourcesURL)")
+                    let (srcURL, _) = try await URLSession(configuration: .ephemeral).download(
+                        from: externalResourcesURL
+                    )
+
+                    // Remove older file first if exists.
+                    let resourcesURL = externalResourcesDirectory.appendingPathComponent(
+                        resources.externalResourcesStorageName
+                    )
+                    if FileManager.default.fileExists(atPath: resourcesURL.path) {
+                        try FileManager.default.removeItem(at: resourcesURL)
+                    }
+                    try FileManager.default.moveItem(at: srcURL, to: resourcesURL)
+                }
+            } catch {}
+        }
+
+        // Reload profile after resources files downloaded.
+        profile = try await loadProfile()
 
         #if canImport(SystemConfiguration)
         var proxyctl: [String] = []
@@ -142,57 +199,54 @@ public struct NetbotCLITool: AsyncParsableCommand {
         }
         #endif
 
-        /// Default GeoLite2 database file url.
-        let dstURL: URL = {
-            var dstURL = FileManager.default.urls(
-                for: .applicationSupportDirectory,
-                in: .userDomainMask
-            )[0]
-            dstURL.appendPathComponent("io.tenbits.Netbot")
-            dstURL.appendPathComponent("GeoLite2-Country.mmdb")
-            return dstURL
-        }()
-
-        if !FileManager.default.fileExists(atPath: dstURL.path) {
-            let _: Void = try await withCheckedThrowingContinuation { continuation in
-                URLSession(configuration: .ephemeral).downloadTask(
-                    with: URL(string: "https://git.io/GeoLite2-Country.mmdb")!
-                ) { url, response, error in
-                    guard let url = url, error == nil else {
-                        continuation.resume(throwing: error!)
-                        return
-                    }
-
-                    do {
-                        let supportDirectory = dstURL.deletingLastPathComponent()
-                        try FileManager.default.createDirectory(
-                            at: supportDirectory,
-                            withIntermediateDirectories: true
-                        )
-                        try FileManager.default.moveItem(at: url, to: dstURL)
-                        continuation.resume()
-                    } catch {
-                        assertionFailure(error.localizedDescription)
-                        continuation.resume(throwing: error)
-                    }
-                }
-                .resume()
-            }
-        }
-
-        LoggingSystem.bootstrap { label in
-            var handler = StreamLogHandler.standardOutput(label: label)
-            handler.logLevel = profile.general.logLevel
-            return handler
-        }
-
         try await App.init(
             profile: profile,
             outboundMode: outboundMode,
             enableHTTPCapture: enableHTTPCapture,
             enableMitm: enableMitm,
-            maxMindDB: .init(file: dstURL.path)
+            maxMindDB: .init(file: maxminddbURL.path)
         )
         .run()
+    }
+
+    func loadProfile() async throws -> Profile {
+        var profile: Profile = .init()
+
+        if let path = profileFile {
+            let data = try Data(contentsOf: URL(fileURLWithPath: path))
+            let jsonObject = try ProfileSerialization.jsonObject(with: data)
+            let jsonData = try JSONSerialization.data(
+                withJSONObject: jsonObject,
+                options: .fragmentsAllowed
+            )
+            let jsonDecoder = JSONDecoder()
+            jsonDecoder.keyDecodingStrategy = .convertFromSnakeCase
+            profile = try jsonDecoder.decode(Profile.self, from: jsonData)
+        }
+
+        let externalResourcesDirectory: URL = {
+            var url = FileManager.default.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            )[0]
+            url.appendPathComponent("io.tenbits.Netbot")
+            return url.appendingPathComponent("External Resources")
+        }()
+
+        let rules = profile.rules.map {
+            guard var resources = $0 as? ExternalRuleResources & ParsableRule else {
+                return $0
+            }
+
+            resources.loadAllRules(
+                from: externalResourcesDirectory.appendingPathComponent(
+                    resources.externalResourcesStorageName
+                )
+            )
+            return resources
+        }
+        profile.rules = rules
+
+        return profile
     }
 }
