@@ -32,7 +32,3 @@ services:
   shell:
     <<: *common
     entrypoint: /bin/bash
-
-  formatting:
-    <<: *common
-    entrypoint: /bin/bash -xcl "swift-format --configuration ./.swift-format --in-place --recursive --parallel ./Sources ./Tests"

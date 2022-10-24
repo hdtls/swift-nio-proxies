@@ -77,6 +77,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
         .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0"),
+        .package(url: "https://github.com/hdtls/swift-format-plugin.git", from: "1.0.0"),
         .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0")
     ],
     targets: [
@@ -116,7 +117,7 @@ let package = Package(
                 .product(name: "NIOExtras", package: "swift-nio-extras"),
             ]
         ),
-        .executableTarget(name: "NIONetbotCLI", dependencies: ["NIONetbot", swiftArgumentParser]),
+        .executableTarget(name: "NIONetbotCLI", dependencies: ["NIONetbot", swiftArgumentParser, swiftLog]),
         .testTarget(name: "NIOHTTPMitMTests", dependencies: ["NIOHTTPMitM", swiftNIO]),
         .testTarget(name: "NIONetbotMiscTests", dependencies: ["NIONetbotMisc", swiftNIO]),
         .testTarget(name: "NIOHTTPProxyTests", dependencies: ["NIOHTTPProxy", swiftNIO, swiftNIOHTTP1, swiftNIOSSL]),
