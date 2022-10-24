@@ -217,7 +217,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
         .run()
     }
 
-    func loadProfile() async throws -> Profile {
+    private func loadProfile() async throws -> Profile {
         var profile: Profile = .init()
 
         if let path = profileFile {
@@ -241,7 +241,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
             return url.appendingPathComponent("External Resources")
         }()
 
-        let rules = profile.rules.map {
+        let rules: [ParsableRule] = profile.rules.map {
             guard var resources = $0 as? ExternalRuleResources & ParsableRule else {
                 return $0
             }
