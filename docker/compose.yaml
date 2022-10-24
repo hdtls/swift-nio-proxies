@@ -1,7 +1,7 @@
 services:
 
   runtime-setup:
-    image: swift-nio-netbot
+    image: swift-netbot-core
     build:
       context: .
       dockerfile: Dockerfile
@@ -10,7 +10,7 @@ services:
 
   common:
     &common
-    image: swift-nio-netbot
+    image: swift-netbot-core
     depends_on: [ runtime-setup ]
     volumes:
       - ..:/code:z
@@ -25,7 +25,6 @@ services:
 
   test:
     <<: *common
-    depends_on: [generate]
     command: /bin/bash -xcl "swift test --sanitize thread -Xswiftc -warnings-as-errors"
 
   # util
