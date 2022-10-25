@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -48,10 +48,10 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     private var eventBuffer: CircularBuffer<Event> = .init(initialCapacity: 0)
 
     /// The `EventLoopFuture<Channel>` to used when creating outbound client channel.
-    private var channelInitializer: (Request) -> EventLoopFuture<Channel>
+    private var channelInitializer: (RequestInfo) -> EventLoopFuture<Channel>
 
     /// The completion handler when proxy connection established.
-    private let completion: (Request, Channel, Channel) -> EventLoopFuture<Void>
+    private let completion: (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
 
     /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
     ///
@@ -59,14 +59,14 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     ///   - username: Username for proxy authentication.
     ///   - passwordReference: Password for proxy authentication.
     ///   - authenticationRequired: A boolean value deterinse whether server should evaluate proxy authentication request.
-    ///   - channelInitializer: The `EventLoopFuture<Channel>` to used when creating outbound client channel.
-    ///   - completion: The completion handler when proxy connection established.
+    ///   - channelInitializer: The outbound channel initializer, returns the initialized outbound channel using the given request info.
+    ///   - completion: The completion handler when proxy connection established, returns `EventLoopFuture<Void>` using given request info, server channel and outbound client channel.
     public init(
         username: String,
         passwordReference: String,
         authenticationRequired: Bool,
-        channelInitializer: @escaping (Request) -> EventLoopFuture<Channel>,
-        completion: @escaping (Request, Channel, Channel) -> EventLoopFuture<Void>
+        channelInitializer: @escaping (RequestInfo) -> EventLoopFuture<Channel>,
+        completion: @escaping (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
     ) {
         self.username = username
         self.passwordReference = passwordReference
@@ -172,19 +172,20 @@ extension HTTPProxyServerHandler {
             }
         }
 
-        let req = Request(head: head)
+        let req = RequestInfo(address: .domainPort(host: head.host, port: head.port))
 
         self.channelInitializer(req).whenComplete {
             switch $0 {
                 case .success(let channel):
-                    self.exchange(channel, context: context, userInfo: req)
+                    self.glue(req, with: channel, and: context)
                 case .failure(let error):
                     self.channelClose(context: context, reason: error)
             }
         }
     }
 
-    private func exchange(_ channel: Channel, context: ChannelHandlerContext, userInfo: Request) {
+    private func glue(_ req: RequestInfo, with channel: Channel, and context: ChannelHandlerContext)
+    {
         precondition(state == .handshaking, "invalid http order")
 
         let promise = context.eventLoop.makePromise(of: Void.self)
@@ -210,7 +211,7 @@ extension HTTPProxyServerHandler {
         let (localGlue, peerGlue) = GlueHandler.matchedPair()
         promise.futureResult
             .flatMap {
-                self.completion(userInfo, context.channel, channel)
+                self.completion(req, context.channel, channel)
             }
             .flatMapThrowing {
                 self.state = .active

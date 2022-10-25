@@ -187,7 +187,7 @@ final public class App {
                                         try await self.configureHTTPMitmAndCapturePipeline(
                                             on: channel,
                                             peer: peer,
-                                            serverHostname: req.serverHostname,
+                                            serverHostname: req.address.host,
                                             tls: ssl
                                         )
                                     }
@@ -341,10 +341,10 @@ final public class App {
     private func configureHTTPMitmAndCapturePipeline(
         on channel: Channel,
         peer: Channel,
-        serverHostname: String,
+        serverHostname: String?,
         tls: Bool
     ) async throws {
-        guard await storage.isMitmEnabled else {
+        guard await storage.isMitmEnabled, let serverHostname = serverHostname else {
             return
         }
 
