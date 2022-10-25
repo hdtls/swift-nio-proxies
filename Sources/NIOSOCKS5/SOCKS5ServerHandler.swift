@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -16,10 +16,7 @@ import NIOCore
 import NIONetbotMisc
 
 /// Add this handshake handler to the front of your channel, closest to the network.
-/// The handler will receive bytes from the network and run them through a state machine
-/// and parser to enforce SOCKSv5 protocol correctness. Inbound bytes will by parsed into
-/// `ClientMessage` for downstream consumption. Send `ServerMessage` to this
-/// handler.
+/// The handler will receive bytes from the network and parse to enforce SOCKSv5 protocol correctness.
 final public class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHandler {
 
     public typealias InboundIn = ByteBuffer
@@ -28,25 +25,52 @@ final public class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHa
     public typealias OutboundOut = ByteBuffer
 
     private var state: HandshakeState
-    private var readBuffer: ByteBuffer!
-    private var bufferedWrites: MarkedCircularBuffer<BufferedWrite> = .init(initialCapacity: 8)
-    private var removalToken: ChannelHandlerContext.RemovalToken?
-    private let username: String
-    private let passwordReference: String
-    private let authenticationRequired: Bool
-    private var channelInitializer: (NetAddress) -> EventLoopFuture<Channel>
 
+    /// Buffered channel read buffer.
+    private var readBuffer: ByteBuffer!
+
+    /// Buffered channel writes.
+    private var bufferedWrites: MarkedCircularBuffer<BufferedWrite> = .init(initialCapacity: 8)
+
+    /// The removaltoken for RemovableChannelHandler.
+    private var removalToken: ChannelHandlerContext.RemovalToken?
+
+    /// The usename used to authenticate this proxy connection.
+    private let username: String
+
+    /// The password used to authenticate this proxy connection.
+    private let passwordReference: String
+
+    /// A boolean value deterinse whether server should evaluate proxy authentication request.
+    private let authenticationRequired: Bool
+
+    /// The `EventLoopFuture<Channel>` to used when creating outbound client channel.
+    private var channelInitializer: (RequestInfo) -> EventLoopFuture<Channel>
+
+    /// The completion handler when proxy connection established.
+    private let completion: (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
+
+    /// Initialize an instance of `SOCKS5ServerHandler` with specified parameters.
+    ///
+    /// - Parameters:
+    ///   - username: Username for proxy authentication.
+    ///   - passwordReference: Password for proxy authentication.
+    ///   - authenticationRequired: A boolean value deterinse whether server should evaluate proxy authentication request.
+    ///   - channelInitializer: The outbound channel initializer, returns the initialized outbound channel using the given request info.
+    ///   - completion: The completion handler when proxy connection established, returns `EventLoopFuture<Void>` using given request info, server channel and outbound client channel.
     public init(
         username: String,
         passwordReference: String,
         authenticationRequired: Bool,
-        channelInitializer: @escaping (NetAddress) -> EventLoopFuture<Channel>
+        channelInitializer: @escaping (RequestInfo) -> EventLoopFuture<Channel>,
+        completion: @escaping (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
     ) {
         self.username = username
         self.passwordReference = passwordReference
         self.authenticationRequired = authenticationRequired
         self.state = .greeting
         self.channelInitializer = channelInitializer
+        self.completion = completion
     }
 
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -205,39 +229,38 @@ extension SOCKS5ServerHandler {
 
     private func evaluateClientRequestAndReplies(context: ChannelHandlerContext) {
         precondition(state == .addressing)
-        let req: Request?
-
         do {
-            req = try readBuffer.readRequestDetails()
+            guard let details = try readBuffer.readRequestDetails() else {
+                return
+            }
+
+            let req = RequestInfo(address: details.address)
+
+            channelInitializer(req).whenComplete {
+                switch $0 {
+                    case .success(let channel):
+                        self.glue(req, with: channel, and: context)
+                    case .failure:
+                        let response: Response = .init(
+                            reply: .hostUnreachable,
+                            boundAddress: req.address
+                        )
+
+                        var buffer = context.channel.allocator.buffer(capacity: 16)
+                        buffer.writeServerResponse(response)
+
+                        context.writeAndFlush(self.wrapOutboundOut(buffer), promise: nil)
+                }
+            }
         } catch {
             context.fireErrorCaught(error)
             channelClose(context: context, reason: error)
             return
         }
-
-        guard let req = req else {
-            return
-        }
-
-        channelInitializer(req.address).whenComplete {
-            switch $0 {
-                case .success(let channel):
-                    self.exchange(channel, context: context, userInfo: req)
-                case .failure:
-                    let response: Response = .init(
-                        reply: .hostUnreachable,
-                        boundAddress: req.address
-                    )
-
-                    var buffer = context.channel.allocator.buffer(capacity: 16)
-                    buffer.writeServerResponse(response)
-
-                    context.writeAndFlush(self.wrapOutboundOut(buffer), promise: nil)
-            }
-        }
     }
 
-    private func exchange(_ channel: Channel, context: ChannelHandlerContext, userInfo: Request) {
+    private func glue(_ req: RequestInfo, with channel: Channel, and context: ChannelHandlerContext)
+    {
         let response = Response(
             reply: .succeeded,
             boundAddress: .socketAddress(channel.remoteAddress!)
@@ -255,6 +278,9 @@ extension SOCKS5ServerHandler {
         // Now we need to glue our channel and the peer channel together.
         context.channel.pipeline.addHandler(localGlue)
             .and(channel.pipeline.addHandler(peerGlue))
+            .flatMap { _ in
+                self.completion(req, context.channel, channel)
+            }
             .whenComplete {
                 switch $0 {
                     case .success:

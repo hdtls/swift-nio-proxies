@@ -35,8 +35,8 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
             username: "",
             passwordReference: "",
             authenticationRequired: false
-        ) { address in
-            switch address {
+        ) { req in
+            switch req.address {
                 case .domainPort(let host, let port):
                     let socketAddress = try! SocketAddress.makeAddressResolvingHost(
                         host,
@@ -50,6 +50,8 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
                         self.childChannel
                     }
             }
+        } completion: { _, _, _ in
+            eventLoop.makeSucceededVoidFuture()
         }
 
         self.channel = EmbeddedChannel(handler: self.handler, loop: eventLoop)
@@ -100,8 +102,8 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
             username: "username",
             passwordReference: "passwordReference",
             authenticationRequired: true
-        ) { address in
-            switch address {
+        ) { req in
+            switch req.address {
                 case .domainPort(let host, let port):
                     let socketAddress = try! SocketAddress.makeAddressResolvingHost(
                         host,
@@ -115,6 +117,8 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
                         childChannel
                     }
             }
+        } completion: { _, _, _ in
+            eventLoop.makeSucceededVoidFuture()
         }
 
         let channel = EmbeddedChannel(handler: handler, loop: eventLoop)
@@ -163,8 +167,8 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
             username: "username",
             passwordReference: "passwordReference",
             authenticationRequired: true
-        ) { address in
-            switch address {
+        ) { req in
+            switch req.address {
                 case .domainPort(let host, let port):
                     let socketAddress = try! SocketAddress.makeAddressResolvingHost(
                         host,
@@ -178,6 +182,8 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
                         childChannel
                     }
             }
+        } completion: { _, _, _ in
+            eventLoop.makeSucceededVoidFuture()
         }
 
         let channel = EmbeddedChannel(handler: handler, loop: eventLoop)

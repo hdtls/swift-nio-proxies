@@ -200,15 +200,17 @@ final public class App {
                             username: "",
                             passwordReference: "",
                             authenticationRequired: false
-                        ) { address in
+                        ) { req in
                             let promise = channel.eventLoop.next().makePromise(of: Channel.self)
                             promise.completeWithTask {
                                 try await self.initializePeer(
-                                    forTarget: address,
+                                    forTarget: req.address,
                                     eventLoop: eventLoop
                                 )
                             }
                             return promise.futureResult
+                        } completion: { _, _, _ in
+                            eventLoop.makeSucceededVoidFuture()
                         }
                         return channel.pipeline.addHandler(handler)
                     default:

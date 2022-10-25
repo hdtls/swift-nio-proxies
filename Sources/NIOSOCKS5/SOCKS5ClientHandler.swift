@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -27,13 +27,27 @@ final public class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
     public typealias OutboundOut = ByteBuffer
 
     private var state: HandshakeState
+
+    /// Buffered channel read buffer.
     private var readBuffer: ByteBuffer!
-    private var bufferedWrites: MarkedCircularBuffer<BufferedWrite>
+
+    /// Buffered channel writes.
+    private var bufferedWrites: MarkedCircularBuffer<BufferedWrite> = .init(initialCapacity: 8)
+
+    /// The removaltoken for RemovableChannelHandler.
     private var removalToken: ChannelHandlerContext.RemovalToken?
-    private let destinationAddress: NetAddress
+
+    /// The usename used to authenticate this proxy connection.
     private let username: String
+
+    /// The password used to authenticate this proxy connection.
     private let passwordReference: String
+
+    /// A boolean value deterinse whether server should evaluate proxy authentication request.
     private let authenticationRequired: Bool
+
+    /// The destination address of the proxy request.
+    private let destinationAddress: NetAddress
 
     /// Creates a new `SOCKS5ClientHandler` that connects to a server
     /// and instructs the server to connect to `destinationAddress`.
