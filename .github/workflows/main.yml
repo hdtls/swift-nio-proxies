@@ -8,7 +8,7 @@ on:
 
 jobs:
   ci:
-    name: Build & test Netbot with Swift ${{ matrix.swift-version }} on ${{ matrix.os }}.
+    name: Build & test with Swift ${{ matrix.swift-version }} on ${{ matrix.platform }}
     strategy:
       matrix:
         platform: [ubuntu-22.04, macos-12]
@@ -16,7 +16,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
         
     steps:
-    - name: Setup Swift to ${{ matrix.swift-version }}
+    - name: Set Swift to ${{ matrix.swift-version }}
       uses: swift-actions/setup-swift@v1
       with: 
         swift-version: ${{ matrix.swift-version }}
