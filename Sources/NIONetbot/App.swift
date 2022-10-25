@@ -168,51 +168,48 @@ final public class App {
             .childChannelInitializer { channel in
                 let eventLoop = channel.eventLoop.next()
 
+                let channelInitializer: (RequestInfo) -> EventLoopFuture<Channel> = { req in
+                    let promise = eventLoop.makePromise(of: Channel.self)
+                    promise.completeWithTask {
+                        try await self.initializePeer(
+                            forTarget: req.address,
+                            eventLoop: eventLoop
+                        )
+                    }
+                    return promise.futureResult
+                }
+
+                let completion: (RequestInfo, Channel, Channel) -> EventLoopFuture<Void> = {
+                    req,
+                    channel,
+                    peer in
+                    channel.pipeline.addHandler(
+                        NIOTLSRecognizer { ssl, channel in
+                            let promise = channel.eventLoop.makePromise(of: Void.self)
+                            promise.completeWithTask {
+                                try await self.configureHTTPMitmAndCapturePipeline(
+                                    on: channel,
+                                    peer: peer,
+                                    serverHostname: req.address.host,
+                                    tls: ssl
+                                )
+                            }
+                            return promise.futureResult
+                        }
+                    )
+                }
+
                 switch `protocol` {
                     case .http:
-                        return channel.pipeline.configureHTTPProxyServerPipeline { req in
-                            let promise = eventLoop.makePromise(of: Channel.self)
-                            promise.completeWithTask {
-                                try await self.initializePeer(
-                                    forTarget: req.address,
-                                    eventLoop: eventLoop
-                                )
-                            }
-                            return promise.futureResult
-                        } completion: { req, channel, peer in
-                            channel.pipeline.addHandler(
-                                NIOTLSRecognizer { ssl, channel in
-                                    let promise = channel.eventLoop.makePromise(of: Void.self)
-                                    promise.completeWithTask {
-                                        try await self.configureHTTPMitmAndCapturePipeline(
-                                            on: channel,
-                                            peer: peer,
-                                            serverHostname: req.address.host,
-                                            tls: ssl
-                                        )
-                                    }
-                                    return promise.futureResult
-                                }
-                            )
-                        }
+                        return channel.pipeline.configureHTTPProxyServerPipeline(
+                            channelInitializer: channelInitializer,
+                            completion: completion
+                        )
                     case .socks5:
-                        let handler = SOCKS5ServerHandler(
-                            username: "",
-                            passwordReference: "",
-                            authenticationRequired: false
-                        ) { req in
-                            let promise = channel.eventLoop.next().makePromise(of: Channel.self)
-                            promise.completeWithTask {
-                                try await self.initializePeer(
-                                    forTarget: req.address,
-                                    eventLoop: eventLoop
-                                )
-                            }
-                            return promise.futureResult
-                        } completion: { _, _, _ in
-                            eventLoop.makeSucceededVoidFuture()
-                        }
-                        return channel.pipeline.addHandler(handler)
+                        return channel.pipeline.configureSOCKSServerPipeline(
+                            channelInitializer: channelInitializer,
+                            completion: completion
+                        )
                     default:
                         preconditionFailure()
                 }
