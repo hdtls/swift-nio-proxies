@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -19,6 +19,27 @@ import NIOCore
 public enum NetAddress: Equatable, Hashable {
     case domainPort(host: String, port: Int)
     case socketAddress(SocketAddress)
+}
+
+extension NetAddress {
+
+    public var host: String? {
+        switch self {
+            case .domainPort(let host, _):
+                return host
+            case .socketAddress(let socketAddress):
+                return socketAddress.ipAddress ?? socketAddress.pathname
+        }
+    }
+
+    public var port: Int? {
+        switch self {
+            case .domainPort(_, let port):
+                return port
+            case .socketAddress(let socketAddress):
+                return socketAddress.port
+        }
+    }
 }
 
 #if swift(>=5.5) && canImport(_Concurrency)
