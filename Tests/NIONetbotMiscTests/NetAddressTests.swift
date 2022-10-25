@@ -207,4 +207,16 @@ class NetAddressTests: XCTestCase {
         XCTAssertEqual(packet.count, 0)
         XCTAssertEqual(buffer.readableBytes, 0)
     }
+
+    func testGetHostPortFromDomainPortAddress() {
+        let addr = NetAddress.domainPort(host: "swift.org", port: 443)
+        XCTAssertEqual(addr.host, "swift.org")
+        XCTAssertEqual(addr.port, 443)
+    }
+
+    func testGetHostPortFromSocektAddress() throws {
+        let addr = NetAddress.socketAddress(try .init(ipAddress: "127.0.0.1", port: 80))
+        XCTAssertEqual(addr.host, "127.0.0.1")
+        XCTAssertEqual(addr.port, 80)
+    }
 }
