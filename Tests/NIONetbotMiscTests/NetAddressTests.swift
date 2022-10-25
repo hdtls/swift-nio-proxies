@@ -19,8 +19,8 @@ import XCTest
 class NetAddressTests: XCTestCase {
 
     func testEquatableWorks() {
-        let first = NetAddress.domainPort("localhost", 80)
-        let second = NetAddress.domainPort("localhost", 80)
+        let first = NetAddress.domainPort(host: "localhost", port: 80)
+        let second = NetAddress.domainPort(host: "localhost", port: 80)
         let third = NetAddress.socketAddress(try! .init(ipAddress: "127.0.0.1", port: 80))
         let fourth = NetAddress.socketAddress(try! .init(ipAddress: "127.0.0.1", port: 80))
         XCTAssertEqual(first, second)
@@ -31,7 +31,7 @@ class NetAddressTests: XCTestCase {
     func testApplyingDomainPortAddress() {
         var packet = Data()
         var buffer = ByteBuffer()
-        let address = NetAddress.domainPort("localhost", 80)
+        let address = NetAddress.domainPort(host: "localhost", port: 80)
         let expectedAddress: [UInt8] = [
             0x03, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74, 0x00, 0x50,
         ]
@@ -202,8 +202,8 @@ class NetAddressTests: XCTestCase {
         XCTAssertNoThrow(addr2 = try buffer.readAddress())
         XCTAssertNotNil(addr1)
         XCTAssertNotNil(addr2)
-        XCTAssertEqual(addr1, .domainPort("localhost", 80))
-        XCTAssertEqual(addr2, .domainPort("localhost", 80))
+        XCTAssertEqual(addr1, .domainPort(host: "localhost", port: 80))
+        XCTAssertEqual(addr2, .domainPort(host: "localhost", port: 80))
         XCTAssertEqual(packet.count, 0)
         XCTAssertEqual(buffer.readableBytes, 0)
     }

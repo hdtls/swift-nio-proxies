@@ -36,7 +36,7 @@ public struct Request: Equatable {
     public var address: NetAddress {
         get throws {
             guard serverHostname.isIPAddress() else {
-                return .domainPort(serverHostname, serverPort)
+                return .domainPort(host: serverHostname, port: serverPort)
             }
 
             return .socketAddress(try SocketAddress(ipAddress: serverHostname, port: serverPort))

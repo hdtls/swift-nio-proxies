@@ -30,7 +30,7 @@ class HTTPProxyClientHandlerTests: XCTestCase {
             passwordReference: "passwordReference",
             authenticationRequired: false,
             preferHTTPTunneling: true,
-            destinationAddress: .domainPort("swift.org", 443),
+            destinationAddress: .domainPort(host: "swift.org", port: 443),
             timeoutInterval: .seconds(5)
         )
 
@@ -123,7 +123,7 @@ class HTTPProxyClientHandlerTests: XCTestCase {
             passwordReference: "passwordReference",
             authenticationRequired: true,
             preferHTTPTunneling: true,
-            destinationAddress: .domainPort("swift.org", 443)
+            destinationAddress: .domainPort(host: "swift.org", port: 443)
         )
 
         channel = EmbeddedChannel()
@@ -158,7 +158,7 @@ class HTTPProxyClientHandlerTests: XCTestCase {
             passwordReference: "passwordReference",
             authenticationRequired: true,
             preferHTTPTunneling: true,
-            destinationAddress: .domainPort("swift.org", 443)
+            destinationAddress: .domainPort(host: "swift.org", port: 443)
         )
 
         channel = EmbeddedChannel()

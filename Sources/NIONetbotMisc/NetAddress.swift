@@ -17,7 +17,7 @@ import NIOCore
 
 /// Represent a socket address or domain port to which we may want to connect or bind.
 public enum NetAddress: Equatable, Hashable {
-    case domainPort(String, Int)
+    case domainPort(host: String, port: Int)
     case socketAddress(SocketAddress)
 }
 
@@ -63,7 +63,7 @@ extension ByteBuffer {
                 else {
                     return nil
                 }
-                return .domainPort(host, Int(port))
+                return .domainPort(host: host, port: Int(port))
             }
 
             guard let packedIPAddress = buffer.readSlice(length: type == .v4 ? 4 : 16),

@@ -65,7 +65,10 @@ class MessageTests: XCTestCase {
     }
 
     func testRequestReadWrite() {
-        var request = Request.init(command: .connect, address: .domainPort("localhost", 80))
+        var request = Request.init(
+            command: .connect,
+            address: .domainPort(host: "localhost", port: 80)
+        )
         var buffer = ByteBuffer()
         buffer.writeRequestDetails(request)
         XCTAssertNoThrow(XCTAssertEqual(try buffer.readRequestDetails(), request))
@@ -86,7 +89,10 @@ class MessageTests: XCTestCase {
     }
 
     func testResponseReadWrite() {
-        let response = Response.init(reply: .succeeded, boundAddress: .domainPort("localhost", 80))
+        let response = Response.init(
+            reply: .succeeded,
+            boundAddress: .domainPort(host: "localhost", port: 80)
+        )
         var buffer = ByteBuffer()
         buffer.writeServerResponse(response)
         XCTAssertNoThrow(XCTAssertEqual(try buffer.readServerResponse(), response))

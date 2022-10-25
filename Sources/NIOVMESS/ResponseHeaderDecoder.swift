@@ -298,8 +298,8 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
                 }
                 if let v = address {
                     switch v {
-                        case .domainPort(let string, _):
-                            address = .domainPort(string, Int(port))
+                        case .domainPort(let host, _):
+                            address = .domainPort(host: host, port: Int(port))
                         case .socketAddress(let socketAddress):
                             var socketAddress = socketAddress
                             socketAddress.port = Int(port)
@@ -362,7 +362,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
         }
 
         guard string.isIPAddress() else {
-            return .domainPort(string, 0)
+            return .domainPort(host: string, port: 0)
         }
 
         return .socketAddress(try .init(ipAddress: string, port: 0))
