@@ -1,16 +1,16 @@
+version: "3"
+
 services:
 
   runtime-setup:
-    image: swift-netbot-core
+    image: swift-netbot-core:22.04-5.7
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        swift_version: "5.7"
 
   common:
     &common
-    image: swift-netbot-core
+    image: swift-netbot-core:22.04-5.7
     depends_on: [ runtime-setup ]
     volumes:
       - ..:/code:z
@@ -19,13 +19,9 @@ services:
       - CAP_NET_RAW
       - CAP_NET_BIND_SERVICE
 
-  generate:
-    <<: *common
-    command: /bin/bash scripts/generate_boilerplate_files.sh
-
   test:
     <<: *common
-    command: /bin/bash -xcl "swift test --sanitize thread -Xswiftc -warnings-as-errors"
+    command: /bin/bash -xcl "swift --version && uname -a && swift $${SWIFT_TEST_VERB-test} $${WARN_AS_ERROR_ARG-} $${SANITIZER_ARG-} $${IMPORT_CHECK_ARG-}"
 
   # util
   shell:

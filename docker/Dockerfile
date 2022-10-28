@@ -1,8 +1,11 @@
 ARG swift_version=5.7
+ARG ubuntu_version=jammy
+ARG base_image=swift:$swift_version-$ubuntu_version
+FROM $base_image
 
-FROM swift:$swift_version
-
-RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true
+# needed to do again after FROM due to docker limitation
+ARG swift_version
+ARG ubuntu_version
 
 # Install OS updates and set as UTF-8
 RUN apt-get update -q \
