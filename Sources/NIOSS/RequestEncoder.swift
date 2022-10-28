@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -21,7 +21,7 @@ final public class RequestEncoder: MessageToByteEncoder {
 
     public typealias OutboundIn = ByteBuffer
 
-    private let taskAddress: NetAddress
+    private let destinationAddress: NetAddress
 
     private let algorithm: Algorithm
 
@@ -31,10 +31,10 @@ final public class RequestEncoder: MessageToByteEncoder {
 
     private var nonce: [UInt8]!
 
-    public init(algorithm: Algorithm, passwordReference: String, taskAddress: NetAddress) {
+    public init(algorithm: Algorithm, passwordReference: String, destinationAddress: NetAddress) {
         self.algorithm = algorithm
         self.passwordReference = passwordReference
-        self.taskAddress = taskAddress
+        self.destinationAddress = destinationAddress
     }
 
     public func encode(data: ByteBuffer, out: inout ByteBuffer) throws {
@@ -43,8 +43,8 @@ final public class RequestEncoder: MessageToByteEncoder {
         var packet = Data()
 
         if symmetricKey == nil {
-            let keyByteCount = 32
-            let saltByteCount = 32
+            let keyByteCount = algorithm == .aes128Gcm ? 16 : 32
+            let saltByteCount = algorithm == .aes128Gcm ? 16 : 32
             let nonceByteCount = 12
             nonce = .init(repeating: 0, count: nonceByteCount)
             let salt = [UInt8](repeating: 0, count: saltByteCount).map({ _ in
@@ -56,7 +56,7 @@ final public class RequestEncoder: MessageToByteEncoder {
                 outputByteCount: keyByteCount
             )
 
-            packet.writeAddress(taskAddress)
+            packet.writeAddress(destinationAddress)
             packet = try seal(packet, using: symmetricKey)
             // TCP packet start with fix size salt so insert salt at startIndex.
             packet.insert(contentsOf: salt, at: packet.startIndex)
@@ -85,7 +85,7 @@ final public class RequestEncoder: MessageToByteEncoder {
         }
 
         switch algorithm {
-            case .aes128Gcm:
+            case .aes128Gcm, .aes256Gcm:
                 var sealedBox = try AES.GCM.seal(
                     sequence,
                     using: symmetricKey,

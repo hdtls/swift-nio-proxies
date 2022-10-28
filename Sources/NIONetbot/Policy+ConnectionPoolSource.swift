@@ -124,7 +124,7 @@ extension ProxyPolicy: ConnectionPoolSource {
                         channel.pipeline.addSSClientHandlers(
                             algorithm: proxy.algorithm,
                             passwordReference: proxy.passwordReference,
-                            taskAddress: destinationAddress
+                            destinationAddress: destinationAddress
                         )
                     }
                     .connect(host: proxy.serverAddress, port: proxy.port)

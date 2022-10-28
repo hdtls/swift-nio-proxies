@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -68,8 +68,8 @@ public class ResponseDecoder: ByteToMessageDecoder {
         -> DecodingState
     {
         if symmetricKey == nil {
-            let saltByteCount = 32
-            let keyByteCount = 32
+            let saltByteCount = algorithm == .aes128Gcm ? 16 : 32
+            let keyByteCount = algorithm == .aes128Gcm ? 16 : 32
             guard buffer.readableBytes >= saltByteCount else {
                 return .needMoreData
             }
@@ -95,7 +95,7 @@ public class ResponseDecoder: ByteToMessageDecoder {
         var bytes: Data
 
         switch algorithm {
-            case .aes128Gcm:
+            case .aes128Gcm, .aes256Gcm:
                 let sealedBox = try AES.GCM.SealedBox.init(combined: combined)
                 bytes = try AES.GCM.open(sealedBox, using: symmetricKey)
             case .chaCha20Poly1305:
@@ -117,7 +117,7 @@ public class ResponseDecoder: ByteToMessageDecoder {
         combined = nonce + buffer.readBytes(length: copyLength)!
 
         switch algorithm {
-            case .aes128Gcm:
+            case .aes128Gcm, .aes256Gcm:
                 let sealedBox = try AES.GCM.SealedBox.init(combined: combined)
                 bytes = try AES.GCM.open(sealedBox, using: symmetricKey)
             case .chaCha20Poly1305:
@@ -130,83 +130,5 @@ public class ResponseDecoder: ByteToMessageDecoder {
         context.fireChannelRead(wrapInboundOut(ByteBuffer(bytes: bytes)))
 
         return .continue
-    }
-
-}
-
-enum Packet {
-    case address(NetAddress)
-    case buffer(ByteBuffer)
-}
-
-public class RequestDecoder: ByteToMessageDecoder {
-
-    public typealias InboundOut = ByteBuffer
-
-    public let secretKey: String
-
-    private var symmetricKey: SymmetricKey!
-
-    private var nonce: [UInt8]
-
-    public init(secretKey: String) {
-        self.secretKey = secretKey
-        self.nonce = .init(repeating: 0, count: 12)
-    }
-
-    public func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws
-        -> DecodingState
-    {
-        var symmetricKey = symmetricKey
-        if symmetricKey == nil {
-            let saltByteCount = 32
-            let keyByteCount = 32
-            guard buffer.readableBytes >= saltByteCount else {
-                return .needMoreData
-            }
-            let salt = buffer.readBytes(length: saltByteCount)!
-            symmetricKey = hkdfDerivedSymmetricKey(
-                secretKey: secretKey,
-                salt: salt,
-                outputByteCount: keyByteCount
-            )
-        }
-
-        let tagByteCount = 16
-        let trunkSize = 2
-
-        var copyLength = trunkSize + tagByteCount
-
-        guard buffer.readableBytes > copyLength else {
-            return .needMoreData
-        }
-
-        var combined = nonce + buffer.readBytes(length: copyLength)!
-        var sealedBox = try ChaChaPoly.SealedBox.init(combined: combined)
-        var bytes = try ChaChaPoly.open(sealedBox, using: symmetricKey!)
-        copyLength = bytes.withUnsafeBytes {
-            Int($0.bindMemory(to: UInt16.self).baseAddress!.pointee.bigEndian) + tagByteCount
-        }
-
-        guard buffer.readableBytes >= copyLength else {
-            buffer.moveReaderIndex(to: buffer.readerIndex - trunkSize - tagByteCount)
-            return .needMoreData
-        }
-
-        nonce.increment(nonce.count)
-
-        combined = nonce + buffer.readBytes(length: copyLength)!
-        sealedBox = try ChaChaPoly.SealedBox.init(combined: combined)
-        bytes = try ChaChaPoly.open(sealedBox, using: symmetricKey!)
-
-        nonce.increment(nonce.count)
-
-        if self.symmetricKey == nil {
-            self.symmetricKey = symmetricKey
-            context.fireChannelRead(NIOAny(Packet.address(try! bytes.readAddress()!)))
-        } else {
-            context.fireChannelRead(NIOAny(Packet.buffer(ByteBuffer(bytes: bytes))))
-        }
-        return .needMoreData
     }
 }
