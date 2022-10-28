@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2022 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2022 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -67,7 +67,7 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
     ///   - nonce: Nonce of the encryptor.
     ///   - configuration: The configuration object contains encoder configurations.
     ///   - forceAEADEncoding: A boolean value determinse whether encoder should use AEAD encoding.
-    ///   - taskAddress: The requet address.
+    ///   - destinationAddress: The requet address.
     public init(
         authenticationCode: UInt8,
         symmetricKey: SecureBytes,
