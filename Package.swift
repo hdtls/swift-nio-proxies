@@ -84,6 +84,7 @@ let package = Package(
         .target(name: "ConnectionPool", dependencies: [swiftNIOCore, swiftNIOPosix, swiftLog]),
         .target(name: "CSHAKE128"),
         .target(name: "SHAKE128", dependencies: ["CSHAKE128", swiftCrypto]),
+        .target(name: "NETestUtils", dependencies: [swiftCrypto]),
         .target(name: "NIODNS", dependencies: [swiftNIOCore, swiftNIOPosix]),
         .target(name: "NIOHTTPMitM", dependencies: [swiftNIOCore, swiftNIOHTTP1, swiftNIOSSL, swiftLog]),
         .target(name: "NIOHTTPProxy", dependencies: ["NIONetbotMisc", swiftNIOCore, swiftNIOHTTP1]),
@@ -124,6 +125,11 @@ let package = Package(
         .testTarget(name: "NIOTrojanTests", dependencies: ["NIOTrojan", swiftNIO]),
         .testTarget(name: "SHAKE128Tests", dependencies: ["SHAKE128"]),
         .testTarget(name: "NIOSOCKS5Tests", dependencies: ["NIOSOCKS5", swiftNIO]),
+        .testTarget(
+            name: "NIOSSTests",
+            dependencies: ["NETestUtils", "NIOSS", swiftNIO],
+            exclude: ["RequestEncoderTests.g.swift.gyb"]
+        ),
         .testTarget(name: "NIOVMESSTests", dependencies: ["NIOVMESS", swiftNIO]),
         .testTarget(
             name: "NIONetbotTests",
