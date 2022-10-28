@@ -1,3 +1,17 @@
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2022 Junfeng Zhang and the Netbot project authors
+// Licensed under Apache License v2.0
+//
+// See LICENSE for license information
+// See CONTRIBUTORS.txt for the list of Netbot project authors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
 // The MIT License (MIT)
 //
 // Copyright (c) 2020 Qutheory, LLC
@@ -20,14 +34,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//===----------------------------------------------------------------------===//
-//
-// This source file is part of the Vapor open source project
-//
-// Copyright (c) 2020 Qutheory, LLC
-// Licensed under The MIT License (MIT)
-//
-//===----------------------------------------------------------------------===//
+// THIS FILE IS MOSTLY COPIED FROM [vapor](https://github.com/vapor/vapor)
 
 import NIOHTTP1
 

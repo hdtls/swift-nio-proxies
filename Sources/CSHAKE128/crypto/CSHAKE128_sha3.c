@@ -1,3 +1,17 @@
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Netbot open source project
+//
+// Copyright (c) 2022 Junfeng Zhang and the Netbot project authors
+// Licensed under Apache License v2.0
+//
+// See LICENSE for license information
+// See CONTRIBUTORS.txt for the list of Netbot project authors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
 // The MIT License (MIT)
 //
 // Copyright (c) 2015 Markku-Juhani O. Saarinen
@@ -19,6 +33,8 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+
+// THIS FILE IS MOSTLY COPIED FROM [swift-nio-extras](https://github.com/apple/swift-nio-extras)
 
 #include "CSHAKE128_sha3.h"
 

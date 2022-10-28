@@ -1,21 +1,8 @@
 //===----------------------------------------------------------------------===//
 //
-// This source file is part of the SwiftCrypto open source project
-//
-// Copyright (c) 2019 Apple Inc. and the SwiftCrypto project authors
-// Licensed under Apache License v2.0
-//
-// See LICENSE.txt for license information
-// See CONTRIBUTORS.md for the list of SwiftCrypto project authors
-//
-// SPDX-License-Identifier: Apache-2.0
-//
-//===----------------------------------------------------------------------===//
-//===----------------------------------------------------------------------===//
-//
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2022 Junfeng Zhang. and the Netbot project authors
+// Copyright (c) 2022 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -24,6 +11,22 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
+
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the SwiftCrypto open source project
+//
+// Copyright (c) 2019-2020 Apple Inc. and the SwiftCrypto project authors
+// Licensed under Apache License v2.0
+//
+// See LICENSE.txt for license information
+// See CONTRIBUTORS.md for the list of SwiftCrypto project authors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
+// THIS FILE IS MOSTLY COPIED FROM [swift-crypto](https://github.com/apple/swift-crypto)
 
 import Foundation
 
