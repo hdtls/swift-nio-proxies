@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 @_implementationOnly import CSHAKE128
-import Foundation
 
 public struct SHAKE128: HashFunctionImplementationDetails {
 
@@ -27,11 +26,11 @@ public struct SHAKE128: HashFunctionImplementationDetails {
         return 16
     }
 
-    var impl: OpenSSLDigestImpl<SHAKE128>
+    var impl: DigestImpl<SHAKE128>
 
     /// Initializes the hash function instance.
     public init() {
-        impl = OpenSSLDigestImpl()
+        impl = DigestImpl()
     }
 
     // Once https://github.com/apple/swift-evolution/pull/910 is landed,

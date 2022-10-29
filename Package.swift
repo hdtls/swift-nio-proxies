@@ -130,7 +130,7 @@ let package = Package(
             dependencies: ["NETestUtils", "NIOSS", swiftNIO],
             exclude: ["RequestEncoderTests.g.swift.gyb"]
         ),
-        .testTarget(name: "NIOVMESSTests", dependencies: ["NIOVMESS", swiftNIO]),
+        .testTarget(name: "NIOVMESSTests", dependencies: ["NETestUtils", "NIOVMESS", swiftNIO]),
         .testTarget(
             name: "NIONetbotTests",
             dependencies: [

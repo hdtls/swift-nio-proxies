@@ -39,4 +39,18 @@ class SHAKE128Tests: XCTestCase {
         }
         XCTAssertEqual(result.description.uppercased(), expected)
     }
+
+    func testSHAKE128CoW() {
+        var hf = SHAKE128()
+        hf.update(data: [1, 2, 3, 4])
+
+        var hfCopy = hf
+        hf.update(data: [5, 6, 7, 8])
+        let digest = hf.finalize()
+
+        hfCopy.update(data: [5, 6, 7, 8])
+        let copyDigest = hfCopy.finalize()
+
+        XCTAssertEqual(digest, copyDigest)
+    }
 }

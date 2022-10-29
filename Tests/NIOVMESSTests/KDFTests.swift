@@ -12,10 +12,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NETestUtils
+import SHAKE128
 import XCTest
 
 @testable import NIOVMESS
-@testable import SHAKE128
 
 class KDFTests: XCTestCase {
 

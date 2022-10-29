@@ -12,11 +12,12 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NETestUtils
 import NIONetbotMisc
+import SHAKE128
 import XCTest
 
 @testable import NIOVMESS
-@testable import SHAKE128
 
 class VMESSTests: XCTestCase {
 
