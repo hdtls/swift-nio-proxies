@@ -17,6 +17,13 @@ import NIONetbotMisc
 
 extension ChannelPipeline {
 
+    /// Configure a `ChannelPipeline` for use as a Shadowsocks client.
+    /// - Parameters:
+    ///   - position: The position in the `ChannelPipeline` where to add the Shadowsocks proxy client handlers. Defaults to `.last`.
+    ///   - algorithm: The algorithm to use to encrypt/decript stream for this connection.
+    ///   - passwordReference: The passwordReference to use to generate symmetric key for stream encription/decryption.
+    ///   - destinationAddress: The destination for proxy connection.
+    /// - Returns: An `EventLoopFuture` that will fire when the pipeline is configured.
     public func addSSClientHandlers(
         position: Position = .last,
         algorithm: Algorithm,
@@ -52,6 +59,13 @@ extension ChannelPipeline {
 
 extension ChannelPipeline.SynchronousOperations {
 
+    /// Configure a `ChannelPipeline` for use as a Shadowsocks client.
+    /// - Parameters:
+    ///   - position: The position in the `ChannelPipeline` where to add the Shadowsocks proxy client handlers. Defaults to `.last`.
+    ///   - algorithm: The algorithm to use to encrypt/decript stream for this connection.
+    ///   - passwordReference: The passwordReference to use to generate symmetric key for stream encription/decryption.
+    ///   - destinationAddress: The destination for proxy connection.
+    /// - Throws: If the pipeline could not be configured.
     public func addSSClientHandlers(
         position: ChannelPipeline.Position = .last,
         algorithm: Algorithm,
@@ -63,14 +77,12 @@ extension ChannelPipeline.SynchronousOperations {
             algorithm: algorithm,
             passwordReference: passwordReference
         )
-        let outboundEncoder = RequestEncoder(
+        let outboundHandler = RequestEncoder(
             algorithm: algorithm,
             passwordReference: passwordReference,
             destinationAddress: destinationAddress
         )
-        let handlers: [ChannelHandler] = [
-            ByteToMessageHandler(inboundDecoder), MessageToByteHandler(outboundEncoder),
-        ]
+        let handlers: [ChannelHandler] = [ByteToMessageHandler(inboundDecoder), outboundHandler]
         try addHandlers(handlers, position: position)
     }
 }

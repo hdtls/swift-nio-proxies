@@ -26,12 +26,10 @@ final class RequestEncoderTests: XCTestCase {
         let destinationAddress = NetAddress.socketAddress(
             try! .init(ipAddress: "192.168.1.1", port: 80)
         )
-        let handler = MessageToByteHandler(
-            RequestEncoder.init(
-                algorithm: .init(rawValue: "AES-128-GCM")!,
-                passwordReference: passwordReference,
-                destinationAddress: destinationAddress
-            )
+        let handler = RequestEncoder(
+            algorithm: .init(rawValue: "AES-128-GCM")!,
+            passwordReference: passwordReference,
+            destinationAddress: destinationAddress
         )
         let channel = EmbeddedChannel(handler: handler)
 
@@ -47,17 +45,25 @@ final class RequestEncoderTests: XCTestCase {
 
         for (i, bytesToWrite) in packets.enumerated() {
             try channel.writeOutbound(ByteBuffer(bytes: bytesToWrite))
-            var byteBuffer = try channel.readOutbound(as: ByteBuffer.self)!
 
             var combined: [UInt8]!
             var actualData: Data!
             var ciphertext: Data!
             var encryptedDataLength: Int = 0
+            var packet: ByteBuffer!
 
-            // Only first packet contains address info.
             if i == 0 {
+                // The first packet contains salt value.
+                packet = try channel.readOutbound(as: ByteBuffer.self)
+                XCTAssertNotNil(packet)
+                XCTAssertEqual(packet.readableBytes, 16)
+
                 // Read salt value.
-                let salt = byteBuffer.readBytes(length: 16)!
+                guard packet.readableBytes == 16 else {
+                    XCTFail("Invalid salt packet.")
+                    return
+                }
+                let salt = packet.readBytes(length: 16)!
 
                 symmetricKey = hkdfDerivedSymmetricKey(
                     secretKey: passwordReference,
@@ -66,33 +72,65 @@ final class RequestEncoderTests: XCTestCase {
                 )
 
                 // Read encrypted address buffer.
-                combined = nonce + byteBuffer.readBytes(length: 18)!
+                packet = try channel.readOutbound(as: ByteBuffer.self)
+                XCTAssertNotNil(packet)
+
+                guard packet.readableBytes > 18 else {
+                    XCTFail(
+                        "Packet should contains at least 18 bytes data to decode encrypt packet length, but got \(packet.readableBytes) bytes."
+                    )
+                    return
+                }
+                combined = nonce + packet.readBytes(length: 18)!
                 ciphertext = try AES.GCM.open(.init(combined: combined), using: symmetricKey)
                 encryptedDataLength = ciphertext.withUnsafeBytes {
                     Int($0.bindMemory(to: UInt16.self).baseAddress!.pointee.bigEndian) + 16
                 }
                 nonce.increment(nonce.count)
 
-                combined = nonce + byteBuffer.readBytes(length: encryptedDataLength)!
+                guard packet.readableBytes == encryptedDataLength else {
+                    XCTFail(
+                        "Packet should contains at least \(encryptedDataLength) bytes data to decode address data, but got \(packet.readableBytes) bytes."
+                    )
+                    return
+                }
+                combined = nonce + packet.readBytes(length: encryptedDataLength)!
                 var actualData = try AES.GCM.open(.init(combined: combined), using: symmetricKey)
                 nonce.increment(nonce.count)
                 XCTAssertEqual(try actualData.readAddress(), destinationAddress)
             }
 
+            packet = try channel.readOutbound(as: ByteBuffer.self)
+            XCTAssertNotNil(packet)
+
             // Read encrypted request data.
-            combined = nonce + byteBuffer.readBytes(length: 18)!
+            guard packet.readableBytes > 18 else {
+                XCTFail(
+                    "Packet should contains at least 18 bytes data to decode encrypt packet length, but got \(packet.readableBytes) bytes."
+                )
+                return
+            }
+            combined = nonce + packet.readBytes(length: 18)!
             ciphertext = try AES.GCM.open(.init(combined: combined), using: symmetricKey)
             encryptedDataLength = ciphertext.withUnsafeBytes {
                 Int($0.bindMemory(to: UInt16.self).baseAddress!.pointee.bigEndian) + 16
             }
             nonce.increment(nonce.count)
 
-            combined = nonce + byteBuffer.readBytes(length: encryptedDataLength)!
+            guard packet.readableBytes == encryptedDataLength else {
+                XCTFail(
+                    "Packet should contains at least \(encryptedDataLength) bytes data to decode trucked packet data, but got \(packet.readableBytes) bytes."
+                )
+                return
+            }
+            combined = nonce + packet.readBytes(length: encryptedDataLength)!
             actualData = try AES.GCM.open(.init(combined: combined), using: symmetricKey)
             nonce.increment(nonce.count)
             XCTAssertEqual(actualData, Data(bytesToWrite))
-            XCTAssertEqual(byteBuffer.readableBytes, 0)
+            XCTAssertEqual(packet.readableBytes, 0)
         }
+
+        XCTAssertNil(try channel.readOutbound(as: ByteBuffer.self))
     }
 
     func testEncodeShadowsocksRequestWithAES256GCM() throws {
@@ -100,12 +138,10 @@ final class RequestEncoderTests: XCTestCase {
         let destinationAddress = NetAddress.socketAddress(
             try! .init(ipAddress: "192.168.1.1", port: 80)
         )
-        let handler = MessageToByteHandler(
-            RequestEncoder.init(
-                algorithm: .init(rawValue: "AES-256-GCM")!,
-                passwordReference: passwordReference,
-                destinationAddress: destinationAddress
-            )
+        let handler = RequestEncoder(
+            algorithm: .init(rawValue: "AES-256-GCM")!,
+            passwordReference: passwordReference,
+            destinationAddress: destinationAddress
         )
         let channel = EmbeddedChannel(handler: handler)
 
@@ -121,17 +157,25 @@ final class RequestEncoderTests: XCTestCase {
 
         for (i, bytesToWrite) in packets.enumerated() {
             try channel.writeOutbound(ByteBuffer(bytes: bytesToWrite))
-            var byteBuffer = try channel.readOutbound(as: ByteBuffer.self)!
 
             var combined: [UInt8]!
             var actualData: Data!
             var ciphertext: Data!
             var encryptedDataLength: Int = 0
+            var packet: ByteBuffer!
 
-            // Only first packet contains address info.
             if i == 0 {
+                // The first packet contains salt value.
+                packet = try channel.readOutbound(as: ByteBuffer.self)
+                XCTAssertNotNil(packet)
+                XCTAssertEqual(packet.readableBytes, 32)
+
                 // Read salt value.
-                let salt = byteBuffer.readBytes(length: 32)!
+                guard packet.readableBytes == 32 else {
+                    XCTFail("Invalid salt packet.")
+                    return
+                }
+                let salt = packet.readBytes(length: 32)!
 
                 symmetricKey = hkdfDerivedSymmetricKey(
                     secretKey: passwordReference,
@@ -140,33 +184,65 @@ final class RequestEncoderTests: XCTestCase {
                 )
 
                 // Read encrypted address buffer.
-                combined = nonce + byteBuffer.readBytes(length: 18)!
+                packet = try channel.readOutbound(as: ByteBuffer.self)
+                XCTAssertNotNil(packet)
+
+                guard packet.readableBytes > 18 else {
+                    XCTFail(
+                        "Packet should contains at least 18 bytes data to decode encrypt packet length, but got \(packet.readableBytes) bytes."
+                    )
+                    return
+                }
+                combined = nonce + packet.readBytes(length: 18)!
                 ciphertext = try AES.GCM.open(.init(combined: combined), using: symmetricKey)
                 encryptedDataLength = ciphertext.withUnsafeBytes {
                     Int($0.bindMemory(to: UInt16.self).baseAddress!.pointee.bigEndian) + 16
                 }
                 nonce.increment(nonce.count)
 
-                combined = nonce + byteBuffer.readBytes(length: encryptedDataLength)!
+                guard packet.readableBytes == encryptedDataLength else {
+                    XCTFail(
+                        "Packet should contains at least \(encryptedDataLength) bytes data to decode address data, but got \(packet.readableBytes) bytes."
+                    )
+                    return
+                }
+                combined = nonce + packet.readBytes(length: encryptedDataLength)!
                 var actualData = try AES.GCM.open(.init(combined: combined), using: symmetricKey)
                 nonce.increment(nonce.count)
                 XCTAssertEqual(try actualData.readAddress(), destinationAddress)
             }
 
+            packet = try channel.readOutbound(as: ByteBuffer.self)
+            XCTAssertNotNil(packet)
+
             // Read encrypted request data.
-            combined = nonce + byteBuffer.readBytes(length: 18)!
+            guard packet.readableBytes > 18 else {
+                XCTFail(
+                    "Packet should contains at least 18 bytes data to decode encrypt packet length, but got \(packet.readableBytes) bytes."
+                )
+                return
+            }
+            combined = nonce + packet.readBytes(length: 18)!
             ciphertext = try AES.GCM.open(.init(combined: combined), using: symmetricKey)
             encryptedDataLength = ciphertext.withUnsafeBytes {
                 Int($0.bindMemory(to: UInt16.self).baseAddress!.pointee.bigEndian) + 16
             }
             nonce.increment(nonce.count)
 
-            combined = nonce + byteBuffer.readBytes(length: encryptedDataLength)!
+            guard packet.readableBytes == encryptedDataLength else {
+                XCTFail(
+                    "Packet should contains at least \(encryptedDataLength) bytes data to decode trucked packet data, but got \(packet.readableBytes) bytes."
+                )
+                return
+            }
+            combined = nonce + packet.readBytes(length: encryptedDataLength)!
             actualData = try AES.GCM.open(.init(combined: combined), using: symmetricKey)
             nonce.increment(nonce.count)
             XCTAssertEqual(actualData, Data(bytesToWrite))
-            XCTAssertEqual(byteBuffer.readableBytes, 0)
+            XCTAssertEqual(packet.readableBytes, 0)
         }
+
+        XCTAssertNil(try channel.readOutbound(as: ByteBuffer.self))
     }
 
     func testEncodeShadowsocksRequestWithChaCha20Poly1305() throws {
@@ -174,12 +250,10 @@ final class RequestEncoderTests: XCTestCase {
         let destinationAddress = NetAddress.socketAddress(
             try! .init(ipAddress: "192.168.1.1", port: 80)
         )
-        let handler = MessageToByteHandler(
-            RequestEncoder.init(
-                algorithm: .init(rawValue: "ChaCha20-Poly1305")!,
-                passwordReference: passwordReference,
-                destinationAddress: destinationAddress
-            )
+        let handler = RequestEncoder(
+            algorithm: .init(rawValue: "ChaCha20-Poly1305")!,
+            passwordReference: passwordReference,
+            destinationAddress: destinationAddress
         )
         let channel = EmbeddedChannel(handler: handler)
 
@@ -195,17 +269,25 @@ final class RequestEncoderTests: XCTestCase {
 
         for (i, bytesToWrite) in packets.enumerated() {
             try channel.writeOutbound(ByteBuffer(bytes: bytesToWrite))
-            var byteBuffer = try channel.readOutbound(as: ByteBuffer.self)!
 
             var combined: [UInt8]!
             var actualData: Data!
             var ciphertext: Data!
             var encryptedDataLength: Int = 0
+            var packet: ByteBuffer!
 
-            // Only first packet contains address info.
             if i == 0 {
+                // The first packet contains salt value.
+                packet = try channel.readOutbound(as: ByteBuffer.self)
+                XCTAssertNotNil(packet)
+                XCTAssertEqual(packet.readableBytes, 32)
+
                 // Read salt value.
-                let salt = byteBuffer.readBytes(length: 32)!
+                guard packet.readableBytes == 32 else {
+                    XCTFail("Invalid salt packet.")
+                    return
+                }
+                let salt = packet.readBytes(length: 32)!
 
                 symmetricKey = hkdfDerivedSymmetricKey(
                     secretKey: passwordReference,
@@ -214,32 +296,64 @@ final class RequestEncoderTests: XCTestCase {
                 )
 
                 // Read encrypted address buffer.
-                combined = nonce + byteBuffer.readBytes(length: 18)!
+                packet = try channel.readOutbound(as: ByteBuffer.self)
+                XCTAssertNotNil(packet)
+
+                guard packet.readableBytes > 18 else {
+                    XCTFail(
+                        "Packet should contains at least 18 bytes data to decode encrypt packet length, but got \(packet.readableBytes) bytes."
+                    )
+                    return
+                }
+                combined = nonce + packet.readBytes(length: 18)!
                 ciphertext = try ChaChaPoly.open(.init(combined: combined), using: symmetricKey)
                 encryptedDataLength = ciphertext.withUnsafeBytes {
                     Int($0.bindMemory(to: UInt16.self).baseAddress!.pointee.bigEndian) + 16
                 }
                 nonce.increment(nonce.count)
 
-                combined = nonce + byteBuffer.readBytes(length: encryptedDataLength)!
+                guard packet.readableBytes == encryptedDataLength else {
+                    XCTFail(
+                        "Packet should contains at least \(encryptedDataLength) bytes data to decode address data, but got \(packet.readableBytes) bytes."
+                    )
+                    return
+                }
+                combined = nonce + packet.readBytes(length: encryptedDataLength)!
                 var actualData = try ChaChaPoly.open(.init(combined: combined), using: symmetricKey)
                 nonce.increment(nonce.count)
                 XCTAssertEqual(try actualData.readAddress(), destinationAddress)
             }
 
+            packet = try channel.readOutbound(as: ByteBuffer.self)
+            XCTAssertNotNil(packet)
+
             // Read encrypted request data.
-            combined = nonce + byteBuffer.readBytes(length: 18)!
+            guard packet.readableBytes > 18 else {
+                XCTFail(
+                    "Packet should contains at least 18 bytes data to decode encrypt packet length, but got \(packet.readableBytes) bytes."
+                )
+                return
+            }
+            combined = nonce + packet.readBytes(length: 18)!
             ciphertext = try ChaChaPoly.open(.init(combined: combined), using: symmetricKey)
             encryptedDataLength = ciphertext.withUnsafeBytes {
                 Int($0.bindMemory(to: UInt16.self).baseAddress!.pointee.bigEndian) + 16
             }
             nonce.increment(nonce.count)
 
-            combined = nonce + byteBuffer.readBytes(length: encryptedDataLength)!
+            guard packet.readableBytes == encryptedDataLength else {
+                XCTFail(
+                    "Packet should contains at least \(encryptedDataLength) bytes data to decode trucked packet data, but got \(packet.readableBytes) bytes."
+                )
+                return
+            }
+            combined = nonce + packet.readBytes(length: encryptedDataLength)!
             actualData = try ChaChaPoly.open(.init(combined: combined), using: symmetricKey)
             nonce.increment(nonce.count)
             XCTAssertEqual(actualData, Data(bytesToWrite))
-            XCTAssertEqual(byteBuffer.readableBytes, 0)
+            XCTAssertEqual(packet.readableBytes, 0)
         }
+
+        XCTAssertNil(try channel.readOutbound(as: ByteBuffer.self))
     }
 }

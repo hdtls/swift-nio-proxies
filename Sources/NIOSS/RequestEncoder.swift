@@ -17,115 +17,129 @@ import Foundation
 import NIOCore
 import NIONetbotMisc
 
-final public class RequestEncoder: MessageToByteEncoder {
+/// Connects to a Shadowsocks server to establish a proxied connection to a host.
+final public class RequestEncoder: ChannelOutboundHandler {
 
     public typealias OutboundIn = ByteBuffer
 
-    private let destinationAddress: NetAddress
+    public typealias OutboundOut = ByteBuffer
 
     private let algorithm: Algorithm
 
     private let passwordReference: String
 
+    private let destinationAddress: NetAddress
+
     private var symmetricKey: SymmetricKey!
 
     private var nonce: [UInt8]!
 
+    /// Initialize an instance of `RequestEncoder` with specified `algorithm`, `passwordReference` and `destinationAddress`.
+    /// - Parameters:
+    ///   - algorithm: The algorithm to use to encrypt stream for this connection.
+    ///   - passwordReference: The password to use to generate symmetric key for encryptor.
+    ///   - destinationAddress: The desired end point - note that only IPv4, IPv6, and FQDNs are supported.
     public init(algorithm: Algorithm, passwordReference: String, destinationAddress: NetAddress) {
         self.algorithm = algorithm
         self.passwordReference = passwordReference
         self.destinationAddress = destinationAddress
     }
 
-    public func encode(data: ByteBuffer, out: inout ByteBuffer) throws {
-        var mutableData = data
+    public func write(
+        context: ChannelHandlerContext,
+        data: NIOAny,
+        promise: EventLoopPromise<Void>?
+    ) {
+        do {
+            if symmetricKey == nil {
+                let byteCount = algorithm == .aes128Gcm ? 16 : 32
+                let saltBytes = SecureBytes(count: byteCount)
+                nonce = .init(repeating: 0, count: 12)
+                symmetricKey = hkdfDerivedSymmetricKey(
+                    secretKey: passwordReference,
+                    salt: saltBytes,
+                    outputByteCount: byteCount
+                )
 
-        var packet = Data()
+                // An AEAD encrypted TCP stream starts with a randomly generated salt to derive the per-session subkey.
+                context.write(
+                    wrapOutboundOut(context.channel.allocator.buffer(bytes: saltBytes)),
+                    promise: promise
+                )
 
-        if symmetricKey == nil {
-            let keyByteCount = algorithm == .aes128Gcm ? 16 : 32
-            let saltByteCount = algorithm == .aes128Gcm ? 16 : 32
-            let nonceByteCount = 12
-            nonce = .init(repeating: 0, count: nonceByteCount)
-            let salt = [UInt8](repeating: 0, count: saltByteCount).map({ _ in
-                UInt8.random(in: UInt8.min...UInt8.max)
-            })
-            symmetricKey = hkdfDerivedSymmetricKey(
-                secretKey: passwordReference,
-                salt: salt,
-                outputByteCount: keyByteCount
-            )
+                // Prepare address data.
+                var byteBuffer = context.channel.allocator.buffer(capacity: 36)
+                byteBuffer.writeAddress(destinationAddress)
+                let message = byteBuffer.readBytes(length: byteBuffer.readableBytes)!
 
-            packet.writeAddress(destinationAddress)
-            packet = try seal(packet, using: symmetricKey)
-            // TCP packet start with fix size salt so insert salt at startIndex.
-            packet.insert(contentsOf: salt, at: packet.startIndex)
+                // Prepare address size data
+                byteBuffer.writeInteger(UInt16(message.count))
+                let sizeBytes = byteBuffer.readBytes(length: byteBuffer.readableBytes)!
+
+                byteBuffer.discardReadBytes()
+
+                byteBuffer.writeBytes(try process(message: sizeBytes))
+                byteBuffer.writeBytes(try process(message: message))
+
+                context.write(wrapOutboundOut(byteBuffer), promise: promise)
+            }
+
+            var unwrapped = unwrapOutboundIn(data)
+
+            // Encrypt and write trucks to server.
+            while unwrapped.readableBytes > 0 {
+                let maxLength = unwrapped.readableBytes & 0x3FFF
+                if let message = unwrapped.readBytes(length: maxLength) {
+                    var byteBuffer = context.channel.allocator.buffer(
+                        capacity: MemoryLayout<UInt16>.size
+                    )
+                    byteBuffer.writeInteger(UInt16(message.count))
+                    let sizeBytes = byteBuffer.readBytes(length: byteBuffer.readableBytes)!
+
+                    byteBuffer.discardReadBytes()
+
+                    byteBuffer.writeBytes(try process(message: sizeBytes))
+                    byteBuffer.writeBytes(try process(message: message))
+
+                    context.write(wrapOutboundOut(byteBuffer), promise: promise)
+                }
+            }
+        } catch {
+            context.fireErrorCaught(error)
         }
-
-        // Payload length is a 2-byte big-endian unsigned integer capped at 0x3FFF.
-        let maxLength = UInt16(mutableData.readableBytes & 0x3FFF)
-        let payload = try seal(mutableData.readBytes(length: Int(maxLength))!, using: symmetricKey)
-
-        packet.append(payload)
-
-        out.writeBytes(packet)
     }
 
-    ///  Encrypt plaintext to struct like `[encrypted payload length][length tag][encrypted payload][payload tag]`
+    /// Process message into structure [ciphertext][tag].
     /// - Parameter message: the plaintext waiting to encrypt which confirm to `DataProtocol`
-    /// - Returns: encrypted data
-    /// - seealso: http://shadowsocks.org/en/wiki/AEAD-Ciphers.html for more information.
-    private func seal<Plaintext>(_ message: Plaintext, using symmetricKey: SymmetricKey) throws
-        -> Data where Plaintext: DataProtocol
-    {
-        var packet = Data()
-
-        var sequence = withUnsafeBytes(of: UInt16(message.count).bigEndian) {
-            Array($0)
-        }
+    private func process<Plaintext>(message: Plaintext) throws -> Data
+    where Plaintext: DataProtocol {
+        var bytes: Data = .init()
 
         switch algorithm {
             case .aes128Gcm, .aes256Gcm:
-                var sealedBox = try AES.GCM.seal(
-                    sequence,
+                let sealedBox = try AES.GCM.seal(
+                    message,
                     using: symmetricKey,
                     nonce: .init(data: nonce)
                 )
-                packet.append(sealedBox.ciphertext)
-                packet.append(sealedBox.tag)
-
-                nonce.increment(nonce.count)
-
-                sequence = Array(message)
-                sealedBox = try AES.GCM.seal(
-                    sequence,
-                    using: symmetricKey,
-                    nonce: .init(data: nonce)
-                )
-                packet.append(sealedBox.ciphertext)
-                packet.append(sealedBox.tag)
+                bytes.append(sealedBox.ciphertext)
+                bytes.append(sealedBox.tag)
             case .chaCha20Poly1305:
-                var sealedBox = try ChaChaPoly.seal(
-                    sequence,
+                let sealedBox = try ChaChaPoly.seal(
+                    message,
                     using: symmetricKey,
                     nonce: .init(data: nonce)
                 )
-                packet.append(sealedBox.ciphertext)
-                packet.append(sealedBox.tag)
-
-                nonce.increment(nonce.count)
-
-                sequence = Array(message)
-                sealedBox = try ChaChaPoly.seal(
-                    sequence,
-                    using: symmetricKey,
-                    nonce: .init(data: nonce)
-                )
-                packet.append(sealedBox.ciphertext)
-                packet.append(sealedBox.tag)
+                bytes.append(sealedBox.ciphertext)
+                bytes.append(sealedBox.tag)
         }
 
         nonce.increment(nonce.count)
-        return packet
+        return bytes
     }
 }
+
+#if swift(>=5.6)
+@available(*, unavailable)
+extension RequestEncoder: Sendable {}
+#endif
