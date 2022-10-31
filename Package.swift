@@ -63,8 +63,7 @@ let package = Package(
     targets: [
         .target(name: "ConnectionPool", dependencies: [swiftNIOCore, swiftNIOPosix, swiftLog]),
         .target(name: "CSHAKE128"),
-        .target(name: "SHAKE128", dependencies: ["CSHAKE128", swiftCrypto]),
-        .target(name: "NETestUtils", dependencies: [swiftCrypto]),
+        .target(name: "SHAKE128", dependencies: ["CSHAKE128", "PrettyBytes", swiftCrypto]),
         .target(name: "NIODNS", dependencies: [swiftNIOCore, swiftNIOPosix]),
         .target(
             name: "NIOHTTPMitM",
@@ -73,14 +72,17 @@ let package = Package(
         .target(name: "NIOHTTPProxy", dependencies: ["NIONetbotMisc", swiftNIOCore, swiftNIOHTTP1]),
         .target(name: "NIONetbotMisc", dependencies: [swiftNIOCore, swiftNIOPosix]),
         .target(name: "NIOSOCKS5", dependencies: ["NIONetbotMisc", swiftNIOCore]),
-        .target(name: "NIOSS", dependencies: ["NIONetbotMisc", swiftCrypto, swiftNIOCore]),
+        .target(
+            name: "NIOSS",
+            dependencies: ["NIONetbotMisc", "PrettyBytes", swiftCrypto, swiftNIOCore]
+        ),
         .target(
             name: "NIOTrojan",
-            dependencies: ["NIONetbotMisc", swiftCrypto, swiftNIOCore, swiftNIOSSL]
+            dependencies: ["NIONetbotMisc", "PrettyBytes", swiftCrypto, swiftNIOCore, swiftNIOSSL]
         ),
         .target(
             name: "NIOVMESS",
-            dependencies: ["NIONetbotMisc", "SHAKE128", swiftCrypto, swiftNIOCore]
+            dependencies: ["NIONetbotMisc", "PrettyBytes", "SHAKE128", swiftCrypto, swiftNIOCore]
         ),
         .target(
             name: "NIONetbot",
@@ -107,6 +109,7 @@ let package = Package(
                 .product(name: "NIOExtras", package: "swift-nio-extras"),
             ]
         ),
+        .target(name: "PrettyBytes"),
         .executableTarget(
             name: "NIONetbotCLI",
             dependencies: ["NIONetbot", swiftArgumentParser, swiftLog]
@@ -117,18 +120,18 @@ let package = Package(
             name: "NIOHTTPProxyTests",
             dependencies: ["NIOHTTPProxy", swiftNIO, swiftNIOHTTP1, swiftNIOSSL]
         ),
-        .testTarget(name: "NIOTrojanTests", dependencies: ["NIOTrojan", swiftNIO]),
+        .testTarget(name: "NIOTrojanTests", dependencies: ["NIOTrojan", "PrettyBytes", swiftNIO]),
         .testTarget(name: "SHAKE128Tests", dependencies: ["SHAKE128"]),
         .testTarget(name: "NIOSOCKS5Tests", dependencies: ["NIOSOCKS5", swiftNIO]),
         .testTarget(
             name: "NIOSSTests",
-            dependencies: ["NETestUtils", "NIOSS", swiftNIO],
+            dependencies: ["PrettyBytes", "NIOSS", swiftNIO],
             exclude: [
                 "RequestEncoderTests.g.swift.gyb",
                 "ResponseDecoderTests.g.swift.gyb"
             ]
         ),
-        .testTarget(name: "NIOVMESSTests", dependencies: ["NETestUtils", "NIOVMESS", swiftNIO]),
+        .testTarget(name: "NIOVMESSTests", dependencies: ["PrettyBytes", "NIOVMESS", swiftNIO]),
         .testTarget(
             name: "NIONetbotTests",
             dependencies: [

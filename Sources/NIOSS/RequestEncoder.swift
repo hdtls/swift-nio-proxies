@@ -16,6 +16,7 @@ import Crypto
 import Foundation
 import NIOCore
 import NIONetbotMisc
+import PrettyBytes
 
 /// Connects to a Shadowsocks server to establish a proxied connection to a host.
 final public class RequestEncoder: ChannelOutboundHandler {

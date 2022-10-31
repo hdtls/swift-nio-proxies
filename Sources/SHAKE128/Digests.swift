@@ -12,6 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+@_exported import PrettyBytes
+
 public struct SHAKE128Digest: DigestPrivate {
     let bytes: [UInt8]
 

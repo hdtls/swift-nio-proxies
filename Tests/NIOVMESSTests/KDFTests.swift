@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NETestUtils
-import SHAKE128
+import Crypto
+import PrettyBytes
 import XCTest
 
 @testable import NIOVMESS

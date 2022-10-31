@@ -15,6 +15,7 @@
 import Crypto
 import NIO
 import NIONetbotMisc
+import PrettyBytes
 import XCTest
 
 @testable import NIOSS

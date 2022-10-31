@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NETestUtils
+import PrettyBytes
 import XCTest
 
 @testable import NIOSS

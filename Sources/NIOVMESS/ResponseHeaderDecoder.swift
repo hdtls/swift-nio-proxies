@@ -16,6 +16,7 @@ import Crypto
 import Foundation
 import NIOCore
 import NIONetbotMisc
+import PrettyBytes
 import SHAKE128
 
 final public class ResponseHeaderDecoder: ByteToMessageDecoder {

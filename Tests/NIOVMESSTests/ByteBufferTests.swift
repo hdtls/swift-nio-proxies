@@ -12,9 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NETestUtils
 import NIOCore
-import SHAKE128
+import PrettyBytes
 import XCTest
 
 @testable import NIOVMESS

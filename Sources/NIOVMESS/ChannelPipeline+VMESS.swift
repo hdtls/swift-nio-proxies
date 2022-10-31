@@ -15,6 +15,7 @@
 import Foundation
 import NIOCore
 import NIONetbotMisc
+import PrettyBytes
 
 extension ChannelPipeline {
 

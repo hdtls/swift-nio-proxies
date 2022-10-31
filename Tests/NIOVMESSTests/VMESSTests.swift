@@ -12,9 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NETestUtils
-import NIONetbotMisc
-import SHAKE128
+import PrettyBytes
 import XCTest
 
 @testable import NIOVMESS

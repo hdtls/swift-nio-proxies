@@ -13,12 +13,13 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
+import PrettyBytes
 import XCTest
 
 @testable import NIOTrojan
 
 // A testing utility that creates one contiguous and one discontiguous representation of the given Data.
-extension Array where Element == UInt8 {
+extension Data {
     func asDataProtocols() -> (contiguous: Data, discontiguous: DispatchData) {
         guard self.count > 0 else {
             // We can't really have discontiguous options here, so we just return empty versions
@@ -56,10 +57,10 @@ class SHA224Tests: XCTestCase {
         h.update(data: data)
         let result = h.finalize()
 
-        let testBytes = try Array(hexString: testVector)
+        let testBytes = try Data(hexString: testVector)
 
-        XCTAssertEqual(testBytes, Array(result), file: file, line: line)
-        XCTAssertEqual(Array(H.hash(data: data)), testBytes, file: file, line: line)
+        XCTAssertEqual(testBytes, Data(result), file: file, line: line)
+        XCTAssertEqual(Data(H.hash(data: data)), testBytes, file: file, line: line)
 
         let (contiguousResult, discontiguousResult) = testBytes.asDataProtocols()
         XCTAssert(result == contiguousResult, file: file, line: line)
