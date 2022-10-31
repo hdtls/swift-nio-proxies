@@ -46,7 +46,7 @@ import NIONetbotMisc
 ///
 ///
 
-public class ResponseDecoder: ByteToMessageDecoder {
+final public class ResponseDecoder: ByteToMessageDecoder {
 
     public typealias InboundOut = ByteBuffer
 
@@ -58,6 +58,10 @@ public class ResponseDecoder: ByteToMessageDecoder {
 
     private var nonce: [UInt8]
 
+    /// Initialize an instance of `ResponseDecoder` with specified `algorithm` and `passwordReference`.
+    /// - Parameters:
+    ///   - algorithm: The algorithm use to decrypt response message.
+    ///   - passwordReference: The password use to generate symmetric key for message decryptor.
     public init(algorithm: Algorithm, passwordReference: String) {
         self.algorithm = algorithm
         self.passwordReference = passwordReference
@@ -67,6 +71,11 @@ public class ResponseDecoder: ByteToMessageDecoder {
     public func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws
         -> DecodingState
     {
+        // Record data for fallback if buffer is not enough to decode as message.
+        let __nonce = nonce
+        let __buffer = buffer
+
+        // Decode salt from first packet.
         if symmetricKey == nil {
             let saltByteCount = algorithm == .aes128Gcm ? 16 : 32
             let keyByteCount = algorithm == .aes128Gcm ? 16 : 32
@@ -83,52 +92,42 @@ public class ResponseDecoder: ByteToMessageDecoder {
 
         let tagByteCount = 16
         let trunkSize = 2
-
-        var copyLength = trunkSize + tagByteCount
-
-        guard buffer.readableBytes > copyLength else {
+        var readLength = trunkSize + tagByteCount
+        // Check if data is enough to decode as size message.
+        guard buffer.readableBytes > readLength else {
             return .needMoreData
         }
+        var byteBuffer = try process(message: buffer.readBytes(length: readLength)!, on: context)
+        let size = byteBuffer.readInteger(as: UInt16.self)
 
-        var combined = nonce + buffer.readBytes(length: copyLength)!
-
-        var bytes: Data
-
-        switch algorithm {
-            case .aes128Gcm, .aes256Gcm:
-                let sealedBox = try AES.GCM.SealedBox.init(combined: combined)
-                bytes = try AES.GCM.open(sealedBox, using: symmetricKey)
-            case .chaCha20Poly1305:
-                let sealedBox = try ChaChaPoly.SealedBox.init(combined: combined)
-                bytes = try ChaChaPoly.open(sealedBox, using: symmetricKey)
-        }
-
-        copyLength = bytes.withUnsafeBytes {
-            Int($0.bindMemory(to: UInt16.self).baseAddress!.pointee.bigEndian) + tagByteCount
-        }
-
-        guard buffer.readableBytes >= copyLength else {
-            buffer.moveReaderIndex(to: buffer.readerIndex - trunkSize - tagByteCount)
+        // Check if buffer is enougth to decode as response message.
+        guard let size = size, buffer.readableBytes >= Int(size) + tagByteCount else {
+            buffer = __buffer
+            nonce = __nonce
             return .needMoreData
         }
-
-        nonce.increment(nonce.count)
-
-        combined = nonce + buffer.readBytes(length: copyLength)!
-
-        switch algorithm {
-            case .aes128Gcm, .aes256Gcm:
-                let sealedBox = try AES.GCM.SealedBox.init(combined: combined)
-                bytes = try AES.GCM.open(sealedBox, using: symmetricKey)
-            case .chaCha20Poly1305:
-                let sealedBox = try ChaChaPoly.SealedBox.init(combined: combined)
-                bytes = try ChaChaPoly.open(sealedBox, using: symmetricKey)
-        }
-
-        nonce.increment(nonce.count)
-
-        context.fireChannelRead(wrapInboundOut(ByteBuffer(bytes: bytes)))
-
+        readLength = Int(size) + tagByteCount
+        byteBuffer = try process(message: buffer.readBytes(length: readLength)!, on: context)
+        context.fireChannelRead(wrapInboundOut(byteBuffer))
         return .continue
     }
+
+    private func process(message: [UInt8], on context: ChannelHandlerContext) throws -> ByteBuffer {
+        var data: Data = .init()
+        let combined = nonce + message
+
+        switch algorithm {
+            case .aes128Gcm, .aes256Gcm:
+                data = try AES.GCM.open(.init(combined: combined), using: symmetricKey)
+            case .chaCha20Poly1305:
+                data = try ChaChaPoly.open(.init(combined: combined), using: symmetricKey)
+        }
+        nonce.increment(nonce.count)
+        return context.channel.allocator.buffer(bytes: data)
+    }
 }
+
+#if swift(>=5.6) && canImport(_Concurrency)
+@available(*, unavailable)
+extension ResponseDecoder: Sendable {}
+#endif
