@@ -30,20 +30,9 @@ extension ChannelPipeline {
         passwordReference: String,
         destinationAddress: NetAddress
     ) -> EventLoopFuture<Void> {
-        let eventLoopFuture: EventLoopFuture<Void>
 
-        if eventLoop.inEventLoop {
-            let result = Result<Void, Error> {
-                try syncOperations.addSSClientHandlers(
-                    position: position,
-                    algorithm: algorithm,
-                    passwordReference: passwordReference,
-                    destinationAddress: destinationAddress
-                )
-            }
-            eventLoopFuture = eventLoop.makeCompletedFuture(result)
-        } else {
-            eventLoopFuture = eventLoop.submit {
+        guard eventLoop.inEventLoop else {
+            return eventLoop.submit {
                 try self.syncOperations.addSSClientHandlers(
                     position: position,
                     algorithm: algorithm,
@@ -53,7 +42,14 @@ extension ChannelPipeline {
             }
         }
 
-        return eventLoopFuture
+        return eventLoop.makeCompletedFuture {
+            try syncOperations.addSSClientHandlers(
+                position: position,
+                algorithm: algorithm,
+                passwordReference: passwordReference,
+                destinationAddress: destinationAddress
+            )
+        }
     }
 }
 

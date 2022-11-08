@@ -140,7 +140,7 @@ final public class RequestEncoder: ChannelOutboundHandler {
     }
 }
 
-#if swift(>=5.6)
+#if swift(>=5.7)
 @available(*, unavailable)
 extension RequestEncoder: Sendable {}
 #endif

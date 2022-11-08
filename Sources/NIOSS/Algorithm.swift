@@ -16,7 +16,7 @@
 ///
 /// We don't care about rawValue is uppercase or lowercase for example:
 ///     Algorithm(rawValue: "aes-128-gcm") == Algorithm(rawValue: "AES-128-GCM") // true
-public enum Algorithm: String, CaseIterable, Equatable {
+public enum Algorithm: String, CaseIterable, Equatable, Hashable, Sendable {
 
     case aes128Gcm = "AES-128-GCM"
     case aes256Gcm = "AES-256-GCM"
@@ -35,7 +35,3 @@ public enum Algorithm: String, CaseIterable, Equatable {
         }
     }
 }
-
-#if swift(>=5.5) && canImport(_Concurrency)
-extension Algorithm: Sendable {}
-#endif

@@ -15,10 +15,10 @@
 import NIOSS
 
 /// A wrapper object use to decoding and encoding proxy settings.
-public struct Proxy: Codable, Equatable, Hashable {
+public struct Proxy: Codable, Equatable, Hashable, Sendable {
 
     /// Proxy protocol definition.
-    public enum `Protocol`: String, CaseIterable, Codable, CustomStringConvertible {
+    public enum `Protocol`: String, CaseIterable, Codable, CustomStringConvertible, Sendable {
         case http
         case socks5
         case shadowsocks = "ss"
@@ -189,9 +189,3 @@ public struct Proxy: Codable, Equatable, Hashable {
         try container.encodeIfPresent(self.overTls ? self.overTls : nil, forKey: .overTls)
     }
 }
-
-#if swift(>=5.5) && canImport(_Concurrency)
-extension Proxy: Sendable {}
-
-extension Proxy.`Protocol`: Sendable {}
-#endif
