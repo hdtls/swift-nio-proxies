@@ -32,35 +32,6 @@ import Dispatch
 import NIOCore
 import NIOPosix
 
-/// A DNS resolver built on top of the libc `getaddrinfo` function.
-///
-/// This is the lowest-common-denominator resolver available to NIO. It's not really a very good
-/// solution because the `getaddrinfo` call blocks during the DNS resolution, meaning that this resolver
-/// will block a thread for as long as it takes to perform the getaddrinfo call. To prevent it from blocking `EventLoop`
-/// threads, it will offload the blocking `getaddrinfo` calls to a `DispatchQueue`.
-/// One advantage from leveraging `getaddrinfo` is the automatic conformance to RFC 6724, which removes some of the work
-/// needed to implement it.
-///
-/// This resolver is a single-use object: it can only be used to perform a single host resolution.
-
-#if os(Linux) || os(FreeBSD) || os(Android)
-import CNIOLinux
-#endif
-
-#if os(Windows)
-import let WinSDK.AF_INET
-import let WinSDK.AF_INET6
-
-import func WinSDK.FreeAddrInfoW
-import func WinSDK.GetAddrInfoW
-import func WinSDK.gai_strerrorA
-
-import struct WinSDK.ADDRESS_FAMILY
-import struct WinSDK.ADDRINFOW
-import struct WinSDK.SOCKADDR_IN
-import struct WinSDK.SOCKADDR_IN6
-#endif
-
 extension NIOBSDSocket {
     /// Specifies the type of socket.
     public struct SocketType: RawRepresentable {
@@ -95,14 +66,42 @@ extension NIOBSDSocket.SocketType {
     #endif
 }
 
+#if os(Linux) || os(FreeBSD) || os(Android)
+import CNIOLinux
+#endif
+
+#if os(Windows)
+import let WinSDK.AF_INET
+import let WinSDK.AF_INET6
+
+import func WinSDK.FreeAddrInfoW
+import func WinSDK.GetAddrInfoW
+import func WinSDK.gai_strerrorA
+
+import struct WinSDK.ADDRESS_FAMILY
+import struct WinSDK.ADDRINFOW
+import struct WinSDK.SOCKADDR_IN
+import struct WinSDK.SOCKADDR_IN6
+#endif
+
 // A thread-specific variable where we store the offload queue if we're on an `SelectableEventLoop`.
 let offloadQueueTSV = ThreadSpecificVariable<DispatchQueue>()
 
-public class GetaddrinfoResolver: Resolver {
+/// A DNS resolver built on top of the libc `getaddrinfo` function.
+///
+/// This is the lowest-common-denominator resolver available to NIO. It's not really a very good
+/// solution because the `getaddrinfo` call blocks during the DNS resolution, meaning that this resolver
+/// will block a thread for as long as it takes to perform the getaddrinfo call. To prevent it from blocking `EventLoop`
+/// threads, it will offload the blocking `getaddrinfo` calls to a `DispatchQueue`.
+/// One advantage from leveraging `getaddrinfo` is the automatic conformance to RFC 6724, which removes some of the work
+/// needed to implement it.
+///
+/// This resolver is a single-use object: it can only be used to perform a single host resolution.
+final public class GetaddrinfoResolver: Resolver {
     private let v4Future: EventLoopPromise<[SocketAddress]>
     private let v6Future: EventLoopPromise<[SocketAddress]>
     private let aiSocktype: NIOBSDSocket.SocketType
-    private let aiProtocol: CInt
+    private let aiProtocol: NIOBSDSocket.OptionLevel
 
     /// Create a new resolver.
     ///
@@ -113,7 +112,7 @@ public class GetaddrinfoResolver: Resolver {
     public init(
         eventLoop: EventLoop,
         aiSocktype: NIOBSDSocket.SocketType = .stream,
-        aiProtocol: CInt = CInt(IPPROTO_TCP)
+        aiProtocol: NIOBSDSocket.OptionLevel = .init(rawValue: CInt(IPPROTO_TCP))
     ) {
         self.v4Future = eventLoop.makePromise()
         self.v6Future = eventLoop.makePromise()
@@ -190,7 +189,7 @@ public class GetaddrinfoResolver: Resolver {
 
                 var aiHints: ADDRINFOW = ADDRINFOW()
                 aiHints.ai_socktype = self.aiSocktype.rawValue
-                aiHints.ai_protocol = self.aiProtocol
+                aiHints.ai_protocol = self.aiProtocol.rawValue
 
                 let iResult = GetAddrInfoW(wszHost, wszPort, &aiHints, &pResult)
                 guard iResult == 0 else {
@@ -211,7 +210,7 @@ public class GetaddrinfoResolver: Resolver {
 
         var hint = addrinfo()
         hint.ai_socktype = self.aiSocktype.rawValue
-        hint.ai_protocol = self.aiProtocol
+        hint.ai_protocol = self.aiProtocol.rawValue
         guard getaddrinfo(host, String(port), &hint, &info) == 0 else {
             self.fail(SocketAddressError.unknown(host: host, port: port))
             return
@@ -277,3 +276,9 @@ public class GetaddrinfoResolver: Resolver {
         self.v4Future.fail(error)
     }
 }
+
+#if swift(>=5.7)
+extension NIOBSDSocket.SocketType: Sendable {}
+
+extension GetaddrinfoResolver: Sendable {}
+#endif

@@ -151,20 +151,15 @@ struct Message {
         }
     }
 
-    struct ID {
-        static var startPoint: Int = -1
+    actor IdentifierGenerator {
 
-        static var lock = NSLock()
+        private var startPoint: Int = -1
 
-        static func next() -> UInt16 {
-            lock.lock()
-            defer { lock.unlock() }
-
+        func next() -> UInt16 {
             startPoint += 1
             if startPoint > Int(UInt16.max) {
                 startPoint = 0
             }
-
             return min(UInt16(startPoint), .max)
         }
     }

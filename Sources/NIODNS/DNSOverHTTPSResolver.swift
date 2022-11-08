@@ -21,7 +21,7 @@ import FoundationNetworking
 #endif
 
 /// A DNS resolver for DoH implementation.
-public class DNSOverHTTPSResolver: NIOPosix.Resolver {
+final public class DNSOverHTTPSResolver: NIOPosix.Resolver {
 
     private actor TaskActor {
         private var storage: [String: Task<Data, Error>] = [:]
@@ -47,7 +47,8 @@ public class DNSOverHTTPSResolver: NIOPosix.Resolver {
     private let v4Future: EventLoopPromise<[SocketAddress]>
     private let v6Future: EventLoopPromise<[SocketAddress]>
     private let session: URLSession = URLSession(configuration: .default)
-    private var store = TaskActor()
+    private let store = TaskActor()
+    private let identifierGenerator = Message.IdentifierGenerator()
 
     /// Initialize an instance of `DNSOverHTTPSResolver` with specified server url and eventLoop.
     /// - Parameters:
@@ -90,9 +91,10 @@ public class DNSOverHTTPSResolver: NIOPosix.Resolver {
         } else {
             task = Task {
                 let options: Message.Options = [.standardQuery, .recursionDesired]
+                let id = await identifierGenerator.next()
 
                 var buffer = ByteBuffer()
-                buffer.writeInteger(Message.ID.next())
+                buffer.writeInteger(id)
                 buffer.writeInteger(options.rawValue)
                 buffer.writeInteger(UInt16(1))
                 buffer.writeInteger(UInt16.zero)
@@ -151,3 +153,7 @@ public class DNSOverHTTPSResolver: NIOPosix.Resolver {
         }
     }
 }
+
+#if swift(>=5.7)
+extension DNSOverHTTPSResolver: Sendable {}
+#endif
