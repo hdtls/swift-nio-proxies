@@ -27,7 +27,7 @@ import NIOPosix
 import NIOSOCKS5
 import NIOSSL
 
-final public class App {
+final public class App: Sendable {
 
     private actor MutableStorage {
 
@@ -168,7 +168,15 @@ final public class App {
             .childChannelInitializer { channel in
                 let eventLoop = channel.eventLoop.next()
 
-                let channelInitializer: (RequestInfo) -> EventLoopFuture<Channel> = { req in
+                #if swift(>=5.7)
+                let channelInitializer: @Sendable (RequestInfo) -> EventLoopFuture<Channel>
+                let completion: @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
+                #else
+                let channelInitializer: (RequestInfo) -> EventLoopFuture<Channel>
+                let completion: (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
+                #endif
+
+                channelInitializer = { req in
                     let promise = eventLoop.makePromise(of: Channel.self)
                     promise.completeWithTask {
                         try await self.initializePeer(
@@ -179,7 +187,7 @@ final public class App {
                     return promise.futureResult
                 }
 
-                let completion: (RequestInfo, Channel, Channel) -> EventLoopFuture<Void> = {
+                completion = {
                     req,
                     channel,
                     peer in

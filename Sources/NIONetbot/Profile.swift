@@ -16,7 +16,7 @@ import Foundation
 import Logging
 
 /// A profile object that defines behavior and policies for a Netbot process.
-public struct Profile {
+public struct Profile: Sendable {
 
     /// The rules contains in this configuration.
     public var rules: [ParsableRule]
@@ -133,7 +133,7 @@ extension Profile: Codable {
 }
 
 /// Basic configuration object that defines behavior and polices for logging and proxy settings.
-public struct BasicConfiguration: Codable {
+public struct BasicConfiguration: Codable, Equatable, Hashable, Sendable {
 
     /// Log level use for `Logging.Logger`.`
     public var logLevel: Logger.Level
@@ -243,7 +243,7 @@ public struct BasicConfiguration: Codable {
 }
 
 /// Configuration for HTTPS traffic decraption with MitM attacks.
-public struct MitMConfiguration: Codable, Equatable {
+public struct MitMConfiguration: Codable, Equatable, Hashable, Sendable {
 
     /// A boolean value determinse whether ssl should skip server cerfitication verification.
     public var skipCertificateVerification: Bool
@@ -291,7 +291,7 @@ public struct MitMConfiguration: Codable, Equatable {
 }
 
 /// Selectable policy group object that defines policy group and current selected policy.
-public struct PolicyGroup {
+public struct PolicyGroup: Sendable {
 
     public var id: UUID = .init()
 
@@ -319,13 +319,3 @@ struct __PolicyGroup: Codable {
         case policies
     }
 }
-
-#if swift(>=5.5) && canImport(_Concurrency)
-extension Profile: Sendable {}
-
-extension BasicConfiguration: Sendable {}
-
-extension MitMConfiguration: Sendable {}
-
-extension PolicyGroup: Sendable {}
-#endif

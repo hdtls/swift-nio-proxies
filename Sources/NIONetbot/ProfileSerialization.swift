@@ -19,7 +19,7 @@ import NIOCore
 public enum ProfileSerializationError: Error {
 
     /// Error reason for invalid file
-    public enum InvalidFileErrorReason: CustomStringConvertible {
+    public enum InvalidFileErrorReason: CustomStringConvertible, Sendable {
 
         /// Line is invalid at cursor line
         case invalidLine(cursor: Int, description: String)
@@ -43,7 +43,7 @@ public enum ProfileSerializationError: Error {
     }
 
     /// Error reason for invalid rule.
-    public enum RuleParsingErrorReason: CustomStringConvertible {
+    public enum RuleParsingErrorReason: CustomStringConvertible, Sendable {
 
         /// Rule missing field.
         case missingField

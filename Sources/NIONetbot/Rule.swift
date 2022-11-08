@@ -15,9 +15,7 @@
 import Crypto
 import Foundation
 import MaxMindDB
-import NIOConcurrencyHelpers
 
-#if swift(>=5.5) && canImport(_Concurrency)
 /// A `ParsableRule` is a route that define matching conditions and policies for proxy routing
 public protocol ParsableRule: LosslessStringConvertible, Sendable {
 
@@ -40,30 +38,6 @@ public protocol ParsableRule: LosslessStringConvertible, Sendable {
     /// - Parameter description: The value to validate.
     static func validate(_ description: String) throws
 }
-#else
-/// A `ParsableRule` is a route that define matching conditions and policies for proxy routing
-public protocol ParsableRule: LosslessStringConvertible {
-
-    /// The expression fot this rule.
-    ///
-    /// If rule is collection expression is used to save external resources url string.
-    var expression: String { get set }
-
-    /// The policy pointed to by the rule.
-    var policy: String { get set }
-
-    /// Initialize an instance of `ParsableRule` with specified expression and policy.
-    init(expression: String, policy: String)
-
-    /// Rule evaluating function to determinse whether this rule match the given expression.
-    /// - Returns: True if match else false.
-    func match(_ expression: String) -> Bool
-
-    /// Validate whether given description can be parsed as `Self`.
-    /// - Parameter description: The value to validate.
-    static func validate(_ description: String) throws
-}
-#endif
 
 private protocol ParsableRulePrivate: ParsableRule {
 
@@ -161,7 +135,7 @@ extension ExternalRuleResources where Self: ParsableRule {
 
 public struct DomainKeywordRule: ParsableRule, ParsableRulePrivate {
 
-    static var label: RuleSystem.Label = .domainKeyword
+    static let label: RuleSystem.Label = .domainKeyword
 
     public var expression: String
 
@@ -183,7 +157,7 @@ public struct DomainKeywordRule: ParsableRule, ParsableRulePrivate {
 
 public struct DomainRule: ParsableRule, ParsableRulePrivate {
 
-    static var label: RuleSystem.Label = .domain
+    static let label: RuleSystem.Label = .domain
 
     public var expression: String
 
@@ -205,15 +179,13 @@ public struct DomainRule: ParsableRule, ParsableRulePrivate {
 
 public struct DomainSetRule: ExternalRuleResources, ParsableRule, ParsableRulePrivate {
 
-    static var label: RuleSystem.Label = .domainSet
+    static let label: RuleSystem.Label = .domainSet
 
     public var expression: String
 
     public var policy: String
 
-    private var domains: [String] = []
-
-    private let lock = NIOLock()
+    @Protected private var domains: [String] = []
 
     public var description: String {
         "\(Self.label.rawValue),\(expression),\(policy)"
@@ -225,11 +197,9 @@ public struct DomainSetRule: ExternalRuleResources, ParsableRule, ParsableRulePr
     }
 
     public func match(_ expression: String) -> Bool {
-        lock.withLock {
-            domains.first {
-                $0 == expression || ".\(expression)".hasSuffix($0)
-            } != nil
-        }
+        domains.first {
+            $0 == expression || ".\(expression)".hasSuffix($0)
+        } != nil
     }
 
     public mutating func loadAllRules(from file: URL) {
@@ -239,22 +209,20 @@ public struct DomainSetRule: ExternalRuleResources, ParsableRule, ParsableRulePr
             return
         }
 
-        lock.withLockVoid {
-            domains = file.split(separator: "\n")
-                .compactMap {
-                    let literal = $0.trimmingCharacters(in: .whitespaces)
-                    guard !literal.isEmpty, !literal.hasPrefix("#"), !literal.hasPrefix(";") else {
-                        return nil
-                    }
-                    return literal
+        domains = file.split(separator: "\n")
+            .compactMap {
+                let literal = $0.trimmingCharacters(in: .whitespaces)
+                guard !literal.isEmpty, !literal.hasPrefix("#"), !literal.hasPrefix(";") else {
+                    return nil
                 }
-        }
+                return literal
+            }
     }
 }
 
 public struct DomainSuffixRule: ParsableRule, ParsableRulePrivate {
 
-    static var label: RuleSystem.Label = .domainSuffix
+    static let label: RuleSystem.Label = .domainSuffix
 
     public var expression: String
 
@@ -278,7 +246,7 @@ public struct DomainSuffixRule: ParsableRule, ParsableRulePrivate {
 
 public struct FinalRule: ParsableRule, ParsableRulePrivate {
 
-    static var label: RuleSystem.Label = .final
+    static let label: RuleSystem.Label = .final
 
     public var expression: String
 
@@ -337,21 +305,15 @@ public struct FinalRule: ParsableRule, ParsableRulePrivate {
     }
 }
 
-public struct GeoIPRule: ParsableRule, ParsableRulePrivate {
+public struct GeoIPRule: ParsableRule, ParsableRulePrivate, @unchecked Sendable {
 
-    static var label: RuleSystem.Label = .geoIp
+    static let label: RuleSystem.Label = .geoIp
 
     public var expression: String
 
     public var policy: String
 
-    public static var database: MaxMindDB? {
-        get { lock.withLock { _database } }
-        set { lock.withLockVoid { _database = newValue } }
-    }
-    private static var _database: MaxMindDB?
-
-    private static let lock: NIOLock = .init()
+    @Protected public static var database: MaxMindDB?
 
     public var description: String {
         "\(Self.label.rawValue),\(expression),\(policy)"
@@ -415,7 +377,7 @@ public struct GeoIPRule: ParsableRule, ParsableRulePrivate {
 
 public struct RuleSetRule: ExternalRuleResources, ParsableRule, ParsableRulePrivate {
 
-    static var label: RuleSystem.Label = .ruleSet
+    static let label: RuleSystem.Label = .ruleSet
 
     public var expression: String
 
@@ -425,9 +387,7 @@ public struct RuleSetRule: ExternalRuleResources, ParsableRule, ParsableRulePriv
         "\(Self.label.rawValue),\(expression),\(policy)"
     }
 
-    private var standardRules: [ParsableRule] = []
-
-    private let lock = NIOLock()
+    @Protected private var standardRules: [ParsableRule] = []
 
     public init(expression: String, policy: String) {
         self.expression = expression
@@ -435,9 +395,7 @@ public struct RuleSetRule: ExternalRuleResources, ParsableRule, ParsableRulePriv
     }
 
     public func match(_ expression: String) -> Bool {
-        lock.withLock {
-            standardRules.first(where: { $0.match(expression) }) != nil
-        }
+        standardRules.first(where: { $0.match(expression) }) != nil
     }
 
     public mutating func loadAllRules(from file: URL) {
@@ -446,20 +404,18 @@ public struct RuleSetRule: ExternalRuleResources, ParsableRule, ParsableRulePriv
         else {
             return
         }
-        lock.withLockVoid {
-            standardRules = file.split(separator: "\n")
-                .compactMap {
-                    let literal = $0.trimmingCharacters(in: .whitespaces)
-                    guard !literal.isEmpty, !literal.hasPrefix("#"), !literal.hasPrefix(";") else {
-                        return nil
-                    }
-                    let label = String(literal.split(separator: ",").first!)
-                    let description = literal + ",\(policy)"
-                    guard let factory = RuleSystem.factory(for: .init(rawValue: label)) else {
-                        return nil
-                    }
-                    return factory.init(description)
+        standardRules = file.split(separator: "\n")
+            .compactMap {
+                let literal = $0.trimmingCharacters(in: .whitespaces)
+                guard !literal.isEmpty, !literal.hasPrefix("#"), !literal.hasPrefix(";") else {
+                    return nil
                 }
-        }
+                let label = String(literal.split(separator: ",").first!)
+                let description = literal + ",\(policy)"
+                guard let factory = RuleSystem.factory(for: .init(rawValue: label)) else {
+                    return nil
+                }
+                return factory.init(description)
+            }
     }
 }

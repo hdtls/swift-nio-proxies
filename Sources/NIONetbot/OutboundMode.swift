@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 /// The network outbound mode.
-public enum OutboundMode: String, CaseIterable {
+public enum OutboundMode: String, CaseIterable, Sendable {
 
     /// Direct mode. In this mode all requests will be sent directly.
     case direct
@@ -38,7 +38,3 @@ extension OutboundMode: CustomStringConvertible {
         }
     }
 }
-
-#if swift(>=5.5) && canImport(_Concurrency)
-extension OutboundMode: Sendable {}
-#endif
