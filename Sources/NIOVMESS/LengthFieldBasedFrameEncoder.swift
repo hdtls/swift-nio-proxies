@@ -188,3 +188,8 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
         return try prepareFrame(data: .init())
     }
 }
+
+#if swift(>=5.7)
+@available(*, unavailable)
+extension LengthFieldBasedFrameEncoder: Sendable {}
+#endif

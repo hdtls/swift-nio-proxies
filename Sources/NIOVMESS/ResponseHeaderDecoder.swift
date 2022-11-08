@@ -369,3 +369,8 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
         return .socketAddress(try .init(ipAddress: string, port: 0))
     }
 }
+
+#if swift(>=5.7)
+@available(*, unavailable)
+extension ResponseHeaderDecoder: Sendable {}
+#endif

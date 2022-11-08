@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 /// `ProtocolVersion` defines VMESS protocol version.
-public struct ProtocolVersion: Codable, Equatable, RawRepresentable {
+public struct ProtocolVersion: Codable, Equatable, RawRepresentable, Sendable {
 
     public var rawValue: UInt8
 
@@ -29,7 +29,7 @@ extension ProtocolVersion {
 }
 
 /// `Algorithm` defines current VMESS supported data security algorithm.
-public enum Algorithm: UInt8, Codable, Equatable {
+public enum Algorithm: UInt8, Codable, Equatable, Sendable {
 
     /// AES-128-CFB
     case aes128cfb = 1
@@ -60,7 +60,7 @@ public enum Algorithm: UInt8, Codable, Equatable {
 }
 
 /// `Command` object defines VMESS command.
-public struct Command: Codable, Equatable, RawRepresentable {
+public struct Command: Codable, Equatable, RawRepresentable, Sendable {
 
     public typealias RawValue = UInt8
 
@@ -84,7 +84,7 @@ extension Command {
 }
 
 /// A `StreamOptions` that contains VMESS stream setting options.
-public struct StreamOptions: Codable, Equatable, OptionSet {
+public struct StreamOptions: Codable, Equatable, OptionSet, Sendable {
 
     public typealias RawValue = UInt8
 
@@ -120,13 +120,3 @@ extension StreamOptions {
     /// Turn on packet length authentication.
     public static let authenticatedLength = StreamOptions.init(rawValue: 0x10)
 }
-
-#if swift(>=5.5) && canImport(_Concurrency)
-extension ProtocolVersion: Sendable {}
-
-extension Algorithm: Sendable {}
-
-extension Command: Sendable {}
-
-extension StreamOptions: Sendable {}
-#endif

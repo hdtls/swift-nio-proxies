@@ -311,3 +311,8 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
         return Array(result.prefix(16))
     }
 }
+
+#if swift(>=5.7)
+@available(*, unavailable)
+extension RequestEncodingHandler: Sendable {}
+#endif

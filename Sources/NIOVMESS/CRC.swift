@@ -16,7 +16,7 @@
 enum CRC32 {
 
     @usableFromInline
-    static var table: [UInt32] = {
+    static let table: [UInt32] = {
         (0...255).map { i -> UInt32 in
             (0..<8).reduce(
                 UInt32(i),

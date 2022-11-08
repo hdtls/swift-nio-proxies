@@ -211,3 +211,8 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
         return context.channel.allocator.buffer(capacity: 0)
     }
 }
+
+#if swift(>=5.7)
+@available(*, unavailable)
+extension LengthFieldBasedFrameDecoder: Sendable {}
+#endif

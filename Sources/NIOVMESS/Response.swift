@@ -17,7 +17,7 @@ import NIOCore
 import NIONetbotMisc
 
 /// `Response` object defines VMESS response data object.
-public struct Response {
+public struct Response: Sendable {
 
     /// Authentication code.
     public var authenticationCode: UInt8
@@ -35,13 +35,7 @@ public struct Response {
     public var body: ByteBuffer?
 }
 
-#if swift(>=5.5) && canImport(_Concurrency)
-extension Response: Sendable {}
-
 public protocol ResponseCommand: Sendable {}
-#else
-public protocol ResponseCommand {}
-#endif
 
 public struct SwitchAccountCommand: ResponseCommand {
 

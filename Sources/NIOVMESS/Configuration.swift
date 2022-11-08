@@ -15,7 +15,7 @@
 import Foundation
 
 /// `Configuration` object defines VMESS request infomation.
-public struct Configuration {
+public struct Configuration: Sendable {
 
     /// The VMESS protocol version.
     public let version: ProtocolVersion = .v1
@@ -61,7 +61,3 @@ public struct Configuration {
         self.options = options
     }
 }
-
-#if swift(>=5.5) && canImport(_Concurrency)
-extension Configuration: Sendable {}
-#endif
