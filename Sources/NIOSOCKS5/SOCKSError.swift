@@ -20,7 +20,7 @@ public enum SOCKSError: Error {
     case unsupportedProtocolVersion
 
     ///  The SOCKS server failed to connect to the target host.
-    public enum ReplyFailureReason {
+    public enum ReplyFailureReason: Sendable {
 
         /// The SOCKS server encountered an internal failure.
         case generalSOCKSServerFailure
@@ -54,7 +54,7 @@ public enum SOCKSError: Error {
     /// The client or server receieved data when it did not expect to.
     case unexpectedRead
 
-    public enum AuthenticationFailureReason {
+    public enum AuthenticationFailureReason: Sendable {
         /// The authentication credentials is incorrect.
         case badCredentials
 

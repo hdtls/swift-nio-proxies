@@ -27,7 +27,3 @@ extension ProtocolVersion {
     /// SOCKS5.
     static let v5 = ProtocolVersion.init(rawValue: 0x05)
 }
-
-#if swift(>=5.5) && canImport(_Concurrency)
-extension ProtocolVersion: Sendable {}
-#endif

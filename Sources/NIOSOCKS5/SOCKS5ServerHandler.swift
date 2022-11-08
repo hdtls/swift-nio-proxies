@@ -302,3 +302,8 @@ extension SOCKS5ServerHandler {
         context.close(promise: nil)
     }
 }
+
+#if swift(>=5.7)
+@available(*, unavailable)
+extension SOCKS5ServerHandler: Sendable {}
+#endif

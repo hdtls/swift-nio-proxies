@@ -335,6 +335,11 @@ extension SOCKS5ClientHandler {
 /// A `Channel` user event that is sent when a SOCKS connection has been established
 ///
 /// After this event has been received it is save to remove the `SOCKS5ClientHandler` from the channel pipeline.
-public enum SOCKSUserEvent: Equatable {
+public enum SOCKSUserEvent: Equatable, Sendable {
     case handshakeCompleted
 }
+
+#if swift(>=5.7)
+@available(*, unavailable)
+extension SOCKS5ClientHandler: Sendable {}
+#endif
