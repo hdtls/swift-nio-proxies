@@ -53,6 +53,31 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     /// The completion handler when proxy connection established.
     private let completion: (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
 
+    #if swift(>=5.7)
+    /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
+    ///
+    /// - Parameters:
+    ///   - username: Username for proxy authentication.
+    ///   - passwordReference: Password for proxy authentication.
+    ///   - authenticationRequired: A boolean value deterinse whether server should evaluate proxy authentication request.
+    ///   - channelInitializer: The outbound channel initializer, returns the initialized outbound channel using the given request info.
+    ///   - completion: The completion handler when proxy connection established, returns `EventLoopFuture<Void>` using given request info, server channel and outbound client channel.
+    @preconcurrency
+    public init(
+        username: String,
+        passwordReference: String,
+        authenticationRequired: Bool,
+        channelInitializer: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Channel>,
+        completion: @escaping @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
+    ) {
+        self.username = username
+        self.passwordReference = passwordReference
+        self.authenticationRequired = authenticationRequired
+        self.channelInitializer = channelInitializer
+        self.completion = completion
+        self.state = .idle
+    }
+    #else
     /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
     ///
     /// - Parameters:
@@ -75,6 +100,7 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
         self.completion = completion
         self.state = .idle
     }
+    #endif
 
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         guard state != .active else {
@@ -149,7 +175,9 @@ extension HTTPProxyServerHandler {
         if head.method == .CONNECT {
             // New request is complete. We don't want any more data from now on.
             _ = context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
-                .flatMap(context.pipeline.removeHandler)
+                .flatMap {
+                    context.pipeline.removeHandler($0)
+                }
         }
 
         // Proxy Authorization
@@ -202,7 +230,9 @@ extension HTTPProxyServerHandler {
             context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
 
             context.pipeline.handler(type: HTTPResponseEncoder.self)
-                .flatMap(context.pipeline.removeHandler)
+                .flatMap {
+                    context.pipeline.removeHandler($0)
+                }
                 .cascade(to: promise)
         } else {
             promise.succeed(())
@@ -250,6 +280,11 @@ extension HTTPProxyServerHandler {
         context.close(promise: nil)
     }
 }
+
+#if swift(>=5.7)
+@available(*, unavailable)
+extension HTTPProxyServerHandler: Sendable {}
+#endif
 
 extension HTTPHeaders {
 

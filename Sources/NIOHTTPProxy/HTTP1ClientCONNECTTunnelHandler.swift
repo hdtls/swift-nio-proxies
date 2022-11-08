@@ -242,3 +242,8 @@ extension HTTP1ClientCONNECTTunnelHandler {
         context.close(promise: nil)
     }
 }
+
+#if swift(>=5.7)
+@available(*, unavailable)
+extension HTTP1ClientCONNECTTunnelHandler: Sendable {}
+#endif
