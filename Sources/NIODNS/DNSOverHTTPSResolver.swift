@@ -12,12 +12,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
 import NIOCore
 import NIOPosix
 
 #if canImport(FoundationNetworking)
-import FoundationNetworking
+@preconcurrency import Foundation
+@preconcurrency import FoundationNetworking
+#else
+import Foundation
 #endif
 
 /// A DNS resolver for DoH implementation.
