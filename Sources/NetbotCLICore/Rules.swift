@@ -17,7 +17,7 @@ import Foundation
 import MaxMindDB
 import NIONetbot
 
-protocol ParsableRulePrivate: ParsableRule {
+protocol CheckedParsableRule: ParsableRule {
 
     static var label: RuleSystem.Label { get }
 
@@ -26,7 +26,7 @@ protocol ParsableRulePrivate: ParsableRule {
     static func validate(_ description: String) throws
 }
 
-extension ParsableRulePrivate {
+extension CheckedParsableRule {
 
     init?(_ description: String) {
         // Rule definitions are comma-separated except comments, and comment are
@@ -115,7 +115,7 @@ extension ExternalRuleResources where Self: ParsableRule {
     }
 }
 
-struct DomainKeywordRule: ParsableRule, ParsableRulePrivate {
+struct DomainKeywordRule: ParsableRule, CheckedParsableRule {
 
     static let label: RuleSystem.Label = .domainKeyword
 
@@ -137,7 +137,7 @@ struct DomainKeywordRule: ParsableRule, ParsableRulePrivate {
     }
 }
 
-struct DomainRule: ParsableRule, ParsableRulePrivate {
+struct DomainRule: ParsableRule, CheckedParsableRule {
 
     static let label: RuleSystem.Label = .domain
 
@@ -159,7 +159,7 @@ struct DomainRule: ParsableRule, ParsableRulePrivate {
     }
 }
 
-struct DomainSetRule: ExternalRuleResources, ParsableRule, ParsableRulePrivate {
+struct DomainSetRule: ExternalRuleResources, ParsableRule, CheckedParsableRule {
 
     static let label: RuleSystem.Label = .domainSet
 
@@ -202,7 +202,7 @@ struct DomainSetRule: ExternalRuleResources, ParsableRule, ParsableRulePrivate {
     }
 }
 
-struct DomainSuffixRule: ParsableRule, ParsableRulePrivate {
+struct DomainSuffixRule: ParsableRule, CheckedParsableRule {
 
     static let label: RuleSystem.Label = .domainSuffix
 
@@ -226,7 +226,7 @@ struct DomainSuffixRule: ParsableRule, ParsableRulePrivate {
     }
 }
 
-struct GeoIPRule: ParsableRule, ParsableRulePrivate, @unchecked Sendable {
+struct GeoIPRule: ParsableRule, CheckedParsableRule, @unchecked Sendable {
 
     static let label: RuleSystem.Label = .geoIp
 
@@ -296,7 +296,7 @@ struct GeoIPRule: ParsableRule, ParsableRulePrivate, @unchecked Sendable {
 //    }
 //}
 
-struct RuleSetRule: ExternalRuleResources, ParsableRule, ParsableRulePrivate {
+struct RuleSetRule: ExternalRuleResources, ParsableRule, CheckedParsableRule {
 
     static let label: RuleSystem.Label = .ruleSet
 
@@ -341,7 +341,7 @@ struct RuleSetRule: ExternalRuleResources, ParsableRule, ParsableRulePrivate {
     }
 }
 
-extension FinalRule: ParsableRulePrivate {
+extension FinalRule: CheckedParsableRule {
 
     static let label: RuleSystem.Label = .final
 

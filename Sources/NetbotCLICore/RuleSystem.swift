@@ -34,7 +34,7 @@ enum RuleSystem {
     /// The object to store parsable rule metatype.
     final private class Registry {
 
-        private var storage: [Label: ParsableRulePrivate.Type] = [:]
+        private var storage: [Label: CheckedParsableRule.Type] = [:]
 
         let lock: NIOLock = .init()
 
@@ -55,13 +55,13 @@ enum RuleSystem {
             use(RuleSetRule.self, as: .ruleSet)
         }
 
-        func factory(for id: Label) -> ParsableRulePrivate.Type? {
+        func factory(for id: Label) -> CheckedParsableRule.Type? {
             lock.withLock {
                 storage[id]
             }
         }
 
-        func use(_ type: ParsableRulePrivate.Type, as id: Label) {
+        func use(_ type: CheckedParsableRule.Type, as id: Label) {
             lock.withLock {
                 storage[id] = type
             }
@@ -73,7 +73,7 @@ enum RuleSystem {
     /// Request rule metadata with specified id value.
     /// - Parameter id: The id use to lookup rule metadata.
     /// - Returns: `ParsableRule` type if find or nil.
-    static func factory(for id: Label) -> ParsableRulePrivate.Type? {
+    static func factory(for id: Label) -> CheckedParsableRule.Type? {
         registry.factory(for: id)
     }
 
@@ -81,7 +81,7 @@ enum RuleSystem {
     /// - Parameters:
     ///   - type: The rule metatype.
     ///   - id: The id used to register this rule metatype.
-    static func use(_ type: ParsableRulePrivate.Type, as id: Label) {
+    static func use(_ type: CheckedParsableRule.Type, as id: Label) {
         registry.use(type, as: id)
     }
 
