@@ -15,7 +15,7 @@
 import ArgumentParser
 import Foundation
 import Logging
-import NIONetbot
+import NetbotCLICore
 
 #if canImport(FoundationNetworking)
 import FoundationNetworking
@@ -211,8 +211,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
             profile: profile,
             outboundMode: outboundMode,
             enableHTTPCapture: enableHTTPCapture,
-            enableMitm: enableMitm,
-            maxMindDB: .init(file: maxminddbURL.path)
+            enableMitm: enableMitm
         )
         .run()
     }

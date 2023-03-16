@@ -12,9 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NIONetbot
 import XCTest
 
-@testable import NIONetbot
+@testable import NetbotCLICore
 
 #if canImport(FoundationNetworking)
 import FoundationNetworking

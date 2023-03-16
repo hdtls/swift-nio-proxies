@@ -19,7 +19,7 @@ import Logging
 public struct Profile: Sendable {
 
     /// The rules contains in this configuration.
-    public var rules: [ParsableRule]
+    public var rules: [any ParsableRule]
 
     /// A configuration object that provides HTTP MitM configuration for this process.
     public var mitm: MitMConfiguration
@@ -31,16 +31,16 @@ public struct Profile: Sendable {
     public var policies: [any Policy]
 
     /// All selectable policy groups contains in this configuration object.
-    public var policyGroups: [PolicyGroup]
+    public var policyGroups: [any PolicyGroup]
 
     /// Initialize an instance of `Profile` with the specified general, replicat, rules, mitm,
     /// polcies and policyGroups.
     public init(
         general: BasicConfiguration,
-        rules: [ParsableRule],
+        rules: [any ParsableRule],
         mitm: MitMConfiguration,
         policies: [any Policy],
-        policyGroups: [PolicyGroup]
+        policyGroups: [any PolicyGroup]
     ) {
         self.general = general
         self.rules = rules
@@ -65,75 +65,8 @@ public struct Profile: Sendable {
     }
 }
 
-extension Profile: Codable {
-
-    enum CodingKeys: String, CodingKey {
-        case rules
-        case mitm
-        case general
-        case policies
-        case policyGroups
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let ruleLiterals = try container.decodeIfPresent([String].self, forKey: .rules) ?? []
-        self.rules = try ruleLiterals.map {
-            var components = $0.split(separator: ",")
-            let id = String(components.removeFirst())
-            guard let factory = RuleSystem.factory(for: .init(rawValue: id)) else {
-                throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
-            }
-            try factory.validate($0)
-            return factory.init($0)!
-        }
-
-        self.mitm =
-            try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
-        self.general =
-            try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
-
-        let policies = try container.decodeIfPresent([__Policy].self, forKey: .policies) ?? []
-        self.policies = policies.map { $0.base }
-
-        let policyGroups =
-            try container.decodeIfPresent([__PolicyGroup].self, forKey: .policyGroups) ?? []
-
-        let supportedPolicies = Builtin.policies + self.policies
-
-        self.policyGroups = policyGroups.map {
-            PolicyGroup(
-                name: $0.name,
-                policies: $0.policies.compactMap { policy in
-                    supportedPolicies.first {
-                        $0.name == policy
-                    }
-                }
-            )
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(
-            rules.isEmpty ? nil : rules.map { $0.description },
-            forKey: .rules
-        )
-        try container.encode(mitm, forKey: .mitm)
-        try container.encode(general, forKey: .general)
-        try container.encodeIfPresent(
-            policies.isEmpty ? nil : policies.map(__Policy.init),
-            forKey: .policies
-        )
-        try container.encodeIfPresent(
-            policyGroups.isEmpty ? nil : policyGroups.map { $0.name },
-            forKey: .policyGroups
-        )
-    }
-}
-
 /// Basic configuration object that defines behavior and polices for logging and proxy settings.
-public struct BasicConfiguration: Codable, Equatable, Hashable, Sendable {
+public struct BasicConfiguration: Sendable {
 
     /// Log level use for `Logging.Logger`.`
     public var logLevel: Logger.Level
@@ -198,52 +131,10 @@ public struct BasicConfiguration: Codable, Equatable, Hashable, Sendable {
             excludeSimpleHostnames: false
         )
     }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.logLevel = try container.decodeIfPresent(Logger.Level.self, forKey: .logLevel) ?? .info
-        self.dnsServers = try container.decodeIfPresent([String].self, forKey: .dnsServers) ?? []
-        self.exceptions = try container.decodeIfPresent([String].self, forKey: .exceptions) ?? []
-        self.httpListenAddress = try container.decodeIfPresent(
-            String.self,
-            forKey: .httpListenAddress
-        )
-        self.httpListenPort = try container.decodeIfPresent(Int.self, forKey: .httpListenPort)
-        self.socksListenAddress = try container.decodeIfPresent(
-            String.self,
-            forKey: .socksListenAddress
-        )
-        self.socksListenPort = try container.decodeIfPresent(Int.self, forKey: .socksListenPort)
-        self.excludeSimpleHostnames =
-            try container.decodeIfPresent(Bool.self, forKey: .excludeSimpleHostnames) ?? false
-    }
-
-    enum CodingKeys: CodingKey {
-        case logLevel
-        case dnsServers
-        case exceptions
-        case httpListenAddress
-        case httpListenPort
-        case socksListenAddress
-        case socksListenPort
-        case excludeSimpleHostnames
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(self.logLevel, forKey: .logLevel)
-        try container.encode(self.dnsServers, forKey: .dnsServers)
-        try container.encode(self.exceptions, forKey: .exceptions)
-        try container.encodeIfPresent(self.httpListenAddress, forKey: .httpListenAddress)
-        try container.encodeIfPresent(self.httpListenPort, forKey: .httpListenPort)
-        try container.encodeIfPresent(self.socksListenAddress, forKey: .socksListenAddress)
-        try container.encodeIfPresent(self.socksListenPort, forKey: .socksListenPort)
-        try container.encode(self.excludeSimpleHostnames, forKey: .excludeSimpleHostnames)
-    }
 }
 
 /// Configuration for HTTPS traffic decraption with MitM attacks.
-public struct MitMConfiguration: Codable, Equatable, Hashable, Sendable {
+public struct MitMConfiguration: Sendable {
 
     /// A boolean value determinse whether ssl should skip server cerfitication verification.
     public var skipCertificateVerification: Bool
@@ -291,31 +182,28 @@ public struct MitMConfiguration: Codable, Equatable, Hashable, Sendable {
 }
 
 /// Selectable policy group object that defines policy group and current selected policy.
-public struct PolicyGroup: Sendable {
-
-    public var id: UUID = .init()
+//public struct PolicyGroup: Sendable {
+//
+//    public var id: UUID = .init()
+//
+//    /// The name for this PolicyGroup.
+//    public var name: String
+//
+//    /// Policies included in this policy group.
+//    public var policies: [any Policy]
+//
+//    /// Initialize an instance of `PolicyGroup` with specified name and policies.
+//    public init(id: UUID = .init(), name: String, policies: [any Policy]) {
+//        self.id = id
+//        self.name = name
+//        self.policies = policies
+//    }
+//}
+public protocol PolicyGroup: Sendable {
 
     /// The name for this PolicyGroup.
-    public var name: String
+    var name: String { get set }
 
     /// Policies included in this policy group.
-    public var policies: [any Policy]
-
-    /// Initialize an instance of `PolicyGroup` with specified name and policies.
-    public init(id: UUID = .init(), name: String, policies: [any Policy]) {
-        self.id = id
-        self.name = name
-        self.policies = policies
-    }
-}
-
-/// PolicyGroup coding wrapper.
-struct __PolicyGroup: Codable {
-    let name: String
-    let policies: [String]
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case policies
-    }
+    var policies: [String] { get set }
 }

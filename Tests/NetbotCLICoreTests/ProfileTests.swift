@@ -14,7 +14,7 @@
 
 import XCTest
 
-@testable import NIONetbot
+@testable import NetbotCLICore
 
 final class ProfileTests: XCTestCase {
 
@@ -415,7 +415,7 @@ final class ProfileTests: XCTestCase {
         XCTAssertEqual(result.count, 2)
         XCTAssertEqual(result.first?.name, "PROXY")
         XCTAssertEqual(result.first?.policies.count, 1)
-        XCTAssertTrue(result.first!.policies.contains(where: { $0.name == "HTTP" }))
+        XCTAssertTrue(result.first!.policies.contains(where: { $0 == "HTTP" }))
         XCTAssertEqual(result.last?.name, "BLOCK")
         XCTAssertEqual(result.last?.policies.count, 3)
     }

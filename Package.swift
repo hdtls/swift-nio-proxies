@@ -47,7 +47,7 @@ let package = Package(
         .library(name: "NIOSS", targets: ["NIOSS"]),
         .library(name: "NIOTrojan", targets: ["NIOTrojan"]),
         .library(name: "NIOVMESS", targets: ["NIOVMESS"]),
-        .executable(name: "netbotcli", targets: ["NIONetbotCLI"]),
+        .executable(name: "netbotcli", targets: ["NetbotCLI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.0.1"),
@@ -103,16 +103,24 @@ let package = Package(
                 swiftNIOSSL,
                 swiftNIOHTTP1,
                 swiftNIOTransportServices,
-                .product(name: "MaxMindDB", package: "swift-maxminddb"),
                 .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
                 .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
-                .product(name: "NIOExtras", package: "swift-nio-extras"),
+                .product(name: "NIOExtras", package: "swift-nio-extras")
             ]
         ),
         .target(name: "PrettyBytes"),
+        .target(
+            name: "NetbotCLICore",
+            dependencies: [
+                "NIONetbot",
+                swiftArgumentParser,
+                swiftLog,
+                .product(name: "MaxMindDB", package: "swift-maxminddb")
+            ]
+        ),
         .executableTarget(
-            name: "NIONetbotCLI",
-            dependencies: ["NIONetbot", swiftArgumentParser, swiftLog]
+            name: "NetbotCLI",
+            dependencies: ["NetbotCLICore", swiftArgumentParser, swiftLog]
         ),
         .testTarget(name: "NIOHTTPMitMTests", dependencies: ["NIOHTTPMitM", swiftNIO]),
         .testTarget(name: "NIONetbotMiscTests", dependencies: ["NIONetbotMisc", swiftNIO]),
@@ -145,6 +153,13 @@ let package = Package(
                 swiftNIOSSL,
                 swiftNIOHTTP1,
                 swiftNIOTransportServices
+            ]
+        ),
+        .testTarget(
+            name: "NetbotCLICoreTests",
+            dependencies: [
+                "NetbotCLICore",
+                swiftNIO
             ],
             exclude: ["ParsableRuleTests.g.swift.gyb"]
         )

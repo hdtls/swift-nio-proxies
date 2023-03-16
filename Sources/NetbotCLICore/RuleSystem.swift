@@ -13,11 +13,12 @@
 //===----------------------------------------------------------------------===//
 
 import NIOConcurrencyHelpers
+import NIONetbot
 
-public enum RuleSystem {
+enum RuleSystem {
 
     /// Label object use to identifier `ParsableRule` metadata.
-    public struct Label: Hashable, RawRepresentable, ExpressibleByStringLiteral {
+    struct Label: Hashable, RawRepresentable, ExpressibleByStringLiteral {
 
         public var rawValue: String
 
@@ -33,7 +34,7 @@ public enum RuleSystem {
     /// The object to store parsable rule metatype.
     final private class Registry {
 
-        private var storage: [Label: ParsableRule.Type] = [:]
+        private var storage: [Label: ParsableRulePrivate.Type] = [:]
 
         let lock: NIOLock = .init()
 
@@ -54,13 +55,13 @@ public enum RuleSystem {
             use(RuleSetRule.self, as: .ruleSet)
         }
 
-        func factory(for id: Label) -> ParsableRule.Type? {
+        func factory(for id: Label) -> ParsableRulePrivate.Type? {
             lock.withLock {
                 storage[id]
             }
         }
 
-        func use(_ type: ParsableRule.Type, as id: Label) {
+        func use(_ type: ParsableRulePrivate.Type, as id: Label) {
             lock.withLock {
                 storage[id] = type
             }
@@ -72,7 +73,7 @@ public enum RuleSystem {
     /// Request rule metadata with specified id value.
     /// - Parameter id: The id use to lookup rule metadata.
     /// - Returns: `ParsableRule` type if find or nil.
-    public static func factory(for id: Label) -> ParsableRule.Type? {
+    static func factory(for id: Label) -> ParsableRulePrivate.Type? {
         registry.factory(for: id)
     }
 
@@ -80,12 +81,12 @@ public enum RuleSystem {
     /// - Parameters:
     ///   - type: The rule metatype.
     ///   - id: The id used to register this rule metatype.
-    public static func use(_ type: ParsableRule.Type, as id: Label) {
+    static func use(_ type: ParsableRulePrivate.Type, as id: Label) {
         registry.use(type, as: id)
     }
 
     /// Labels for all registered rules.
-    public static var labels: [Label] {
+    static var labels: [Label] {
         registry.allLabels
     }
 }
@@ -93,23 +94,23 @@ public enum RuleSystem {
 extension RuleSystem.Label {
 
     /// Label for `DOMAIN` rule.
-    public static var domain: RuleSystem.Label { "DOMAIN" }
+    static var domain: RuleSystem.Label { "DOMAIN" }
 
     /// Label for `DOMAIN-SUFFIX` rule.
-    public static var domainSuffix: RuleSystem.Label { "DOMAIN-SUFFIX" }
+    static var domainSuffix: RuleSystem.Label { "DOMAIN-SUFFIX" }
 
     /// Label for `DOMAIN-KEYWORD` rule.
-    public static var domainKeyword: RuleSystem.Label { "DOMAIN-KEYWORD" }
+    static var domainKeyword: RuleSystem.Label { "DOMAIN-KEYWORD" }
 
     /// Label for `DOMAIN-SET` rule.
-    public static var domainSet: RuleSystem.Label { "DOMAIN-SET" }
+    static var domainSet: RuleSystem.Label { "DOMAIN-SET" }
 
     /// Label for `RULE-SET` rule.
-    public static var ruleSet: RuleSystem.Label { "RULE-SET" }
+    static var ruleSet: RuleSystem.Label { "RULE-SET" }
 
     /// Label for `GEOIP` rule.
-    public static var geoIp: RuleSystem.Label { "GEOIP" }
+    static var geoIp: RuleSystem.Label { "GEOIP" }
 
     /// Label for `FINAL` rule.
-    public static var final: RuleSystem.Label { "FINAL" }
+    static var final: RuleSystem.Label { "FINAL" }
 }

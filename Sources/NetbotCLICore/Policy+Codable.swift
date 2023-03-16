@@ -12,16 +12,16 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
+import NIONetbot
 
 /// Policy coding wrapper.
 struct __Policy {
 
     /// The actual policy value.
-    var base: any Policy
+    var base: any NIONetbot.Policy
 
     /// Initialize an instance of `__Policy` with specified base value.
-    init(_ base: any Policy) {
+    init(_ base: any NIONetbot.Policy) {
         self.base = base
     }
 }

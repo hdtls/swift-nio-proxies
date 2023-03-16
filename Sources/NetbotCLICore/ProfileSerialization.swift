@@ -14,6 +14,7 @@
 
 import Foundation
 import NIOCore
+import NIONetbot
 
 /// Errors that can be raised while parsing profile file.
 public enum ProfileSerializationError: Error {
@@ -265,8 +266,8 @@ open class ProfileSerialization {
                     __groupKeyedByLine[cursor] = [o.0: policies]
 
                     let jsonValue = JSONValue.object([
-                        __PolicyGroup.CodingKeys.name.rawValue: .string(o.0),
-                        __PolicyGroup.CodingKeys.policies.rawValue: .array(
+                        PolicyGroup.CodingKeys.name.rawValue: .string(o.0),
+                        PolicyGroup.CodingKeys.policies.rawValue: .array(
                             policies.map(JSONValue.string)
                         ),
                     ])

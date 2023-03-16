@@ -13,8 +13,9 @@
 //===----------------------------------------------------------------------===//
 
 import XCTest
+import NIONetbot
 
-@testable import NIONetbot
+@testable import NetbotCLICore
 
 #if canImport(FoundationNetworking)
 import FoundationNetworking

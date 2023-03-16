@@ -14,7 +14,6 @@
 
 import Foundation
 import Logging
-import MaxMindDB
 import NIOCore
 import NIODNS
 import NIOExtras
@@ -78,8 +77,7 @@ final public class App: Sendable {
         profile: Profile,
         outboundMode: OutboundMode = .direct,
         enableHTTPCapture: Bool = false,
-        enableMitm: Bool = false,
-        maxMindDB: MaxMindDB
+        enableMitm: Bool = false
     ) {
         self.logger = logger
         self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
@@ -89,7 +87,6 @@ final public class App: Sendable {
             enableHTTPCapture: enableHTTPCapture,
             enableMitm: enableMitm
         )
-        GeoIPRule.database = maxMindDB
     }
 
     public func run() async throws {
@@ -322,7 +319,7 @@ final public class App: Sendable {
         // `policyGroups`, if group exists use group's
         // `selected` as policy ID else use rule's policy as ID.
         if let g = profile.policyGroups.first(where: { $0.name == savedFinalRule.policy }) {
-            preferred = g.policies.first?.name
+            preferred = g.policies.first
         } else {
             preferred = savedFinalRule.policy
         }
