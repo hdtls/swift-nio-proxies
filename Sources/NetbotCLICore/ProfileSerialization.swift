@@ -91,12 +91,12 @@ open class ProfileSerialization {
 
     struct JSONKey: Equatable, RawRepresentable {
 
-        static let general: JSONKey = .init(rawValue: "general")!
+        static let basicSettings: JSONKey = .init(rawValue: "basic_settings")!
         static let replica: JSONKey = .init(rawValue: "replica")!
         static let policies: JSONKey = .init(rawValue: "policies")!
         static let policyGroups: JSONKey = .init(rawValue: "policy_groups")!
         static let rules: JSONKey = .init(rawValue: "rules")!
-        static let mitm: JSONKey = .init(rawValue: "mitm")!
+        static let manInTheMiddleSettings: JSONKey = .init(rawValue: "man_in_the_middle_settings")!
 
         typealias RawValue = String
 
@@ -105,7 +105,7 @@ open class ProfileSerialization {
         init?(rawValue: RawValue) {
             switch rawValue {
                 case "[General]":
-                    self.rawValue = "general"
+                    self.rawValue = "basic_settings"
                 case "[Policies]":
                     self.rawValue = "policies"
                 case "[Policy Group]":
@@ -113,7 +113,7 @@ open class ProfileSerialization {
                 case "[Rule]":
                     self.rawValue = "rules"
                 case "[MitM]":
-                    self.rawValue = "mitm"
+                    self.rawValue = "man_in_the_middle_settings"
                 default:
                     // Convert kebab case to snake case
                     self.rawValue = rawValue.replacingOccurrences(of: "-", with: "_")
@@ -371,7 +371,7 @@ open class ProfileSerialization {
             }
 
             switch key {
-                case JSONKey.general.rawValue:
+                case JSONKey.basicSettings.rawValue:
                     components.append("[General]")
                 case JSONKey.policies.rawValue:
                     components.append("[Policies]")
@@ -379,7 +379,7 @@ open class ProfileSerialization {
                     components.append("[Policy Group]")
                 case JSONKey.rules.rawValue:
                     components.append("[Rule]")
-                case JSONKey.mitm.rawValue:
+                case JSONKey.manInTheMiddleSettings.rawValue:
                     components.append("[MitM]")
                 default:
                     components.append("\(key)")

@@ -12,20 +12,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-import Logging
-
 /// A profile object that defines behavior and policies for a Netbot process.
 public struct Profile: Sendable {
 
     /// The rules contains in this configuration.
     public var rules: [any ParsableRule]
 
-    /// A configuration object that provides HTTP MitM configuration for this process.
-    public var mitm: MitMConfiguration
+    /// A setting object that provides HTTP MitM settings for this process.
+    public var manInTheMiddleSettings: ManInTheMiddleSettings
 
-    /// A configuration object that provides general configuration for this process.
-    public var general: BasicConfiguration
+    /// A setting object that provides basic settings for this process.
+    public var basicSettings: BasicSettings
 
     /// All proxy policy object contains in this configuration object.
     public var policies: [any Policy]
@@ -33,18 +30,18 @@ public struct Profile: Sendable {
     /// All selectable policy groups contains in this configuration object.
     public var policyGroups: [any PolicyGroup]
 
-    /// Initialize an instance of `Profile` with the specified general, replicat, rules, mitm,
+    /// Initialize an instance of `Profile` with the specified basicSettings, replicat, rules, manInTheMiddleSettings,
     /// polcies and policyGroups.
     public init(
-        general: BasicConfiguration,
+        basicSettings: BasicSettings,
         rules: [any ParsableRule],
-        mitm: MitMConfiguration,
+        manInTheMiddleSettings: ManInTheMiddleSettings,
         policies: [any Policy],
         policyGroups: [any PolicyGroup]
     ) {
-        self.general = general
+        self.basicSettings = basicSettings
         self.rules = rules
-        self.mitm = mitm
+        self.manInTheMiddleSettings = manInTheMiddleSettings
         self.policies = policies
         self.policyGroups = policyGroups
     }
@@ -52,153 +49,20 @@ public struct Profile: Sendable {
     /// Initialize an `Profile`.
     ///
     /// Calling this method is equivalent to calling
-    /// `init(general:rules:mitm:policies:policyGroups:)`
-    /// with a default general, replica rules, mitm, policies and policyGroups object.
+    /// `init(basicSettings:rules:manInTheMiddleSettings:policies:policyGroups:)`
+    /// with a default basicSettings, replica rules, manInTheMiddleSettings, policies and policyGroups object.
     public init() {
         self.init(
-            general: .init(),
+            basicSettings: .init(),
             rules: .init(),
-            mitm: .init(),
+            manInTheMiddleSettings: .init(),
             policies: .init(),
             policyGroups: .init()
         )
     }
 }
 
-/// Basic configuration object that defines behavior and polices for logging and proxy settings.
-public struct BasicConfiguration: Sendable {
-
-    /// Log level use for `Logging.Logger`.`
-    public var logLevel: Logger.Level
-
-    /// DNS servers use for system proxy.
-    public var dnsServers: [String]
-
-    /// Exceptions use for system proxy.
-    public var exceptions: [String]
-
-    /// Http listen address use for system http proxy.
-    public var httpListenAddress: String?
-
-    /// Http listen port use for system http proxy
-    public var httpListenPort: Int?
-
-    /// Socks listen address use for system socks proxy.
-    public var socksListenAddress: String?
-
-    /// Socks listen port use for system socks proxy.
-    public var socksListenPort: Int?
-
-    /// A boolean value that determines whether system proxy should exclude simple hostnames.
-    public var excludeSimpleHostnames: Bool
-
-    /// Initialize an instance of `BasicConfiguration` with specified logLevel, dnsServers exceptions,
-    /// httpListenAddress, httpListenPort, socksListenAddress, socksListenPort and excludeSimpleHostnames.
-    public init(
-        logLevel: Logger.Level,
-        dnsServers: [String],
-        exceptions: [String],
-        httpListenAddress: String?,
-        httpListenPort: Int?,
-        socksListenAddress: String?,
-        socksListenPort: Int?,
-        excludeSimpleHostnames: Bool
-    ) {
-        self.logLevel = logLevel
-        self.dnsServers = dnsServers
-        self.exceptions = exceptions
-        self.httpListenAddress = httpListenAddress
-        self.httpListenPort = httpListenPort
-        self.socksListenAddress = socksListenAddress
-        self.socksListenPort = socksListenPort
-        self.excludeSimpleHostnames = excludeSimpleHostnames
-    }
-
-    /// Initialize an instance of `BasicConfiguration`.
-    ///
-    /// Calling this method is equivalent to calling `init(logLevel:dnsServers:exceptions:httpListenAddress:httpListenPort:socksListenAddress:socksListenPort:excludeSimpleHostnames:)`
-    /// with `info` logLevel, `["system"]` dnsServers, `nil` exceptions, httpListenAddress, httpListenPort,
-    /// socksListenAddress, socksListenPort and `false` excludeSimpleHostnames.
-    public init() {
-        self.init(
-            logLevel: .info,
-            dnsServers: ["system"],
-            exceptions: [],
-            httpListenAddress: nil,
-            httpListenPort: nil,
-            socksListenAddress: nil,
-            socksListenPort: nil,
-            excludeSimpleHostnames: false
-        )
-    }
-}
-
-/// Configuration for HTTPS traffic decraption with MitM attacks.
-public struct MitMConfiguration: Sendable {
-
-    /// A boolean value determinse whether ssl should skip server cerfitication verification.
-    public var skipCertificateVerification: Bool
-
-    /// Hostnames that should perform MitM.
-    public var hostnames: [String]
-
-    /// Base64 encoded CA P12 bundle.
-    public var base64EncodedP12String: String?
-
-    /// Passphrase for P12 bundle.
-    public var passphrase: String?
-
-    /// Initialize an instance of `Configuration` with specified skipCertificateVerification, hostnames, base64EncodedP12String, passphrase.
-    /// - Parameters:
-    ///   - skipCertificateVerification: A boolean value determinse whether client should skip server certificate verification.
-    ///   - hostnames: Hostnames use when decript.
-    ///   - base64EncodedP12String: The base64 encoded p12 certificate bundle string.
-    ///   - passphrase: Passphrase for p12 bundle.
-    public init(
-        skipCertificateVerification: Bool,
-        hostnames: [String],
-        base64EncodedP12String: String?,
-        passphrase: String?
-    ) {
-        self.skipCertificateVerification = skipCertificateVerification
-        self.hostnames = hostnames
-        self.passphrase = passphrase
-        self.base64EncodedP12String = base64EncodedP12String
-    }
-
-    /// Initialize an instance of `Configuration`.
-    ///
-    /// Calling this method is equivalent to calling
-    /// `init(skipCertificateVerification:hostnames:base64EncodedP12String:passphrase:)`
-    /// with a default skipCertificateVerification, hostnames, base64EncodedP12String and passphrase values.
-    public init() {
-        self.init(
-            skipCertificateVerification: false,
-            hostnames: [],
-            base64EncodedP12String: nil,
-            passphrase: nil
-        )
-    }
-}
-
 /// Selectable policy group object that defines policy group and current selected policy.
-//public struct PolicyGroup: Sendable {
-//
-//    public var id: UUID = .init()
-//
-//    /// The name for this PolicyGroup.
-//    public var name: String
-//
-//    /// Policies included in this policy group.
-//    public var policies: [any Policy]
-//
-//    /// Initialize an instance of `PolicyGroup` with specified name and policies.
-//    public init(id: UUID = .init(), name: String, policies: [any Policy]) {
-//        self.id = id
-//        self.name = name
-//        self.policies = policies
-//    }
-//}
 public protocol PolicyGroup: Sendable {
 
     /// The name for this PolicyGroup.

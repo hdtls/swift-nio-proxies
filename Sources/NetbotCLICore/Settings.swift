@@ -15,7 +15,7 @@
 import Logging
 import NIONetbot
 
-extension BasicConfiguration: Codable {
+extension BasicSettings: Codable {
 
     private enum CodingKeys: CodingKey {
         case logLevel
@@ -66,9 +66,9 @@ extension BasicConfiguration: Codable {
     }
 }
 
-extension BasicConfiguration: Equatable {
+extension BasicSettings: Equatable {
 
-    public static func == (lhs: BasicConfiguration, rhs: BasicConfiguration) -> Bool {
+    public static func == (lhs: BasicSettings, rhs: BasicSettings) -> Bool {
         lhs.logLevel == rhs.logLevel
             && lhs.dnsServers == rhs.dnsServers
             && lhs.exceptions == rhs.exceptions
@@ -80,7 +80,7 @@ extension BasicConfiguration: Equatable {
     }
 }
 
-extension MitMConfiguration: Codable {
+extension ManInTheMiddleSettings: Codable {
 
     private enum CodingKeys: CodingKey {
         case skipCertificateVerification
@@ -115,9 +115,9 @@ extension MitMConfiguration: Codable {
     }
 }
 
-extension MitMConfiguration: Equatable {
+extension ManInTheMiddleSettings: Equatable {
 
-    public static func == (lhs: MitMConfiguration, rhs: MitMConfiguration) -> Bool {
+    public static func == (lhs: ManInTheMiddleSettings, rhs: ManInTheMiddleSettings) -> Bool {
         lhs.skipCertificateVerification == rhs.skipCertificateVerification
             && lhs.hostnames == rhs.hostnames
             && lhs.base64EncodedP12String == rhs.base64EncodedP12String

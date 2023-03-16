@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import Logging
+@_exported import Logging
 import NIOCore
 import NIODNS
 import NIOExtras
@@ -91,8 +91,8 @@ final public class App: Sendable {
 
     public func run() async throws {
         do {
-            if let address = await storage.profile.general.httpListenAddress,
-                let port = await storage.profile.general.httpListenPort
+            if let address = await storage.profile.basicSettings.httpListenAddress,
+                let port = await storage.profile.basicSettings.httpListenPort
             {
                 let (_, quiesce) = try await startVPNTunnel(
                     protocol: .http,
@@ -104,8 +104,8 @@ final public class App: Sendable {
                 )
             }
 
-            if let address = await storage.profile.general.socksListenAddress,
-                let port = await storage.profile.general.socksListenPort
+            if let address = await storage.profile.basicSettings.socksListenAddress,
+                let port = await storage.profile.basicSettings.socksListenPort
             {
                 let (_, quiesce) = try await startVPNTunnel(
                     protocol: .socks5,
@@ -372,16 +372,17 @@ final public class App: Sendable {
         }
 
         // If detect SSL handshake then setup SSL pipeline to decrypt SSL.
-        guard let base64EncodedP12String = profile.mitm.base64EncodedP12String else {
+        guard let base64EncodedP12String = profile.manInTheMiddleSettings.base64EncodedP12String
+        else {
             // To enable the HTTP MitM feature, you must provide the corresponding configuration.
             throw NIOSSLError.failedToLoadCertificate
         }
 
         let trustStore = try CertificateStore(
-            passphrase: profile.mitm.passphrase,
+            passphrase: profile.manInTheMiddleSettings.passphrase,
             base64EncodedP12String: base64EncodedP12String
         )
-        await trustStore.setUpMitMHosts(profile.mitm.hostnames)
+        await trustStore.setUpMitMHosts(profile.manInTheMiddleSettings.hostnames)
 
         guard let p12 = try await trustStore.certificate(identifiedBy: serverHostname) else {
             return
@@ -394,7 +395,7 @@ final public class App: Sendable {
             privateKey: privateKey
         )
         configuration.certificateVerification =
-            profile.mitm.skipCertificateVerification ? .none : .fullVerification
+            profile.manInTheMiddleSettings.skipCertificateVerification ? .none : .fullVerification
         var context = try NIOSSLContext(configuration: configuration)
         let ssl0 = NIOSSLServerHandler(context: context)
         let recognizer = try await channel.pipeline.handler(type: NIOTLSRecognizer.self).get()

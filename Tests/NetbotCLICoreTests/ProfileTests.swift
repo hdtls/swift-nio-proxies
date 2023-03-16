@@ -18,7 +18,7 @@ import XCTest
 
 final class ProfileTests: XCTestCase {
 
-    let generalString = """
+    let basicSettingString = """
         [General]
         log-level = trace
         dns-servers = 223.5.5.5, 114.114.114.114, system
@@ -53,7 +53,7 @@ final class ProfileTests: XCTestCase {
         FINAL,PROXY
         """
 
-    let mitmString = """
+    let manInTheMiddleSettingString = """
         [MitM]
         skip-certificate-verification = true
         hostnames = *.google.com, *.ietf.org
@@ -69,14 +69,14 @@ final class ProfileTests: XCTestCase {
 
     func testGeneralDecoding() throws {
         let jsonObject = try ProfileSerialization.jsonObject(
-            with: generalString.data(using: .utf8)!
+            with: basicSettingString.data(using: .utf8)!
         )
         let profle = try jsonDecoder.decode(
             Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
         )
 
-        let result = profle.general
+        let result = profle.basicSettings
 
         XCTAssertEqual(result.logLevel, .trace)
         XCTAssertEqual(result.dnsServers, ["223.5.5.5", "114.114.114.114", "system"])
@@ -463,14 +463,14 @@ final class ProfileTests: XCTestCase {
 
     func testMitMDecoding() throws {
         let jsonObject = try ProfileSerialization.jsonObject(
-            with: mitmString.data(using: .utf8)!
+            with: manInTheMiddleSettingString.data(using: .utf8)!
         )
         let profile = try jsonDecoder.decode(
             Profile.self,
             from: JSONSerialization.data(withJSONObject: jsonObject, options: .fragmentsAllowed)
         )
 
-        let result = profile.mitm
+        let result = profile.manInTheMiddleSettings
 
         XCTAssertTrue(result.skipCertificateVerification)
         XCTAssertEqual(result.hostnames, ["*.google.com", "*.ietf.org"])

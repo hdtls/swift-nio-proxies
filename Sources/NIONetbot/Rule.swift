@@ -12,8 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-
 /// A `ParsableRule` is a route that define matching conditions and policies for proxy routing
 public protocol ParsableRule: LosslessStringConvertible, Sendable {
 

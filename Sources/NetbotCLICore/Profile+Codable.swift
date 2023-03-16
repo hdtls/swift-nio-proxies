@@ -16,10 +16,10 @@
 
 extension Profile: Codable {
 
-    enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey {
         case rules
-        case mitm
-        case general
+        case manInTheMiddleSettings
+        case basicSettings
         case policies
         case policyGroups
     }
@@ -37,23 +37,24 @@ extension Profile: Codable {
             try factory.validate($0)
             return factory.init($0)!
         }
-
-        let mitm =
-            try container.decodeIfPresent(MitMConfiguration.self, forKey: .mitm) ?? .init()
-
-        let general =
-            try container.decodeIfPresent(BasicConfiguration.self, forKey: .general) ?? .init()
-
+        let manInTheMiddleSettings =
+            try container.decodeIfPresent(
+                ManInTheMiddleSettings.self, forKey: .manInTheMiddleSettings)
+        let basicSettings =
+            try container.decodeIfPresent(BasicSettings.self, forKey: .basicSettings)
         let policies = try container.decodeIfPresent([__Policy].self, forKey: .policies)?.map {
             $0.base
         }
 
-        //        let supportedPolicies = Builtin.policies + (policies ?? [])
         let policyGroups = try container.decodeIfPresent([PolicyGroup].self, forKey: .policyGroups)
 
         self.init(
-            general: general, rules: rules, mitm: mitm, policies: policies ?? [],
-            policyGroups: policyGroups ?? [])
+            basicSettings: basicSettings ?? .init(),
+            rules: rules,
+            manInTheMiddleSettings: manInTheMiddleSettings ?? .init(),
+            policies: policies ?? [],
+            policyGroups: policyGroups ?? []
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -62,8 +63,8 @@ extension Profile: Codable {
             rules.isEmpty ? nil : rules.map { $0.description },
             forKey: .rules
         )
-        try container.encode(mitm, forKey: .mitm)
-        try container.encode(general, forKey: .general)
+        try container.encode(manInTheMiddleSettings, forKey: .manInTheMiddleSettings)
+        try container.encode(basicSettings, forKey: .basicSettings)
         try container.encodeIfPresent(
             policies.isEmpty ? nil : policies.map(__Policy.init),
             forKey: .policies

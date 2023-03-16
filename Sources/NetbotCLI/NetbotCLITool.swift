@@ -110,7 +110,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
 
         var profile: Profile = try await loadProfile()
 
-        let logLevel = logLevel ?? profile.general.logLevel
+        let logLevel = logLevel ?? profile.basicSettings.logLevel
 
         LoggingSystem.bootstrap { label in
             var handler = StreamLogHandler.standardOutput(label: label)
@@ -163,41 +163,41 @@ public struct NetbotCLITool: AsyncParsableCommand {
         #if canImport(SystemConfiguration)
         var proxyctl: [String] = []
 
-        profile.general.socksListenAddress =
-            socksListenAddress ?? profile.general.socksListenAddress
-        if let socksListenAddress = profile.general.socksListenAddress {
+        profile.basicSettings.socksListenAddress =
+            socksListenAddress ?? profile.basicSettings.socksListenAddress
+        if let socksListenAddress = profile.basicSettings.socksListenAddress {
             proxyctl.append("--socks-listen-address")
             proxyctl.append(socksListenAddress)
         }
 
-        profile.general.socksListenPort =
-            socksListenPort ?? profile.general.socksListenPort
-        if let socksListenPort = profile.general.socksListenPort {
+        profile.basicSettings.socksListenPort =
+            socksListenPort ?? profile.basicSettings.socksListenPort
+        if let socksListenPort = profile.basicSettings.socksListenPort {
             proxyctl.append("--socks-listen-port")
             proxyctl.append("\(socksListenPort)")
         }
 
-        profile.general.httpListenAddress =
-            httpListenAddress ?? profile.general.httpListenAddress
-        if let httpListenAddress = profile.general.httpListenAddress {
+        profile.basicSettings.httpListenAddress =
+            httpListenAddress ?? profile.basicSettings.httpListenAddress
+        if let httpListenAddress = profile.basicSettings.httpListenAddress {
             proxyctl.append("--http-listen-address")
             proxyctl.append("\(httpListenAddress)")
         }
 
-        profile.general.httpListenPort =
-            httpListenPort ?? profile.general.httpListenPort
-        if let httpListenPort = profile.general.httpListenPort {
+        profile.basicSettings.httpListenPort =
+            httpListenPort ?? profile.basicSettings.httpListenPort
+        if let httpListenPort = profile.basicSettings.httpListenPort {
             proxyctl.append("--http-listen-port")
             proxyctl.append("\(httpListenPort)")
         }
 
-        if profile.general.excludeSimpleHostnames {
+        if profile.basicSettings.excludeSimpleHostnames {
             proxyctl.append("--exclude-simple-hostnames")
         }
 
-        if !profile.general.exceptions.isEmpty {
+        if !profile.basicSettings.exceptions.isEmpty {
             proxyctl.append("--exceptions")
-            proxyctl.append(profile.general.exceptions.joined(separator: ","))
+            proxyctl.append(profile.basicSettings.exceptions.joined(separator: ","))
         }
 
         if !proxyctl.isEmpty {
