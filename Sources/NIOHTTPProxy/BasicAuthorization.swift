@@ -22,12 +22,6 @@ struct BasicAuthorization: Equatable {
 
     /// The plaintext password
     let password: String
-
-    /// Create a new `BasicAuthorization`.
-    init(username: String, password: String) {
-        self.username = username
-        self.password = password
-    }
 }
 
 extension HTTPHeaders {

@@ -61,8 +61,4 @@ struct Command: Hashable, RawRepresentable {
     static let udpAssociate = Command(rawValue: 0x03)
 
     var rawValue: UInt8
-
-    init(rawValue: UInt8) {
-        self.rawValue = rawValue
-    }
 }

@@ -128,9 +128,9 @@ open class ProfileSerialization {
     /// - Parameter data: The configuration file byte buffer.
     /// - Returns: Foundation NSDictionary object.
     open class func jsonObject(with data: ByteBuffer) throws -> Any {
-        var __rulesKeyedByLine: [Int: String] = [:]
-        var __groupKeyedByLine: [Int: [String: [String]]] = [:]
-        var __policies: [String] = Builtin.policies.map { $0.name }
+        var _rulesKeyedByLine: [Int: String] = [:]
+        var _groupKeyedByLine: [Int: [String: [String]]] = [:]
+        var _policies: [String] = Builtin.policies.map { $0.name }
 
         /// Line number being parsed.
         var cursor: Int = 0
@@ -156,7 +156,7 @@ open class ProfileSerialization {
 
                 case (.string(let l), _):
                     if currentGroup == "[Rule]" {
-                        __rulesKeyedByLine[cursor] = l
+                        _rulesKeyedByLine[cursor] = l
                     }
 
                     guard let currentGroup = currentGroup else {
@@ -182,7 +182,7 @@ open class ProfileSerialization {
                         preconditionFailure()
                     }
 
-                    __policies.append(o.0)
+                    _policies.append(o.0)
 
                     // Rebuild policies as json array.
                     let components = o.1.split(separator: ",")
@@ -231,7 +231,7 @@ open class ProfileSerialization {
                         .split(separator: ",")
                         .map { $0.trimmingCharacters(in: .whitespaces) }
 
-                    __groupKeyedByLine[cursor] = [o.0: policies]
+                    _groupKeyedByLine[cursor] = [o.0: policies]
 
                     let jsonValue = JSONValue.object([
                         PolicyGroup.CodingKeys.name.rawValue: .string(o.0),
@@ -269,9 +269,9 @@ open class ProfileSerialization {
 
         // File validating.
         // All proxy used in policy group must declare in [Proxy Policy].
-        try __groupKeyedByLine.forEach { (cursor, line) in
+        try _groupKeyedByLine.forEach { (cursor, line) in
             try line.values.joined().forEach { name in
-                guard __policies.contains(where: { $0 == name }) else {
+                guard _policies.contains(where: { $0 == name }) else {
                     throw ProfileSerializationError.invalidFile(
                         reason: .unknownPolicy(cursor: cursor, policy: name)
                     )
@@ -280,7 +280,7 @@ open class ProfileSerialization {
         }
 
         // All proxy label defined in rule should
-        try __rulesKeyedByLine.forEach { (cursor, line) in
+        try _rulesKeyedByLine.forEach { (cursor, line) in
             let rawValue = line.split(separator: ",").first!.trimmingCharacters(in: .whitespaces)
             guard let factory = RuleSystem.factory(for: .init(rawValue: rawValue)),
                 let rule = factory.init(line)
@@ -291,9 +291,9 @@ open class ProfileSerialization {
             }
             // Validate rule policy.
             let all =
-                __policies
+                _policies
                 + Array(
-                    __groupKeyedByLine.values.reduce(
+                    _groupKeyedByLine.values.reduce(
                         into: [],
                         { partialResult, next in
                             partialResult.append(contentsOf: next.keys)

@@ -111,7 +111,7 @@ public class CertificateAuthority {
     ///   - p12: The PKCS12 bundle.
     convenience init(passphrase: String?, p12: OpaquePointer) throws {
         var pkey: UnsafeMutablePointer<EVP_PKEY>? = nil
-        var cert: OpaquePointer? /*<X509>*/ = nil
+        var cert: OpaquePointer? = nil
         var caCerts: OpaquePointer? = nil
 
         let rc = CNIOBoringSSL_PKCS12_parse(p12, passphrase, &pkey, &cert, &caCerts)
@@ -276,9 +276,9 @@ public class CertificateAuthority {
         subjectAltNames: [String],
         pubkey: UnsafeMutablePointer<EVP_PKEY>
     ) -> OpaquePointer {
-        /* Sign with the CA. */
+        // Sign with the CA.
         let certificate = CNIOBoringSSL_X509_new()!
-        /* Set version to X509v3 */
+        // Set version to X509v3
         CNIOBoringSSL_X509_set_version(certificate, Int(X509_VERSION_3))
 
         // NB: X509_set_serialNumber uses an internal copy of the ASN1_INTEGER, so this is
@@ -286,17 +286,17 @@ public class CertificateAuthority {
         var serial = CertificateAuthority.randomSerialNumber()
         CNIOBoringSSL_X509_set_serialNumber(certificate, &serial)
 
-        /* Set issuer to CA's subject. */
+        // Set issuer to CA's subject.
         CNIOBoringSSL_X509_set_issuer_name(
             certificate,
             CNIOBoringSSL_X509_get_subject_name(self.certificate)
         )
 
-        /* Set validity of certificate to 1 years. */
+        // Set validity of certificate to 1 years.
         CNIOBoringSSL_X509_gmtime_adj(CNIOBoringSSL_X509_get_notBefore(certificate), 0)
         CNIOBoringSSL_X509_gmtime_adj(CNIOBoringSSL_X509_get_notAfter(certificate), 86400 * 365)
 
-        /* Set the DN of the request. */
+        // Set the DN of the request.
         let name = CNIOBoringSSL_X509_NAME_new()
         defer {
             CNIOBoringSSL_X509_NAME_free(name)
@@ -338,7 +338,7 @@ public class CertificateAuthority {
             value: subjectAltName
         )
 
-        /* Now perform the actual signing with the CA. */
+        // Now perform the actual signing with the CA.
         CNIOBoringSSL_X509_sign(certificate, self.privateKey, CNIOBoringSSL_EVP_sha256())
 
         return certificate

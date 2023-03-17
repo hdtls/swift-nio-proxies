@@ -28,6 +28,8 @@
 
 // THIS FILE IS MOSTLY COPIED FROM [swift-crypto](https://github.com/apple/swift-crypto)
 
+// swift-format-ignore-file
+
 import Foundation
 
 #if !(os(macOS) || os(iOS) || os(watchOS) || os(tvOS))

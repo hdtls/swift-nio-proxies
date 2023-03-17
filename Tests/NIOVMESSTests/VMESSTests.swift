@@ -47,7 +47,7 @@ class VMESSTests: XCTestCase {
         var result = Array(repeating: UInt8.zero, count: data.count)
         try data.withUnsafeBytes { inPtr in
             try result.withUnsafeMutableBytes { dataOut in
-                try common_AES_cfb128_encrypt(
+                try commonAESCFB128Encrypt(
                     nonce: Array(i),
                     key: k,
                     dataIn: inPtr,
@@ -69,7 +69,7 @@ class VMESSTests: XCTestCase {
         var outLength = 0
         try data.withUnsafeBytes { inPtr in
             try result.withUnsafeMutableBytes { buffer in
-                try common_AES_encrypt(
+                try commonAESEncrypt(
                     key: k,
                     dataIn: inPtr,
                     dataOut: buffer,

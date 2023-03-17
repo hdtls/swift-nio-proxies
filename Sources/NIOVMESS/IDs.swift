@@ -14,15 +14,15 @@
 
 import Foundation
 
-let KDFSaltConstAuthIDEncryptionKey = "AES Auth ID Encryption".data(using: .utf8)!
-let KDFSaltConstAEADRespHeaderLenKey = "AEAD Resp Header Len Key".data(using: .utf8)!
-let KDFSaltConstAEADRespHeaderLenIV = "AEAD Resp Header Len IV".data(using: .utf8)!
-let KDFSaltConstAEADRespHeaderPayloadKey = "AEAD Resp Header Key".data(using: .utf8)!
-let KDFSaltConstAEADRespHeaderPayloadIV = "AEAD Resp Header IV".data(using: .utf8)!
-let KDFSaltConstVMessAEADKDF = "VMess AEAD KDF".data(using: .utf8)!
-let KDFSaltConstVMessHeaderPayloadAEADKey = "VMess Header AEAD Key".data(using: .utf8)!
-let KDFSaltConstVMessHeaderPayloadAEADIV = "VMess Header AEAD Nonce".data(using: .utf8)!
-let KDFSaltConstVMessHeaderPayloadLengthAEADKey = "VMess Header AEAD Key_Length".data(using: .utf8)!
-let KDFSaltConstVMessHeaderPayloadLengthAEADIV = "VMess Header AEAD Nonce_Length".data(
+let kDFSaltConstAuthIDEncryptionKey = "AES Auth ID Encryption".data(using: .utf8)!
+let kDFSaltConstAEADRespHeaderLenKey = "AEAD Resp Header Len Key".data(using: .utf8)!
+let kDFSaltConstAEADRespHeaderLenIV = "AEAD Resp Header Len IV".data(using: .utf8)!
+let kDFSaltConstAEADRespHeaderPayloadKey = "AEAD Resp Header Key".data(using: .utf8)!
+let kDFSaltConstAEADRespHeaderPayloadIV = "AEAD Resp Header IV".data(using: .utf8)!
+let kDFSaltConstVMessAEADKDF = "VMess AEAD KDF".data(using: .utf8)!
+let kDFSaltConstVMessHeaderPayloadAEADKey = "VMess Header AEAD Key".data(using: .utf8)!
+let kDFSaltConstVMessHeaderPayloadAEADIV = "VMess Header AEAD Nonce".data(using: .utf8)!
+let kDFSaltConstVMessHeaderPayloadLengthAEADKey = "VMess Header AEAD Key_Length".data(using: .utf8)!
+let kDFSaltConstVMessHeaderPayloadLengthAEADIV = "VMess Header AEAD Nonce_Length".data(
     using: .utf8
 )!

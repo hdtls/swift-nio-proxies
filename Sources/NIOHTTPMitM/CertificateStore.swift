@@ -17,8 +17,8 @@ import NIOSSL
 /// Certificate store used to generate server certificate when perform HTTP MitM Attack.
 public actor CertificateStore {
 
-    /* private but tests */ var pool: [String: NIOSSLPKCS12Bundle] = [:]
-    /* private but tests */ var hostnames: [String] = []
+    var pool: [String: NIOSSLPKCS12Bundle] = [:]
+    var hostnames: [String] = []
     private var ca: CertificateAuthority
     private var passphrase: String?
 

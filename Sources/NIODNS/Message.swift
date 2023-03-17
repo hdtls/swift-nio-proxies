@@ -183,22 +183,6 @@ struct Message {
 
     /// Additional records section.
     var additionalRecords: [ResourceRecord]
-
-    init(
-        id: UInt16,
-        options: Options,
-        questions: [Question],
-        answers: [ResourceRecord],
-        authorities: [ResourceRecord],
-        additionalRecords: [ResourceRecord]
-    ) {
-        self.id = id
-        self.options = options
-        self.questions = questions
-        self.answers = answers
-        self.authorities = authorities
-        self.additionalRecords = additionalRecords
-    }
 }
 
 struct Question {
@@ -212,12 +196,6 @@ struct Question {
     var labels: [String]
     var questionType: UInt16
     var questionClass: Class
-
-    init(labels: [String], questionType: UInt16, questionClass: Class) {
-        self.labels = labels
-        self.questionType = questionType
-        self.questionClass = questionClass
-    }
 }
 
 struct ResourceRecord {
@@ -227,18 +205,4 @@ struct ResourceRecord {
     let recordClass: UInt16
     let ttl: UInt32
     var resource: [UInt8]
-
-    init(
-        labels: [String],
-        recordType: UInt16,
-        recordClass: UInt16,
-        ttl: UInt32,
-        resource: [UInt8]
-    ) {
-        self.labels = labels
-        self.recordType = recordType
-        self.recordClass = recordClass
-        self.ttl = ttl
-        self.resource = resource
-    }
 }

@@ -36,40 +36,41 @@ extension Proxy: Codable {
         let serverAddress = try container.decode(String.self, forKey: .serverAddress)
         let port = try container.decode(Int.self, forKey: .port)
         let `protocol` = try container.decode(`Protocol`.self, forKey: .protocol)
-        let username = try container.decodeIfPresent(String.self, forKey: .username) ?? ""
-        let password = try container.decodeIfPresent(String.self, forKey: .password) ?? ""
-        let authenticationRequired =
-            try container.decodeIfPresent(Bool.self, forKey: .authenticationRequired) ?? false
-        let prefererHttpTunneling =
-            try container.decodeIfPresent(Bool.self, forKey: .prefererHttpTunneling) ?? false
-        let skipCertificateVerification =
-            try container.decodeIfPresent(Bool.self, forKey: .skipCertificateVerification) ?? false
-        let sni = try container.decodeIfPresent(String.self, forKey: .sni) ?? ""
-        let certificatePinning =
-            try container.decodeIfPresent(String.self, forKey: .certificatePinning) ?? ""
-        let algorithm: Algorithm
-        if let algorithmRawValue =
-            try container.decodeIfPresent(String.self, forKey: .algorithm)
-        {
-            algorithm = .init(rawValue: algorithmRawValue) ?? .aes128Gcm
-        } else {
-            algorithm = .aes128Gcm
-        }
-        let overTls = try container.decodeIfPresent(Bool.self, forKey: .overTls) ?? false
+        let username = try container.decodeIfPresent(String.self, forKey: .username)
+        let password = try container.decodeIfPresent(String.self, forKey: .password)
+        let authenticationRequired = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .authenticationRequired
+        )
+        let prefererHttpTunneling = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .prefererHttpTunneling
+        )
+        let skipCertificateVerification = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .skipCertificateVerification
+        )
+        let sni = try container.decodeIfPresent(String.self, forKey: .sni)
+        let certificatePinning = try container.decodeIfPresent(
+            String.self,
+            forKey: .certificatePinning
+        )
+        let algorithm = try container.decodeIfPresent(Algorithm.self, forKey: .algorithm)
+        let overTls = try container.decodeIfPresent(Bool.self, forKey: .overTls)
 
         self.init(
             serverAddress: serverAddress,
             port: port,
             protocol: `protocol`,
-            username: username,
-            password: password,
-            authenticationRequired: authenticationRequired,
-            prefererHttpTunneling: prefererHttpTunneling,
-            overTls: overTls,
-            skipCertificateVerification: skipCertificateVerification,
-            sni: sni,
-            certificatePinning: certificatePinning,
-            algorithm: algorithm
+            username: username ?? "",
+            password: password ?? "",
+            authenticationRequired: authenticationRequired ?? false,
+            prefererHttpTunneling: prefererHttpTunneling ?? true,
+            overTls: overTls ?? false,
+            skipCertificateVerification: skipCertificateVerification ?? false,
+            sni: sni ?? "",
+            certificatePinning: certificatePinning ?? "",
+            algorithm: algorithm ?? .aes128Gcm
         )
     }
 
@@ -78,35 +79,41 @@ extension Proxy: Codable {
         try container.encode(self.serverAddress, forKey: .serverAddress)
         try container.encode(self.port, forKey: .port)
         try container.encode(self.protocol, forKey: .protocol)
-        try container.encodeIfPresent(
-            self.username.isEmpty ? nil : self.username,
-            forKey: .username
-        )
-        try container.encodeIfPresent(
-            self.password.isEmpty ? nil : self.password,
-            forKey: .password
-        )
-        try container.encodeIfPresent(
-            self.authenticationRequired ? self.authenticationRequired : nil,
-            forKey: .authenticationRequired
-        )
-        try container.encodeIfPresent(
-            self.prefererHttpTunneling ? self.prefererHttpTunneling : nil,
-            forKey: .prefererHttpTunneling
-        )
-        try container.encodeIfPresent(
-            self.skipCertificateVerification ? self.skipCertificateVerification : nil,
-            forKey: .skipCertificateVerification
-        )
-        try container.encodeIfPresent(self.sni.isEmpty ? nil : self.sni, forKey: .sni)
-        try container.encodeIfPresent(
-            self.certificatePinning.isEmpty ? nil : self.certificatePinning,
-            forKey: .certificatePinning
-        )
-        try container.encodeIfPresent(
-            self.algorithm != .aes128Gcm ? self.algorithm.rawValue : nil,
-            forKey: .algorithm
-        )
-        try container.encodeIfPresent(self.overTls ? self.overTls : nil, forKey: .overTls)
+
+        // The properties listed below are not required by all protocols, and we should not encode
+        // them in the result of the corresponding protocol.
+
+        if !self.username.isEmpty {
+            try container.encode(self.username, forKey: .username)
+        }
+        if !self.password.isEmpty {
+            try container.encode(self.password, forKey: .password)
+        }
+        if self.authenticationRequired {
+            try container.encode(self.authenticationRequired, forKey: .authenticationRequired)
+        }
+        if self.prefererHttpTunneling {
+            try container.encode(self.prefererHttpTunneling, forKey: .prefererHttpTunneling)
+        }
+        if self.skipCertificateVerification {
+            try container.encode(
+                self.skipCertificateVerification,
+                forKey: .skipCertificateVerification
+            )
+        }
+        if !self.sni.isEmpty {
+            try container.encode(self.sni, forKey: .sni)
+        }
+        if !self.certificatePinning.isEmpty {
+            try container.encode(self.certificatePinning, forKey: .certificatePinning)
+        }
+        if self.algorithm != .aes128Gcm {
+            try container.encode(self.algorithm, forKey: .algorithm)
+        }
+        if self.overTls {
+            try container.encode(self.overTls, forKey: .overTls)
+        }
     }
 }
+
+extension Algorithm: Codable {}

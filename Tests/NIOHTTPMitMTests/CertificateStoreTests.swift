@@ -27,7 +27,7 @@ final class CertificateStoreTests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.
-        try store = CertificateStore(
+        store = try CertificateStore(
             passphrase: passphrase,
             base64EncodedP12String: base64EncodedP12String
         )

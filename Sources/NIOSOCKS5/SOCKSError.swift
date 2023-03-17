@@ -38,7 +38,7 @@ public enum SOCKSError: Error {
         case connectionRefused
 
         /// The host address's TTL has expired.
-        case TTLExpired
+        case tTLExpired
 
         /// The provided command is not supported.
         case commandNotSupported
@@ -81,7 +81,7 @@ extension SOCKSError.ReplyFailureReason {
             case .refused:
                 return .connectionRefused
             case .ttlExpired:
-                return .TTLExpired
+                return .tTLExpired
             case .commandUnsupported:
                 return .commandNotSupported
             case .addressTypeUnsupported:
@@ -105,7 +105,7 @@ extension SOCKSError.ReplyFailureReason {
                 return "Host unreachable."
             case .connectionRefused:
                 return "Connection refused."
-            case .TTLExpired:
+            case .tTLExpired:
                 return "TTL expired."
             case .commandNotSupported:
                 return "Command not supported."

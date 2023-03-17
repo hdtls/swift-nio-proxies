@@ -70,12 +70,12 @@ struct KDF {
         var innerHasher: Updatable
 
         init<U: Updatable>(H: () -> U, key: SymmetricKey) {
-            var K: ContiguousBytes
+            var k: ContiguousBytes
 
             if key.withUnsafeBytes({ $0.count }) == U.blockSize {
-                K = key
+                k = key
             } else if key.withUnsafeBytes({ $0.count }) > U.blockSize {
-                K = key.withUnsafeBytes { (keyBytes) in
+                k = key.withUnsafeBytes { (keyBytes) in
                     var hash = H()
                     hash.update(bufferPointer: keyBytes)
                     return hash.get()
@@ -83,11 +83,11 @@ struct KDF {
             } else {
                 var keyArray = Array(repeating: UInt8(0), count: U.blockSize)
                 key.withUnsafeBytes { keyArray.replaceSubrange(0..<$0.count, with: $0) }
-                K = keyArray
+                k = keyArray
             }
 
             self.innerHasher = H()
-            let innerKey = K.withUnsafeBytes {
+            let innerKey = k.withUnsafeBytes {
                 return $0.map({ (keyByte) in
                     keyByte ^ 0x36
                 })
@@ -95,7 +95,7 @@ struct KDF {
             innerHasher.update(data: innerKey)
 
             self.outerHasher = H()
-            let outerKey = K.withUnsafeBytes {
+            let outerKey = k.withUnsafeBytes {
                 return $0.map({ (keyByte) in
                     keyByte ^ 0x5c
                 })
@@ -116,7 +116,7 @@ struct KDF {
         info: [Info],
         outputByteCount: Int? = nil
     ) -> SymmetricKey where Info: DataProtocol {
-        var updatable = __HMAC(H: { SHA256() }, key: .init(data: KDFSaltConstVMessAEADKDF))
+        var updatable = __HMAC(H: { SHA256() }, key: .init(data: kDFSaltConstVMessAEADKDF))
 
         for path in info {
             updatable = __HMAC(H: { updatable }, key: .init(data: Array(path)))

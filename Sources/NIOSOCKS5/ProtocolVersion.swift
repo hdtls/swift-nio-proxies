@@ -16,10 +16,6 @@
 struct ProtocolVersion: Hashable, RawRepresentable {
 
     var rawValue: UInt8
-
-    init(rawValue: UInt8) {
-        self.rawValue = rawValue
-    }
 }
 
 extension ProtocolVersion {

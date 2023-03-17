@@ -91,11 +91,11 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
         if forceAEADDecoding {
             var symmetricKey = KDF16.deriveKey(
                 inputKeyMaterial: .init(data: self.symmetricKey),
-                info: [KDFSaltConstAEADRespHeaderLenKey]
+                info: [kDFSaltConstAEADRespHeaderLenKey]
             )
             var nonce = KDF12.deriveKey(
                 inputKeyMaterial: .init(data: self.nonce),
-                info: [KDFSaltConstAEADRespHeaderLenIV]
+                info: [kDFSaltConstAEADRespHeaderLenIV]
             ).withUnsafeBytes {
                 Array($0)
             }
@@ -125,11 +125,11 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
             symmetricKey = KDF16.deriveKey(
                 inputKeyMaterial: .init(data: self.symmetricKey),
-                info: [KDFSaltConstAEADRespHeaderPayloadKey]
+                info: [kDFSaltConstAEADRespHeaderPayloadKey]
             )
             nonce = KDF12.deriveKey(
                 inputKeyMaterial: .init(data: self.nonce),
-                info: [KDFSaltConstAEADRespHeaderPayloadIV]
+                info: [kDFSaltConstAEADRespHeaderPayloadIV]
             ).withUnsafeBytes {
                 Array($0)
             }
@@ -176,7 +176,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
             try data.withUnsafeReadableBytes { inPtr in
                 try headPartData.withUnsafeMutableBytes { dataOut in
-                    try common_AES_cfb128_decrypt(
+                    try commonAESCFB128Decrypt(
                         nonce: Array(nonce),
                         key: symmetricKey,
                         dataIn: inPtr,
@@ -222,7 +222,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
             outLength = 0
             try data.withUnsafeReadableBytes { inPtr in
                 try headPartData.withUnsafeMutableBytes { dataOut in
-                    try common_AES_cfb128_decrypt(
+                    try commonAESCFB128Decrypt(
                         nonce: Array(nonce),
                         key: symmetricKey,
                         dataIn: inPtr,
@@ -264,7 +264,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
             $0.load(as: UInt32.self).bigEndian
         }
 
-        let expectedAuthCode = common_FNV1a(mutableData[4...])
+        let expectedAuthCode = commonFNV1a(mutableData[4...])
 
         if actualAuthCode != expectedAuthCode {
             // TODO: Specified Verify Error

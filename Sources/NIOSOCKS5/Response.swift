@@ -82,12 +82,5 @@ extension Response {
 
         /// The raw `UInt8` status code.
         var rawValue: UInt8
-
-        /// Creates a new `Reply` from the given raw status code. Common
-        /// statuses have convenience variables.
-        /// - parameter value: The raw `UInt8` code sent by the SOCKS server.
-        init(rawValue: UInt8) {
-            self.rawValue = rawValue
-        }
     }
 }

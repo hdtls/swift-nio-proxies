@@ -22,8 +22,7 @@ import Foundation
 ///   - saltByteCount: salt length for deliver key.
 /// - Returns: hash result
 @inline(__always)
-private func __bytesToKey(_ secretKey: String, saltByteCount: Int, outputByteCount: Int) -> [UInt8]
-{
+private func bytesToKey(_ secretKey: String, saltByteCount: Int, outputByteCount: Int) -> [UInt8] {
     var i = 0
     var initialResult: [UInt8] = []
     var partialResult: [UInt8] = []
@@ -59,7 +58,7 @@ func hkdfDerivedSymmetricKey<Salt: DataProtocol>(
     outputByteCount: Int
 ) -> SymmetricKey {
     let inputKeyMaterial = SymmetricKey(
-        data: __bytesToKey(secretKey, saltByteCount: salt.count, outputByteCount: outputByteCount)
+        data: bytesToKey(secretKey, saltByteCount: salt.count, outputByteCount: outputByteCount)
     )
     let info = "ss-subkey".data(using: .utf8)!
 

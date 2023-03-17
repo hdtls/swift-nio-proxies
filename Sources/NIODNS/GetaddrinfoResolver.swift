@@ -220,7 +220,7 @@ final public class GetaddrinfoResolver: Resolver {
             self.parseAndPublishResults(info, host: host)
             freeaddrinfo(info)
         } else {
-            /* this is odd, getaddrinfo returned NULL */
+            // this is odd, getaddrinfo returned NULL
             self.fail(SocketAddressError.unsupported)
         }
         #endif

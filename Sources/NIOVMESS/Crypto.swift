@@ -22,7 +22,7 @@ import Foundation
 #endif
 
 /// Swift version FNV-1a for 32 bits.
-func common_FNV1a<Bytes: Sequence>(_ data: Bytes) -> UInt32 where Bytes.Element == UInt8 {
+func commonFNV1a<Bytes: Sequence>(_ data: Bytes) -> UInt32 where Bytes.Element == UInt8 {
     // These are the FNV-1a parameters for 32 bits.
     let prime: UInt32 = 16_777_619
     let initialResult: UInt32 = 2_166_136_261
@@ -35,11 +35,11 @@ func common_FNV1a<Bytes: Sequence>(_ data: Bytes) -> UInt32 where Bytes.Element 
     }
 }
 
-func common_FNV1a(_ ptr: UnsafeRawBufferPointer) -> UInt32 {
-    common_FNV1a(Array(ptr))
+func commonFNV1a(_ ptr: UnsafeRawBufferPointer) -> UInt32 {
+    commonFNV1a(Array(ptr))
 }
 
-func common_AES_cfb128_encrypt<Key>(
+func commonAESCFB128Encrypt<Key>(
     nonce: [UInt8],
     key: Key,
     dataIn: UnsafeRawBufferPointer,
@@ -47,7 +47,7 @@ func common_AES_cfb128_encrypt<Key>(
     dataOutAvailable: Int,
     dataOutMoved: UnsafeMutablePointer<Int>? = nil
 ) throws where Key: ContiguousBytes {
-    try common_AES_cfb128_crypt(
+    try commonAESCFB128Crypt(
         enc: true,
         nonce: nonce,
         key: key,
@@ -58,7 +58,7 @@ func common_AES_cfb128_encrypt<Key>(
     )
 }
 
-func common_AES_cfb128_decrypt<Key>(
+func commonAESCFB128Decrypt<Key>(
     nonce: [UInt8],
     key: Key,
     dataIn: UnsafeRawBufferPointer,
@@ -66,7 +66,7 @@ func common_AES_cfb128_decrypt<Key>(
     dataOutAvailable: Int,
     dataOutMoved: UnsafeMutablePointer<Int>? = nil
 ) throws where Key: ContiguousBytes {
-    try common_AES_cfb128_crypt(
+    try commonAESCFB128Crypt(
         enc: false,
         nonce: nonce,
         key: key,
@@ -77,14 +77,14 @@ func common_AES_cfb128_decrypt<Key>(
     )
 }
 
-func common_AES_encrypt<Key>(
+func commonAESEncrypt<Key>(
     key: Key,
     dataIn: UnsafeRawBufferPointer,
     dataOut: UnsafeMutableRawBufferPointer,
     dataOutAvailable: Int,
     dataOutMoved: UnsafeMutablePointer<Int>? = nil
 ) throws where Key: ContiguousBytes {
-    try common_AES_crypt(
+    try commonAESCrypt(
         enc: true,
         key: key,
         dataIn: dataIn,
@@ -94,14 +94,14 @@ func common_AES_encrypt<Key>(
     )
 }
 
-func common_AES_decrypt<Key>(
+func commonAESDecrypt<Key>(
     key: Key,
     dataIn: UnsafeRawBufferPointer,
     dataOut: UnsafeMutableRawBufferPointer,
     dataOutAvailable: Int,
     dataOutMoved: UnsafeMutablePointer<Int>? = nil
 ) throws where Key: ContiguousBytes {
-    try common_AES_crypt(
+    try commonAESCrypt(
         enc: false,
         key: key,
         dataIn: dataIn,
@@ -111,7 +111,7 @@ func common_AES_decrypt<Key>(
     )
 }
 
-private func common_AES_cfb128_crypt<Key>(
+private func commonAESCFB128Crypt<Key>(
     enc: Bool,
     nonce: [UInt8],
     key: Key,
@@ -217,7 +217,7 @@ private func common_AES_cfb128_crypt<Key>(
     #endif
 }
 
-private func common_AES_crypt<Key>(
+private func commonAESCrypt<Key>(
     enc: Bool,
     key: Key,
     dataIn: UnsafeRawBufferPointer,

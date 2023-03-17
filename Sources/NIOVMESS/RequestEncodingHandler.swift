@@ -196,7 +196,7 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
 
         buffer.writeInteger(
             buffer.withUnsafeReadableBytes {
-                common_FNV1a($0)
+                commonFNV1a($0)
             }
         )
 
@@ -214,10 +214,10 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
             let sealedLengthBox: AES.GCM.SealedBox = try withUnsafeBytes(
                 of: UInt16(buffer.readableBytes).bigEndian
             ) {
-                info[0] = Array(KDFSaltConstVMessHeaderPayloadLengthAEADKey)
+                info[0] = Array(kDFSaltConstVMessHeaderPayloadLengthAEADKey)
                 let symmetricKey = KDF16.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
 
-                info[0] = Array(KDFSaltConstVMessHeaderPayloadLengthAEADIV)
+                info[0] = Array(kDFSaltConstVMessHeaderPayloadLengthAEADIV)
                 let nonce = try KDF12.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
                     .withUnsafeBytes { ptr in
                         try AES.GCM.Nonce.init(data: ptr)
@@ -231,10 +231,10 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
             }
 
             let sealedPayloadBox: AES.GCM.SealedBox = try buffer.withUnsafeReadableBytes {
-                info[0] = Array(KDFSaltConstVMessHeaderPayloadAEADKey)
+                info[0] = Array(kDFSaltConstVMessHeaderPayloadAEADKey)
                 let symmetricKey = KDF16.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
 
-                info[0] = Array(KDFSaltConstVMessHeaderPayloadAEADIV)
+                info[0] = Array(kDFSaltConstVMessHeaderPayloadAEADIV)
                 let nonce = try KDF12.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
                     .withUnsafeBytes { ptr in
                         try AES.GCM.Nonce.init(data: ptr)
@@ -265,7 +265,7 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
             var result = Data(repeating: 0, count: buffer.readableBytes)
             try buffer.withUnsafeReadableBytes { inPtr in
                 try result.withUnsafeMutableBytes { dataOut in
-                    try common_AES_cfb128_encrypt(
+                    try commonAESCFB128Encrypt(
                         nonce: Array(hasher.finalize()),
                         key: inputKeyMaterial,
                         dataIn: inPtr,
@@ -292,14 +292,14 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
 
         let inputKeyMaterial = KDF16.deriveKey(
             inputKeyMaterial: key,
-            info: [Array(KDFSaltConstAuthIDEncryptionKey)]
+            info: [Array(kDFSaltConstAuthIDEncryptionKey)]
         )
 
         var result = [UInt8](repeating: 0, count: byteBuffer.count + 16)
 
         try byteBuffer.withUnsafeBytes { inPtr in
             try result.withUnsafeMutableBytes { outPtr in
-                try common_AES_encrypt(
+                try commonAESEncrypt(
                     key: inputKeyMaterial,
                     dataIn: inPtr,
                     dataOut: outPtr,

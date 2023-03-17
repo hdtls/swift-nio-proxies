@@ -72,8 +72,8 @@ final public class ResponseDecoder: ByteToMessageDecoder {
         -> DecodingState
     {
         // Record data for fallback if buffer is not enough to decode as message.
-        let __nonce = nonce
-        let __buffer = buffer
+        let fallbackNonce = nonce
+        let fallbackBuffer = buffer
 
         // Decode salt from first packet.
         if symmetricKey == nil {
@@ -102,8 +102,8 @@ final public class ResponseDecoder: ByteToMessageDecoder {
 
         // Check if buffer is enougth to decode as response message.
         guard let size = size, buffer.readableBytes >= Int(size) + tagByteCount else {
-            buffer = __buffer
-            nonce = __nonce
+            buffer = fallbackBuffer
+            nonce = fallbackNonce
             return .needMoreData
         }
         readLength = Int(size) + tagByteCount
