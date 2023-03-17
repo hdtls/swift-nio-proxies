@@ -89,38 +89,6 @@ public enum ProfileSerializationError: Error {
 /// To convert a json object to data the object must is a NSDIctionary with String keys.
 open class ProfileSerialization {
 
-    struct JSONKey: Equatable, RawRepresentable {
-
-        static let basicSettings: JSONKey = .init(rawValue: "basic_settings")!
-        static let replica: JSONKey = .init(rawValue: "replica")!
-        static let policies: JSONKey = .init(rawValue: "policies")!
-        static let policyGroups: JSONKey = .init(rawValue: "policy_groups")!
-        static let rules: JSONKey = .init(rawValue: "rules")!
-        static let manInTheMiddleSettings: JSONKey = .init(rawValue: "man_in_the_middle_settings")!
-
-        typealias RawValue = String
-
-        var rawValue: RawValue
-
-        init?(rawValue: RawValue) {
-            switch rawValue {
-                case "[General]":
-                    self.rawValue = "basic_settings"
-                case "[Policies]":
-                    self.rawValue = "policies"
-                case "[Policy Group]":
-                    self.rawValue = "policy_groups"
-                case "[Rule]":
-                    self.rawValue = "rules"
-                case "[MitM]":
-                    self.rawValue = "man_in_the_middle_settings"
-                default:
-                    // Convert kebab case to snake case
-                    self.rawValue = rawValue.replacingOccurrences(of: "-", with: "_")
-            }
-        }
-    }
-
     enum JSONValue: Equatable {
         case string(String)
         case number(String)
@@ -370,53 +338,47 @@ open class ProfileSerialization {
                 components.append(newLine)
             }
 
-            switch key {
-                case JSONKey.basicSettings.rawValue:
-                    components.append("[General]")
-                case JSONKey.policies.rawValue:
-                    components.append("[Policies]")
-                case JSONKey.policyGroups.rawValue:
-                    components.append("[Policy Group]")
-                case JSONKey.rules.rawValue:
-                    components.append("[Rule]")
-                case JSONKey.manInTheMiddleSettings.rawValue:
-                    components.append("[MitM]")
-                default:
-                    components.append("\(key)")
-            }
+            components.append(key.convertToKebabCase())
 
-            guard key != JSONKey.policyGroups.rawValue else {
+            guard key != Profile.CodingKeys.policyGroups.rawValue else {
                 guard let selectablePolicyGroups = value as? [[String: Any]] else {
                     throw ProfileSerializationError.dataCorrupted
                 }
-                selectablePolicyGroups.forEach {
-                    let policies = ($0[JSONKey.policies.rawValue] as? [String]) ?? []
-                    components.append("\($0["name"]!) = \(policies.joined(separator: ","))")
-                }
+
+                components.append(
+                    contentsOf: selectablePolicyGroups.map {
+                        let policies =
+                            ($0[PolicyGroup.CodingKeys.policies.rawValue] as? [String]) ?? []
+                        return
+                            "\($0[PolicyGroup.CodingKeys.name.rawValue]!) = \(policies.joined(separator: ","))"
+                    })
                 return
             }
 
-            guard key != JSONKey.policies.rawValue else {
+            guard key != Profile.CodingKeys.policies.rawValue else {
                 guard let policies = value as? [[String: Any]] else {
                     throw ProfileSerializationError.dataCorrupted
                 }
 
                 components.append(
                     contentsOf: try policies.map {
-                        guard
-                            let configuration = $0[__Policy.CodingKeys.proxy.rawValue]
-                                as? [String: Any],
-                            let name = $0[__Policy.CodingKeys.name.rawValue],
+                        // Only proxy policy requires proxy configurations
+                        let proxy = $0[__Policy.CodingKeys.proxy.rawValue] as? [String: Any]
+                        guard let name = $0[__Policy.CodingKeys.name.rawValue],
                             let type = $0[__Policy.CodingKeys.type.rawValue]
                         else {
                             throw ProfileSerializationError.dataCorrupted
                         }
 
-                        let configurationString = configuration.map {
-                            "\($0.key.replacingOccurrences(of: "_", with: "-"))=\($0.value)"
+                        let configurationString = proxy?.map {
+                            "\($0.key.convertToKebabCase())=\($0.value)"
                         }.joined(separator: ", ")
 
-                        return "\(name) = \(type), \(configurationString)"
+                        if let configurationString {
+                            return "\(name) = \(type), \(configurationString)"
+                        } else {
+                            return "\(name) = \(type)"
+                        }
                     }
                 )
                 return
@@ -430,7 +392,7 @@ open class ProfileSerialization {
                 try dictionary.keys.sorted().forEach { k in
                     let v = dictionary[k]!
 
-                    let k = k.replacingOccurrences(of: "_", with: "-")
+                    let k = k.convertToKebabCase()
                     if k == "exceptions" || k == "dns-servers" || k == "hostnames" {
                         guard let l = v as? [String] else {
                             throw ProfileSerializationError.dataCorrupted
@@ -583,6 +545,24 @@ extension String {
                     result = joinedString + String(stringKey[trailingUnderscoreRange])
                 }
                 return result
+        }
+    }
+
+    func convertToKebabCase() -> String {
+        switch self {
+            case "basicSettings": return "[General]"
+            case "rules": return "[Rule]"
+            case "policies": return "[Policies]"
+            case "policyGroups": return "[Policy Group]"
+            case "manInTheMiddleSettings": return "[MitM]"
+            default:
+                let stringKey = self
+                guard !stringKey.isEmpty else { return stringKey }
+
+                return stringKey.first!.lowercased()
+                    + stringKey.dropFirst().map {
+                        $0.isUppercase ? "-\($0.lowercased())" : "\($0)"
+                    }.joined()
         }
     }
 }

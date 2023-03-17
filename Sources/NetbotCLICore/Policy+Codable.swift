@@ -67,6 +67,7 @@ extension __Policy: Codable {
             case is RejectTinyGifPolicy:
                 try container.encode("reject-tinygif", forKey: .type)
             case let policy as ProxyPolicy:
+                try container.encode(policy.proxy.protocol.rawValue, forKey: .type)
                 try container.encodeIfPresent(policy.proxy, forKey: .proxy)
             default:
                 fatalError("Unsupported policy \(base).")
