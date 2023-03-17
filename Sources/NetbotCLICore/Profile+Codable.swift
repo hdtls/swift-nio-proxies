@@ -16,7 +16,7 @@
 
 extension Profile: Codable {
 
-    private enum CodingKeys: String, CodingKey {
+    enum CodingKeys: String, CodingKey {
         case rules
         case manInTheMiddleSettings
         case basicSettings
@@ -70,7 +70,11 @@ extension Profile: Codable {
             forKey: .policies
         )
         try container.encodeIfPresent(
-            policyGroups.isEmpty ? nil : policyGroups.map { $0.name },
+            policyGroups.isEmpty
+                ? nil
+                : policyGroups.map {
+                    PolicyGroup(name: $0.name, policies: $0.policies)
+                },
             forKey: .policyGroups
         )
     }
