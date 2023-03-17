@@ -143,7 +143,7 @@ open class ProfileSerialization {
 
         static func convertFromString(_ string: String, forKey key: String) -> JSONValue {
             switch key {
-                case "dns_servers", "exceptions", "hostnames":
+                case "dns-servers", "exceptions", "hostnames":
                     return .array(
                         string.split(separator: ",")
                             .map { .convertFromString($0.trimmingCharacters(in: .whitespaces)) }
@@ -170,7 +170,7 @@ open class ProfileSerialization {
         var json: JSONValue = .object([:])
         var parser = ProfileParser.init(byteBuffer: data)
 
-        var currentGroup: JSONKey?
+        var currentGroup: String?
 
         try parser.parse().forEach { next in
             cursor += 1
@@ -184,10 +184,10 @@ open class ProfileSerialization {
                     return
 
                 case (.section(let g), _):
-                    currentGroup = .init(rawValue: g)
+                    currentGroup = g
 
                 case (.string(let l), _):
-                    if currentGroup == .rules {
+                    if currentGroup == "[Rule]" {
                         __rulesKeyedByLine[cursor] = l
                     }
 
@@ -195,22 +195,22 @@ open class ProfileSerialization {
                         throw ProfileSerializationError.dataCorrupted
                     }
 
-                    guard case .array(var array) = _json[currentGroup.rawValue] ?? .array([]) else {
+                    guard case .array(var array) = _json[currentGroup] ?? .array([]) else {
                         preconditionFailure()
                     }
 
                     array.append(.convertFromString(l))
 
-                    _json[currentGroup.rawValue] = .array(array)
+                    _json[currentGroup] = .array(array)
 
                     json = .object(_json)
 
-                case (.object(let o), .some(.policies)):
+                case (.object(let o), "[Policies]"):
                     guard let currentGroup = currentGroup else {
                         throw ProfileSerializationError.dataCorrupted
                     }
 
-                    guard case .array(var array) = _json[currentGroup.rawValue] ?? .array([]) else {
+                    guard case .array(var array) = _json[currentGroup] ?? .array([]) else {
                         preconditionFailure()
                     }
 
@@ -225,7 +225,7 @@ open class ProfileSerialization {
                             let components = $0.split(separator: "=").map {
                                 $0.trimmingCharacters(in: .whitespaces)
                             }
-                            let jsonKey = JSONKey(rawValue: components.first!)!.rawValue
+                            let jsonKey = components.first!
                             configuration[jsonKey] = .convertFromString(
                                 components.last!,
                                 forKey: jsonKey
@@ -245,16 +245,16 @@ open class ProfileSerialization {
 
                     array.append(jsonValue)
 
-                    _json[currentGroup.rawValue] = .array(array)
+                    _json[currentGroup] = .array(array)
 
                     json = .object(_json)
 
-                case (.object(let o), .some(.policyGroups)):
+                case (.object(let o), "[Policy Group]"):
                     guard let currentGroup = currentGroup else {
                         throw ProfileSerializationError.dataCorrupted
                     }
                     //
-                    guard case .array(var array) = _json[currentGroup.rawValue] ?? .array([]) else {
+                    guard case .array(var array) = _json[currentGroup] ?? .array([]) else {
                         preconditionFailure()
                     }
 
@@ -274,7 +274,7 @@ open class ProfileSerialization {
 
                     array.append(jsonValue)
 
-                    _json[currentGroup.rawValue] = .array(array)
+                    _json[currentGroup] = .array(array)
 
                     json = .object(_json)
 
@@ -284,16 +284,16 @@ open class ProfileSerialization {
                     }
 
                     guard
-                        case .object(var dictionary) = _json[currentGroup.rawValue] ?? .object([:])
+                        case .object(var dictionary) = _json[currentGroup] ?? .object([:])
                     else {
                         preconditionFailure()
                     }
 
-                    let jsonKey = JSONKey(rawValue: o.0)!.rawValue
+                    let jsonKey = o.0
 
                     dictionary[jsonKey] = .convertFromString(o.1, forKey: jsonKey)
 
-                    _json[currentGroup.rawValue] = .object(dictionary)
+                    _json[currentGroup] = .object(dictionary)
 
                     json = .object(_json)
             }
@@ -459,7 +459,11 @@ extension ProfileSerialization.JSONValue {
             case .array(let values):
                 return try values.map { try $0.toObjcRepresentation() }
             case .object(let object):
-                return try object.mapValues { try $0.toObjcRepresentation() }
+                var converted: [String: Any] = [:]
+                try object.forEach {
+                    converted[$0.key.convertToCamelCase()] = try $0.value.toObjcRepresentation()
+                }
+                return converted
             case .bool(let bool):
                 return bool
             case .number(let string):
@@ -473,6 +477,7 @@ extension ProfileSerialization.JSONValue {
 }
 
 extension NSNumber {
+
     fileprivate static func fromJSONNumber(_ string: String) -> NSNumber? {
         let decIndex = string.firstIndex(of: ".")
         let expIndex = string.firstIndex(of: "e")
@@ -516,5 +521,68 @@ extension NSNumber {
         }
 
         return nil
+    }
+}
+
+extension String {
+
+    func convertToCamelCase() -> String {
+        switch self {
+            case "[General]": return "basicSettings"
+            case "[Rule]": return "rules"
+            case "[Policies]": return "policies"
+            case "[Policy Group]": return "policyGroups"
+            case "[MitM]": return "manInTheMiddleSettings"
+            default:
+                let stringKey = self
+                guard !stringKey.isEmpty else { return stringKey }
+
+                // Find the first non-underscore character
+                guard let firstNonUnderscore = stringKey.firstIndex(where: { $0 != "-" }) else {
+                    // Reached the end without finding an _
+                    return stringKey
+                }
+
+                // Find the last non-underscore character
+                var lastNonUnderscore = stringKey.index(before: stringKey.endIndex)
+                while lastNonUnderscore > firstNonUnderscore && stringKey[lastNonUnderscore] == "-"
+                {
+                    stringKey.formIndex(before: &lastNonUnderscore)
+                }
+
+                let keyRange = firstNonUnderscore...lastNonUnderscore
+                let leadingUnderscoreRange = stringKey.startIndex..<firstNonUnderscore
+                let trailingUnderscoreRange =
+                    stringKey.index(after: lastNonUnderscore)..<stringKey.endIndex
+
+                let components = stringKey[keyRange].split(separator: "-")
+                let joinedString: String
+                if components.count == 1 {
+                    // No underscores in key, leave the word as is - maybe already camel cased
+                    joinedString = String(stringKey[keyRange])
+                } else {
+                    joinedString =
+                        ([components[0].lowercased()] + components[1...].map { $0.capitalized })
+                        .joined()
+                }
+
+                // Do a cheap isEmpty check before creating and appending potentially empty strings
+                let result: String
+                if leadingUnderscoreRange.isEmpty && trailingUnderscoreRange.isEmpty {
+                    result = joinedString
+                } else if !leadingUnderscoreRange.isEmpty && !trailingUnderscoreRange.isEmpty {
+                    // Both leading and trailing underscores
+                    result =
+                        String(stringKey[leadingUnderscoreRange]) + joinedString
+                        + String(stringKey[trailingUnderscoreRange])
+                } else if !leadingUnderscoreRange.isEmpty {
+                    // Just leading
+                    result = String(stringKey[leadingUnderscoreRange]) + joinedString
+                } else {
+                    // Just trailing
+                    result = joinedString + String(stringKey[trailingUnderscoreRange])
+                }
+                return result
+        }
     }
 }

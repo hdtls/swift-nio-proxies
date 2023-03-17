@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import XCTest
 import NIONetbot
+import XCTest
 
 @testable import NetbotCLICore
 
