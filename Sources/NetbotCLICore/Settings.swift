@@ -47,10 +47,15 @@ extension BasicSettings: Codable {
             try container.decodeIfPresent(Bool.self, forKey: .excludeSimpleHostnames)
 
         self.init(
-            logLevel: logLevel ?? .info, dnsServers: dnsServers ?? [], exceptions: exceptions ?? [],
-            httpListenAddress: httpListenAddress, httpListenPort: httpListenPort,
-            socksListenAddress: socksListenAddress, socksListenPort: socksListenPort,
-            excludeSimpleHostnames: excludeSimpleHostnames ?? false)
+            logLevel: logLevel ?? .info,
+            dnsServers: dnsServers ?? [],
+            exceptions: exceptions ?? [],
+            httpListenAddress: httpListenAddress,
+            httpListenPort: httpListenPort,
+            socksListenAddress: socksListenAddress,
+            socksListenPort: socksListenPort,
+            excludeSimpleHostnames: excludeSimpleHostnames ?? false
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -92,24 +97,28 @@ extension ManInTheMiddleSettings: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let skipCertificateVerification = try container.decodeIfPresent(
-            Bool.self, forKey: .skipCertificateVerification)
+            Bool.self,
+            forKey: .skipCertificateVerification
+        )
         let hostnames = try container.decodeIfPresent([String].self, forKey: .hostnames)
         let base64EncodedP12String = try container.decodeIfPresent(
-            String.self, forKey: .base64EncodedP12String)
+            String.self,
+            forKey: .base64EncodedP12String
+        )
         let passphrase = try container.decodeIfPresent(String.self, forKey: .passphrase)
 
         self.init(
-            skipCertificateVerification: skipCertificateVerification ?? true,
-            hostnames: hostnames ?? [], base64EncodedP12String: base64EncodedP12String,
-            passphrase: passphrase)
+            skipCertificateVerification: skipCertificateVerification ?? false,
+            hostnames: hostnames ?? [],
+            base64EncodedP12String: base64EncodedP12String,
+            passphrase: passphrase
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(self.skipCertificateVerification, forKey: .skipCertificateVerification)
-        if !self.hostnames.isEmpty {
-            try container.encode(self.hostnames, forKey: .hostnames)
-        }
+        try container.encode(self.hostnames, forKey: .hostnames)
         try container.encodeIfPresent(self.base64EncodedP12String, forKey: .base64EncodedP12String)
         try container.encodeIfPresent(self.passphrase, forKey: .passphrase)
     }

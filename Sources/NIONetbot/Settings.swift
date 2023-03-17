@@ -85,7 +85,7 @@ public struct BasicSettings: Sendable {
 /// Configuration for HTTPS traffic decraption with MitM attacks.
 public struct ManInTheMiddleSettings: Sendable {
 
-    /// A boolean value determinse whether ssl should skip server cerfitication verification.
+    /// A boolean value determinse whether ssl should skip server cerfitication verification. Default is false.
     public var skipCertificateVerification: Bool
 
     /// Hostnames that should perform MitM.

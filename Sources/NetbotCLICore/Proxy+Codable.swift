@@ -58,11 +58,19 @@ extension Proxy: Codable {
         let overTls = try container.decodeIfPresent(Bool.self, forKey: .overTls) ?? false
 
         self.init(
-            serverAddress: serverAddress, port: port, protocol: `protocol`, username: username,
-            password: password, authenticationRequired: authenticationRequired,
-            prefererHttpTunneling: prefererHttpTunneling, overTls: overTls,
-            skipCertificateVerification: skipCertificateVerification, sni: sni,
-            certificatePinning: certificatePinning, algorithm: algorithm)
+            serverAddress: serverAddress,
+            port: port,
+            protocol: `protocol`,
+            username: username,
+            password: password,
+            authenticationRequired: authenticationRequired,
+            prefererHttpTunneling: prefererHttpTunneling,
+            overTls: overTls,
+            skipCertificateVerification: skipCertificateVerification,
+            sni: sni,
+            certificatePinning: certificatePinning,
+            algorithm: algorithm
+        )
     }
 
     public func encode(to encoder: Encoder) throws {

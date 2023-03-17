@@ -39,7 +39,9 @@ extension Profile: Codable {
         }
         let manInTheMiddleSettings =
             try container.decodeIfPresent(
-                ManInTheMiddleSettings.self, forKey: .manInTheMiddleSettings)
+                ManInTheMiddleSettings.self,
+                forKey: .manInTheMiddleSettings
+            )
         let basicSettings =
             try container.decodeIfPresent(BasicSettings.self, forKey: .basicSettings)
         let policies = try container.decodeIfPresent([__Policy].self, forKey: .policies)?.map {

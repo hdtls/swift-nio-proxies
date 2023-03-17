@@ -3,5 +3,6 @@
     "spaces" : 4
   },
   "indentConditionalCompilationBlocks" : false,
-  "indentSwitchCaseLabels" : true
+  "indentSwitchCaseLabels" : true,
+  "lineBreakBeforeEachArgument" : true
 }

@@ -351,7 +351,8 @@ open class ProfileSerialization {
                             ($0[PolicyGroup.CodingKeys.policies.rawValue] as? [String]) ?? []
                         return
                             "\($0[PolicyGroup.CodingKeys.name.rawValue]!) = \(policies.joined(separator: ","))"
-                    })
+                    }
+                )
                 return
             }
 
