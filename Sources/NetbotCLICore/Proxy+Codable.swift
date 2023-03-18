@@ -65,7 +65,7 @@ extension Proxy: Codable {
             username: username ?? "",
             password: password ?? "",
             authenticationRequired: authenticationRequired ?? false,
-            prefererHttpTunneling: prefererHttpTunneling ?? true,
+            prefererHttpTunneling: prefererHttpTunneling ?? false,
             overTls: overTls ?? false,
             skipCertificateVerification: skipCertificateVerification ?? false,
             sni: sni ?? "",

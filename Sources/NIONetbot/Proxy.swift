@@ -90,7 +90,7 @@ public struct Proxy: Sendable {
         username: String = "",
         password: String = "",
         authenticationRequired: Bool = false,
-        prefererHttpTunneling: Bool = true,
+        prefererHttpTunneling: Bool = false,
         overTls: Bool = false,
         skipCertificateVerification: Bool = false,
         sni: String = "",
