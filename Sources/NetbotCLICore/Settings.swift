@@ -43,8 +43,10 @@ extension BasicSettings: Codable {
             forKey: .socksListenAddress
         )
         let socksListenPort = try container.decodeIfPresent(Int.self, forKey: .socksListenPort)
-        let excludeSimpleHostnames =
-            try container.decodeIfPresent(Bool.self, forKey: .excludeSimpleHostnames)
+        let excludeSimpleHostnames = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .excludeSimpleHostnames
+        )
 
         self.init(
             logLevel: logLevel ?? .info,
@@ -71,7 +73,18 @@ extension BasicSettings: Codable {
     }
 }
 
-extension BasicSettings: Equatable {
+extension BasicSettings: Equatable, Hashable {
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(logLevel)
+        hasher.combine(dnsServers)
+        hasher.combine(exceptions)
+        hasher.combine(httpListenAddress)
+        hasher.combine(httpListenPort)
+        hasher.combine(socksListenAddress)
+        hasher.combine(socksListenPort)
+        hasher.combine(excludeSimpleHostnames)
+    }
 
     public static func == (lhs: BasicSettings, rhs: BasicSettings) -> Bool {
         lhs.logLevel == rhs.logLevel
@@ -124,7 +137,14 @@ extension ManInTheMiddleSettings: Codable {
     }
 }
 
-extension ManInTheMiddleSettings: Equatable {
+extension ManInTheMiddleSettings: Equatable, Hashable {
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(skipCertificateVerification)
+        hasher.combine(hostnames)
+        hasher.combine(base64EncodedP12String)
+        hasher.combine(passphrase)
+    }
 
     public static func == (lhs: ManInTheMiddleSettings, rhs: ManInTheMiddleSettings) -> Bool {
         lhs.skipCertificateVerification == rhs.skipCertificateVerification
