@@ -16,11 +16,6 @@ jobs:
         swift-version: ["5.7"]
         
     steps:
-      - name: Setup Swift...
-        uses: swift-actions/setup-swift@v1
-        with: 
-          swift-version: ${{ matrix.swift-version }}
-
       - name: Checkout repository...
         uses: actions/checkout@v3
       
