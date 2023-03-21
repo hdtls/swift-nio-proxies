@@ -90,7 +90,7 @@ final class ProxyTests: XCTestCase {
         let expectedProxyString =
             "{\"port\":8080,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"}"
 
-        let proxy = Proxy()
+        let proxy = Proxy(serverAddress: "127.0.0.1", port: 8080, protocol: .http)
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys

@@ -84,9 +84,9 @@ public struct Proxy: Sendable {
     public var algorithm: Algorithm = .aes128Gcm
 
     public init(
-        serverAddress: String = "127.0.0.1",
-        port: Int = 8080,
-        `protocol`: `Protocol` = .http,
+        serverAddress: String,
+        port: Int,
+        `protocol`: `Protocol`,
         username: String = "",
         password: String = "",
         authenticationRequired: Bool = false,
