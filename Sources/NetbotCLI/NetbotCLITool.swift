@@ -226,9 +226,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
                 withJSONObject: jsonObject,
                 options: .fragmentsAllowed
             )
-            let jsonDecoder = JSONDecoder()
-            jsonDecoder.keyDecodingStrategy = .convertFromSnakeCase
-            profile = try jsonDecoder.decode(Profile.self, from: jsonData)
+            profile = try JSONDecoder().decode(Profile.self, from: jsonData)
         }
 
         let externalResourcesDirectory: URL = {
