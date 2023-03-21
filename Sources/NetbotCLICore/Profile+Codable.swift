@@ -37,17 +37,17 @@ extension Profile: Codable {
             try factory.validate($0)
             return factory.init($0)!
         }
-        let manInTheMiddleSettings =
-            try container.decodeIfPresent(
-                ManInTheMiddleSettings.self,
-                forKey: .manInTheMiddleSettings
-            )
-        let basicSettings =
-            try container.decodeIfPresent(BasicSettings.self, forKey: .basicSettings)
+        let manInTheMiddleSettings = try container.decodeIfPresent(
+            ManInTheMiddleSettings.self,
+            forKey: .manInTheMiddleSettings
+        )
+        let basicSettings = try container.decodeIfPresent(
+            BasicSettings.self,
+            forKey: .basicSettings
+        )
         let policies = try container.decodeIfPresent([__Policy].self, forKey: .policies)?.map {
             $0.base
         }
-
         let policyGroups = try container.decodeIfPresent([PolicyGroup].self, forKey: .policyGroups)
 
         self.init(
@@ -61,22 +61,14 @@ extension Profile: Codable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(
-            rules.isEmpty ? nil : rules.map { $0.description },
-            forKey: .rules
-        )
+        try container.encode(rules.map { $0.description }, forKey: .rules)
         try container.encode(manInTheMiddleSettings, forKey: .manInTheMiddleSettings)
         try container.encode(basicSettings, forKey: .basicSettings)
-        try container.encodeIfPresent(
-            policies.isEmpty ? nil : policies.map(__Policy.init),
-            forKey: .policies
-        )
-        try container.encodeIfPresent(
-            policyGroups.isEmpty
-                ? nil
-                : policyGroups.map {
-                    PolicyGroup(name: $0.name, policies: $0.policies)
-                },
+        try container.encode(policies.map(__Policy.init), forKey: .policies)
+        try container.encode(
+            policyGroups.map {
+                PolicyGroup(name: $0.name, policies: $0.policies)
+            },
             forKey: .policyGroups
         )
     }
