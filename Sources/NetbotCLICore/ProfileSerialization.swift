@@ -190,12 +190,15 @@ open class ProfileSerialization {
                     var configuration: [String: JSONValue] = [:]
                     components.suffix(from: 1)
                         .forEach {
-                            let components = $0.split(separator: "=").map {
-                                $0.trimmingCharacters(in: .whitespaces)
-                            }
-                            let jsonKey = components.first!
+                            let substrings = $0.split(
+                                separator: "=",
+                                omittingEmptySubsequences: false
+                            ).map { $0.trimmingCharacters(in: .whitespaces) }
+
+                            let jsonKey = substrings.first!
+
                             configuration[jsonKey] = .convertFromString(
-                                components.last!,
+                                substrings.last!,
                                 forKey: jsonKey
                             )
                         }
