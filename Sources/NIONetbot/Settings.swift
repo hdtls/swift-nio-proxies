@@ -18,13 +18,13 @@
 public struct BasicSettings: Sendable {
 
     /// Log level use for `Logging.Logger`.`
-    public var logLevel: Logger.Level
+    public var logLevel: Logger.Level = .info
 
     /// DNS servers use for system proxy.
-    public var dnsServers: [String]
+    public var dnsServers: [String] = []
 
     /// Exceptions use for system proxy.
-    public var exceptions: [String]
+    public var exceptions: [String] = []
 
     /// Http listen address use for system http proxy.
     public var httpListenAddress: String?
@@ -39,7 +39,7 @@ public struct BasicSettings: Sendable {
     public var socksListenPort: Int?
 
     /// A boolean value that determines whether system proxy should exclude simple hostnames.
-    public var excludeSimpleHostnames: Bool
+    public var excludeSimpleHostnames: Bool = false
 
     /// Initialize an instance of `BasicSettings` with specified logLevel, dnsServers exceptions,
     /// httpListenAddress, httpListenPort, socksListenAddress, socksListenPort and excludeSimpleHostnames.
@@ -66,12 +66,12 @@ public struct BasicSettings: Sendable {
     /// Initialize an instance of `BasicSettings`.
     ///
     /// Calling this method is equivalent to calling `init(logLevel:dnsServers:exceptions:httpListenAddress:httpListenPort:socksListenAddress:socksListenPort:excludeSimpleHostnames:)`
-    /// with `info` logLevel, `["system"]` dnsServers, `nil` exceptions, httpListenAddress, httpListenPort,
+    /// with `info` logLevel, `[]` dnsServers, `nil` exceptions, httpListenAddress, httpListenPort,
     /// socksListenAddress, socksListenPort and `false` excludeSimpleHostnames.
     public init() {
         self.init(
             logLevel: .info,
-            dnsServers: ["system"],
+            dnsServers: [],
             exceptions: [],
             httpListenAddress: nil,
             httpListenPort: nil,
@@ -86,10 +86,10 @@ public struct BasicSettings: Sendable {
 public struct ManInTheMiddleSettings: Sendable {
 
     /// A boolean value determinse whether ssl should skip server cerfitication verification. Default is false.
-    public var skipCertificateVerification: Bool
+    public var skipCertificateVerification: Bool = false
 
     /// Hostnames that should perform MitM.
-    public var hostnames: [String]
+    public var hostnames: [String] = []
 
     /// Base64 encoded CA P12 bundle.
     public var base64EncodedP12String: String?

@@ -50,10 +50,10 @@ public struct Proxy: Sendable {
     /// Username for proxy authentication.
     ///
     /// - note: For VMESS protocol username *MUST* be an UUID string.
-    public var username: String
+    public var username: String = ""
 
     /// Password for HTTP basic authentication and SOCKS5 username password authentication.
-    public var password: String
+    public var password: String = ""
 
     /// Password field for this proxy settings. For now just return password instead.
     public var passwordReference: String { password }
@@ -61,27 +61,27 @@ public struct Proxy: Sendable {
     /// A boolean value determinse whether connection should perform username password authentication.
     ///
     /// - note: This is used in HTTP/HTTPS basic authentication and SOCKS/SOCKS over TLS username/password authentication.
-    public var authenticationRequired: Bool
+    public var authenticationRequired: Bool = false
 
     /// A boolean value determinse whether HTTP proxy should prefer using CONNECT tunnel.
-    public var prefererHttpTunneling: Bool
+    public var prefererHttpTunneling: Bool = false
 
     /// A boolean value determinse whether connection should enable TLS.
-    public var overTls: Bool
+    public var overTls: Bool = false
 
     /// A boolean value determinse whether SSL should skip certification verification.
-    public var skipCertificateVerification: Bool
+    public var skipCertificateVerification: Bool = false
 
     /// SSL sni.
-    public var sni: String
+    public var sni: String = ""
 
     /// SSL certificate pinning.
-    public var certificatePinning: String
+    public var certificatePinning: String = ""
 
     /// SS encryption and decryption algorithm.
     ///
     /// - note: This is used in Shadowsocks protocol.
-    public var algorithm: Algorithm
+    public var algorithm: Algorithm = .aes128Gcm
 
     public init(
         serverAddress: String = "127.0.0.1",

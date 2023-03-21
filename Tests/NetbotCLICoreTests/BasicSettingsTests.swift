@@ -79,7 +79,7 @@ final class BasicSettingsTests: XCTestCase {
 
     func testEncodeDefaultBasicSettings() throws {
         let expectedBasicSettingsString =
-            "{\"dnsServers\":[\"system\"],\"exceptions\":[],\"excludeSimpleHostnames\":false,\"logLevel\":\"info\"}"
+            "{\"dnsServers\":[],\"exceptions\":[],\"excludeSimpleHostnames\":false,\"logLevel\":\"info\"}"
 
         let basicSettings = BasicSettings()
 

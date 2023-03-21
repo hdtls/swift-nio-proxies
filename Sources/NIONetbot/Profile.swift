@@ -16,19 +16,19 @@
 public struct Profile: Sendable {
 
     /// The rules contains in this configuration.
-    public var rules: [any ParsableRule]
+    public var rules: [any ParsableRule] = []
 
     /// A setting object that provides HTTP MitM settings for this process.
-    public var manInTheMiddleSettings: ManInTheMiddleSettings
+    public var manInTheMiddleSettings: ManInTheMiddleSettings = .init()
 
     /// A setting object that provides basic settings for this process.
-    public var basicSettings: BasicSettings
+    public var basicSettings: BasicSettings = .init()
 
     /// All proxy policy object contains in this configuration object.
-    public var policies: [any Policy]
+    public var policies: [any Policy] = []
 
     /// All selectable policy groups contains in this configuration object.
-    public var policyGroups: [any PolicyGroup]
+    public var policyGroups: [any PolicyGroup] = []
 
     /// Initialize an instance of `Profile` with the specified basicSettings, replicat, rules, manInTheMiddleSettings,
     /// polcies and policyGroups.
