@@ -38,6 +38,7 @@ let package = Package(
         .iOS(.v13),
     ],
     products: [
+        .library(name: "NetbotCLICore", targets: ["NetbotCLICore"]),
         .library(name: "NIODNS", targets: ["NIODNS"]),
         .library(name: "NIOHTTPMitM", targets: ["NIOHTTPMitM"]),
         .library(name: "NIOHTTPProxy", targets: ["NIOHTTPProxy"]),
@@ -120,7 +121,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "NetbotCLI",
-            dependencies: ["NetbotCLICore", swiftArgumentParser, swiftLog]
+            dependencies: ["NetbotCLICore", swiftLog]
         ),
         .testTarget(name: "NIOHTTPMitMTests", dependencies: ["NIOHTTPMitM", swiftNIO]),
         .testTarget(name: "NIONetbotMiscTests", dependencies: ["NIONetbotMisc", swiftNIO]),
