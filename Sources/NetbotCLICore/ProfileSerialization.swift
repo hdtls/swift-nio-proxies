@@ -87,7 +87,7 @@ public enum ProfileSerializationError: Error {
 /// You use the JSONSerialization class to convert JSON to Foundation objects and convert Foundation
 /// objects to JSON.
 /// To convert a json object to data the object must is a NSDIctionary with String keys.
-open class ProfileSerialization {
+final public class ProfileSerialization {
 
     enum JSONValue: Equatable {
         case string(String)
@@ -127,7 +127,7 @@ open class ProfileSerialization {
     /// Create a Foundation object from configuration file data.
     /// - Parameter data: The configuration file byte buffer.
     /// - Returns: Foundation NSDictionary object.
-    open class func jsonObject(with data: ByteBuffer) throws -> Any {
+    public class func jsonObject(with data: ByteBuffer) throws -> Any {
         var _rulesKeyedByLine: [Int: String] = [:]
         var _groupKeyedByLine: [Int: [String: [String]]] = [:]
         var _policies: [String] = Builtin.policies.map { $0.name }
@@ -318,7 +318,7 @@ open class ProfileSerialization {
     /// Create a Foundation object from configuration file data.
     /// - Parameter data: The configuration file data.
     /// - Returns: Foundation NSDictionary object.
-    open class func jsonObject(with data: Data) throws -> Any {
+    public class func jsonObject(with data: Data) throws -> Any {
         try jsonObject(with: ByteBuffer.init(bytes: data))
     }
 
@@ -326,7 +326,7 @@ open class ProfileSerialization {
     /// then an exception will be thrown.
     /// - Parameter obj: Foundation NSDictionary object.
     /// - Returns: Generated configuration file data.
-    open class func data(withJSONObject obj: Any) throws -> Data {
+    public class func data(withJSONObject obj: Any) throws -> Data {
         guard let json = obj as? [String: Any] else {
             throw ProfileSerializationError.dataCorrupted
         }
