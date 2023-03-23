@@ -117,3 +117,36 @@ extension Proxy: Codable {
 }
 
 extension Algorithm: Codable {}
+
+extension Proxy: Equatable, Hashable {
+
+    public static func == (lhs: Proxy, rhs: Proxy) -> Bool {
+        lhs.serverAddress == rhs.serverAddress
+            && lhs.port == rhs.port
+            && lhs.protocol == rhs.protocol
+            && lhs.username == rhs.username
+            && lhs.password == rhs.password
+            && lhs.authenticationRequired == rhs.authenticationRequired
+            && lhs.prefererHttpTunneling == rhs.prefererHttpTunneling
+            && lhs.overTls == rhs.overTls
+            && lhs.skipCertificateVerification == rhs.skipCertificateVerification
+            && lhs.sni == rhs.sni
+            && lhs.certificatePinning == rhs.certificatePinning
+            && lhs.algorithm == rhs.algorithm
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(serverAddress)
+        hasher.combine(port)
+        hasher.combine(`protocol`)
+        hasher.combine(username)
+        hasher.combine(password)
+        hasher.combine(authenticationRequired)
+        hasher.combine(prefererHttpTunneling)
+        hasher.combine(overTls)
+        hasher.combine(skipCertificateVerification)
+        hasher.combine(sni)
+        hasher.combine(certificatePinning)
+        hasher.combine(algorithm)
+    }
+}
