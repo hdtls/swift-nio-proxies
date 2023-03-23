@@ -19,8 +19,6 @@ import NIONetbotMisc
 /// Policy protocol representation a policy object.
 public protocol Policy: ConnectionPoolSource, Sendable {
 
-    var id: UUID { get }
-
     /// The name of the policy.
     var name: String { get set }
 
@@ -31,15 +29,11 @@ public protocol Policy: ConnectionPoolSource, Sendable {
 /// DirectPolicy will tunnel connection derectly.
 public struct DirectPolicy: Policy {
 
-    public var id: UUID
-
     public var name: String
 
     public var destinationAddress: NetAddress?
 
-    public init(id: UUID = .init(), name: String = "DIRECT", destinationAddress: NetAddress? = nil)
-    {
-        self.id = id
+    public init(name: String = "DIRECT", destinationAddress: NetAddress? = nil) {
         self.name = name
         self.destinationAddress = destinationAddress
     }
@@ -48,15 +42,11 @@ public struct DirectPolicy: Policy {
 /// RejectPolicy will reject connection to the destination.
 public struct RejectPolicy: Policy {
 
-    public var id: UUID
-
     public var name: String
 
     public var destinationAddress: NetAddress?
 
-    public init(id: UUID = .init(), name: String = "REJECT", destinationAddress: NetAddress? = nil)
-    {
-        self.id = id
+    public init(name: String = "REJECT", destinationAddress: NetAddress? = nil) {
         self.name = name
         self.destinationAddress = destinationAddress
     }
@@ -65,26 +55,20 @@ public struct RejectPolicy: Policy {
 /// RejectTinyGifPolicy will reject connection and response a tiny gif.
 public struct RejectTinyGifPolicy: Policy {
 
-    public var id: UUID
-
     public var name: String
 
     public var destinationAddress: NetAddress?
 
     public init(
-        id: UUID = .init(),
         name: String = "REJECT-TINYGIF",
         destinationAddress: NetAddress? = nil
     ) {
-        self.id = id
         self.name = name
         self.destinationAddress = destinationAddress
     }
 }
 
 public struct ProxyPolicy: Policy {
-
-    public var id: UUID
 
     public var name: String
 
@@ -93,12 +77,10 @@ public struct ProxyPolicy: Policy {
     public var destinationAddress: NetAddress?
 
     public init(
-        id: UUID = .init(),
         name: String,
         proxy: Proxy,
         destinationAddress: NetAddress? = nil
     ) {
-        self.id = id
         self.name = name
         self.proxy = proxy
         self.destinationAddress = destinationAddress
