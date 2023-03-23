@@ -12,16 +12,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-import ConnectionPool
 import Foundation
-import Logging
-import NIOCore
+@_exported import Logging
+@_exported import NIOCore
 import NIOHTTPProxy
 import NIOPosix
 import NIOSOCKS5
 import NIOSS
 import NIOSSL
 import NIOVMESS
+
+@_exported import protocol ConnectionPool.ConnectionPoolSource
 
 #if canImport(Network)
 import NIOTransportServices

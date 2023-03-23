@@ -13,8 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import NIOCore
-import NIONetbot
+@_exported import NIOCore
 
 /// Errors that can be raised while parsing profile file.
 public enum ProfileSerializationError: Error {

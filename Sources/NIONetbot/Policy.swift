@@ -12,9 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-import ConnectionPool
+@_exported import ConnectionPool
 import Foundation
-import NIONetbotMisc
+@_exported import NIONetbotMisc
 
 /// Policy protocol representation a policy object.
 public protocol Policy: ConnectionPoolSource, Sendable {
