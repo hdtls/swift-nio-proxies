@@ -28,7 +28,7 @@ protocol CheckedParsableRule: ParsableRule {
 
 extension CheckedParsableRule {
 
-    init?(_ description: String) {
+    public init?(_ description: String) {
         // Rule definitions are comma-separated except comments, and comment are
         // always at the end of the rule and followed by //.
         //
@@ -92,7 +92,7 @@ public protocol ExternalRuleResources {
 
 extension ExternalRuleResources where Self: ParsableRule {
 
-    var externalResourcesURL: URL {
+    public var externalResourcesURL: URL {
         get throws {
             guard let url = URL(string: expression) else {
                 throw ProfileSerializationError.failedToParseRule(reason: .invalidExternalResources)
@@ -101,7 +101,7 @@ extension ExternalRuleResources where Self: ParsableRule {
         }
     }
 
-    var externalResourcesStorageName: String {
+    public var externalResourcesStorageName: String {
         guard let url = try? externalResourcesURL else {
             return ""
         }
@@ -115,76 +115,76 @@ extension ExternalRuleResources where Self: ParsableRule {
     }
 }
 
-struct DomainKeywordRule: ParsableRule, CheckedParsableRule {
+public struct DomainKeywordRule: ParsableRule, CheckedParsableRule {
 
     static let label: RuleSystem.Label = .domainKeyword
 
-    var expression: String
+    public var expression: String
 
-    var policy: String
+    public var policy: String
 
-    var description: String {
+    public var description: String {
         "\(Self.label.rawValue),\(expression),\(policy)"
     }
 
-    init(expression: String, policy: String) {
+    public init(expression: String, policy: String) {
         self.expression = expression
         self.policy = policy
     }
 
-    func match(_ pattern: String) -> Bool {
+    public func match(_ pattern: String) -> Bool {
         pattern.contains(expression)
     }
 }
 
-struct DomainRule: ParsableRule, CheckedParsableRule {
+public struct DomainRule: ParsableRule, CheckedParsableRule {
 
     static let label: RuleSystem.Label = .domain
 
-    var expression: String
+    public var expression: String
 
-    var policy: String
+    public var policy: String
 
-    var description: String {
+    public var description: String {
         "\(Self.label.rawValue),\(expression),\(policy)"
     }
 
-    init(expression: String, policy: String) {
+    public init(expression: String, policy: String) {
         self.expression = expression
         self.policy = policy
     }
 
-    func match(_ pattern: String) -> Bool {
+    public func match(_ pattern: String) -> Bool {
         expression == pattern
     }
 }
 
-struct DomainSetRule: ExternalRuleResources, ParsableRule, CheckedParsableRule {
+public struct DomainSetRule: ExternalRuleResources, ParsableRule, CheckedParsableRule {
 
     static let label: RuleSystem.Label = .domainSet
 
-    var expression: String
+    public var expression: String
 
-    var policy: String
+    public var policy: String
 
     @Protected private var domains: [String] = []
 
-    var description: String {
+    public var description: String {
         "\(Self.label.rawValue),\(expression),\(policy)"
     }
 
-    init(expression: String, policy: String) {
+    public init(expression: String, policy: String) {
         self.expression = expression
         self.policy = policy
     }
 
-    func match(_ expression: String) -> Bool {
+    public func match(_ expression: String) -> Bool {
         domains.first {
             $0 == expression || ".\(expression)".hasSuffix($0)
         } != nil
     }
 
-    mutating func loadAllRules(from file: URL) {
+    public mutating func loadAllRules(from file: URL) {
         guard let data = try? Data(contentsOf: file),
             let file = String(data: data, encoding: .utf8)
         else {
@@ -202,50 +202,50 @@ struct DomainSetRule: ExternalRuleResources, ParsableRule, CheckedParsableRule {
     }
 }
 
-struct DomainSuffixRule: ParsableRule, CheckedParsableRule {
+public struct DomainSuffixRule: ParsableRule, CheckedParsableRule {
 
     static let label: RuleSystem.Label = .domainSuffix
 
-    var expression: String
+    public var expression: String
 
-    var policy: String
+    public var policy: String
 
-    var description: String {
+    public var description: String {
         "\(Self.label.rawValue),\(expression),\(policy)"
     }
 
-    init(expression: String, policy: String) {
+    public init(expression: String, policy: String) {
         self.expression = expression
         self.policy = policy
     }
 
-    func match(_ pattern: String) -> Bool {
+    public func match(_ pattern: String) -> Bool {
         // e.g. apple.com should match *.apple.com and apple.com
         // should not match *apple.com.
         expression == pattern || ".\(pattern)".hasSuffix(expression)
     }
 }
 
-struct GeoIPRule: ParsableRule, CheckedParsableRule, @unchecked Sendable {
+public struct GeoIPRule: ParsableRule, CheckedParsableRule, @unchecked Sendable {
 
     static let label: RuleSystem.Label = .geoIp
 
-    var expression: String
+    public var expression: String
 
-    var policy: String
+    public var policy: String
 
     @Protected static var database: MaxMindDB?
 
-    var description: String {
+    public var description: String {
         "\(Self.label.rawValue),\(expression),\(policy)"
     }
 
-    init(expression: String, policy: String) {
+    public init(expression: String, policy: String) {
         self.expression = expression
         self.policy = policy
     }
 
-    func match(_ pattern: String) -> Bool {
+    public func match(_ pattern: String) -> Bool {
         do {
             let dictionary =
                 try Self.database?.lookup(ipAddress: pattern) as? [String: [String: Any]]
@@ -296,30 +296,30 @@ struct GeoIPRule: ParsableRule, CheckedParsableRule, @unchecked Sendable {
 //    }
 //}
 
-struct RuleSetRule: ExternalRuleResources, ParsableRule, CheckedParsableRule {
+public struct RuleSetRule: ExternalRuleResources, ParsableRule, CheckedParsableRule {
 
     static let label: RuleSystem.Label = .ruleSet
 
-    var expression: String
+    public var expression: String
 
-    var policy: String
+    public var policy: String
 
-    var description: String {
+    public var description: String {
         "\(Self.label.rawValue),\(expression),\(policy)"
     }
 
     @Protected private var standardRules: [ParsableRule] = []
 
-    init(expression: String, policy: String) {
+    public init(expression: String, policy: String) {
         self.expression = expression
         self.policy = policy
     }
 
-    func match(_ expression: String) -> Bool {
+    public func match(_ expression: String) -> Bool {
         standardRules.first(where: { $0.match(expression) }) != nil
     }
 
-    mutating func loadAllRules(from file: URL) {
+    public mutating func loadAllRules(from file: URL) {
         guard let data = try? Data(contentsOf: file),
             let file = String(data: data, encoding: .utf8)
         else {
