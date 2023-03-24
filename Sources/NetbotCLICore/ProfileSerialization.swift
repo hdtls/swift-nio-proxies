@@ -343,18 +343,32 @@ final public class ProfileSerialization {
             components.append(key.convertToKebabCase())
 
             guard key != Profile.CodingKeys.policyGroups.rawValue else {
-                guard let selectablePolicyGroups = value as? [[String: Any]] else {
+                guard let g = value as? [[String: Any]] else {
                     throw ProfileSerializationError.dataCorrupted
                 }
 
-                components.append(
-                    contentsOf: selectablePolicyGroups.map {
-                        let policies =
-                            ($0[PolicyGroup.CodingKeys.policies.rawValue] as? [String]) ?? []
-                        return
-                            "\($0[PolicyGroup.CodingKeys.name.rawValue]!) = \(policies.joined(separator: ","))"
+                let contents =
+                    try g
+                    .sorted {
+                        guard let lhs = $0[PolicyGroup.CodingKeys.name.rawValue] as? String,
+                            let rhs = $1[PolicyGroup.CodingKeys.name.rawValue] as? String
+                        else {
+                            throw ProfileSerializationError.dataCorrupted
+                        }
+                        return lhs < rhs
                     }
-                )
+                    .map {
+                        let name = $0[PolicyGroup.CodingKeys.name.rawValue] as! String
+
+                        guard
+                            let policies = $0[PolicyGroup.CodingKeys.policies.rawValue] as? [String]
+                        else {
+                            return "\(name) = "
+                        }
+
+                        return "\(name) = \(policies.joined(separator: ", "))"
+                    }
+                components.append(contentsOf: contents)
                 return
             }
 
@@ -373,8 +387,10 @@ final public class ProfileSerialization {
                             throw ProfileSerializationError.dataCorrupted
                         }
 
-                        let configurationString = proxy?.map {
-                            "\($0.key.convertToKebabCase())=\($0.value)"
+                        let configurationString = try proxy?.sorted(by: { lhs, rhs in
+                            lhs.key < rhs.key
+                        }).map {
+                            "\($0.key.convertToKebabCase()) = \(try serialize($0.value))"
                         }.joined(separator: ", ")
 
                         if let configurationString {
@@ -394,16 +410,8 @@ final public class ProfileSerialization {
             } else if let dictionary = value as? [String: Any] {
                 try dictionary.keys.sorted().forEach { k in
                     let v = dictionary[k]!
-
                     let k = k.convertToKebabCase()
-                    if k == "exceptions" || k == "dns-servers" || k == "hostnames" {
-                        guard let l = v as? [String] else {
-                            throw ProfileSerializationError.dataCorrupted
-                        }
-                        components.append("\(k) = \(l.joined(separator: ","))")
-                    } else {
-                        components.append("\(k) = \(v)")
-                    }
+                    components.append("\(k) = \(try serialize(v))")
                 }
             } else {
                 throw ProfileSerializationError.dataCorrupted
@@ -414,6 +422,76 @@ final public class ProfileSerialization {
             .joined(separator: newLine)
             .replacingOccurrences(of: newLine + newLine, with: newLine)
             .data(using: .utf8) ?? .init()
+    }
+
+    private static func serialize(_ obj: Any) throws -> String {
+        // For better performance, the most expensive conditions to evaluate should be last.
+        switch obj {
+            case let str as String:
+                return str
+            case let boolValue as Bool:
+                return boolValue.description
+            case let num as Int:
+                return num.description
+            case let num as Int8:
+                return num.description
+            case let num as Int16:
+                return num.description
+            case let num as Int32:
+                return num.description
+            case let num as Int64:
+                return num.description
+            case let num as UInt:
+                return num.description
+            case let num as UInt8:
+                return num.description
+            case let num as UInt16:
+                return num.description
+            case let num as UInt32:
+                return num.description
+            case let num as UInt64:
+                return num.description
+            case let array as [Any?]:
+                return try array.compactMap {
+                    guard let obj = $0 else {
+                        return nil
+                    }
+                    return try serialize(obj)
+                }.joined(separator: ", ")
+            case let dict as [AnyHashable: Any?]:
+                guard let obj = dict as? [String: Any?] else {
+                    throw NSError(
+                        domain: NSCocoaErrorDomain,
+                        code: CocoaError.propertyListReadCorrupt.rawValue,
+                        userInfo: [NSDebugDescriptionErrorKey: "NSDictionary key must be NSString"]
+                    )
+                }
+                return try obj.keys.sorted().map {
+                    guard let v = obj[$0], let v else {
+                        return "\($0) = "
+                    }
+                    return "\($0) = \(try serialize(v))"
+                }.joined(separator: ",")
+            case let num as Float:
+                return num.description
+            case let num as Double:
+                return num.description
+            case let num as Decimal:
+                return num.description
+            case let num as NSDecimalNumber:
+                return num.description
+            case is NSNull:
+                return "null"
+            case is NSNumber:
+                let num = obj as! NSNumber
+                return num.description
+            default:
+                throw NSError(
+                    domain: NSCocoaErrorDomain,
+                    code: CocoaError.propertyListReadCorrupt.rawValue,
+                    userInfo: [NSDebugDescriptionErrorKey: "Invalid object cannot be serialized"]
+                )
+        }
     }
 }
 
