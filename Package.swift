@@ -16,8 +16,8 @@
 import PackageDescription
 
 let swiftArgumentParser: Target.Dependency = .product(
-    name: "ArgumentParser",
-    package: "swift-argument-parser"
+  name: "ArgumentParser",
+  package: "swift-argument-parser"
 )
 let swiftNIO: Target.Dependency = .product(name: "NIO", package: "swift-nio")
 let swiftNIOCore: Target.Dependency = .product(name: "NIOCore", package: "swift-nio")
@@ -25,145 +25,142 @@ let swiftNIOHTTP1: Target.Dependency = .product(name: "NIOHTTP1", package: "swif
 let swiftNIOPosix: Target.Dependency = .product(name: "NIOPosix", package: "swift-nio")
 let swiftNIOSSL: Target.Dependency = .product(name: "NIOSSL", package: "swift-nio-ssl")
 let swiftNIOTransportServices: Target.Dependency = .product(
-    name: "NIOTransportServices",
-    package: "swift-nio-transport-services"
+  name: "NIOTransportServices",
+  package: "swift-nio-transport-services"
 )
 let swiftCrypto: Target.Dependency = .product(name: "Crypto", package: "swift-crypto")
 let swiftLog: Target.Dependency = .product(name: "Logging", package: "swift-log")
 
 let package = Package(
-    name: "swift-nio-netbot",
-    platforms: [
-        .macOS(.v10_15),
-        .iOS(.v13),
-    ],
-    products: [
-        .library(name: "NetbotCLICore", targets: ["NetbotCLICore"]),
-        .library(name: "NIODNS", targets: ["NIODNS"]),
-        .library(name: "NIOHTTPMitM", targets: ["NIOHTTPMitM"]),
-        .library(name: "NIOHTTPProxy", targets: ["NIOHTTPProxy"]),
-        .library(name: "NIONetbot", targets: ["NIONetbot"]),
-        .library(name: "NIONetbotMisc", targets: ["NIONetbotMisc"]),
-        .library(name: "NIOSOCKS5", targets: ["NIOSOCKS5"]),
-        .library(name: "NIOSS", targets: ["NIOSS"]),
-        .library(name: "NIOTrojan", targets: ["NIOTrojan"]),
-        .library(name: "NIOVMESS", targets: ["NIOVMESS"]),
-        .executable(name: "netbotcli", targets: ["NetbotCLI"]),
-    ],
-    dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.0.1"),
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "2.1.0"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.4.2"),
-        .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
-        .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
-        .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
-        .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0"),
-        .package(url: "https://github.com/apple/swift-format.git", branch: "main"),
-        .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0")
-    ],
-    targets: [
-        .target(name: "ConnectionPool", dependencies: [swiftNIOCore, swiftNIOPosix, swiftLog]),
-        .target(name: "CSHAKE128"),
-        .target(name: "SHAKE128", dependencies: ["CSHAKE128", "PrettyBytes", swiftCrypto]),
-        .target(name: "NIODNS", dependencies: [swiftNIOCore, swiftNIOPosix]),
-        .target(
-            name: "NIOHTTPMitM",
-            dependencies: [swiftNIOCore, swiftNIOHTTP1, swiftNIOSSL, swiftLog]
-        ),
-        .target(name: "NIOHTTPProxy", dependencies: ["NIONetbotMisc", swiftNIOCore, swiftNIOHTTP1]),
-        .target(name: "NIONetbotMisc", dependencies: [swiftNIOCore, swiftNIOPosix]),
-        .target(name: "NIOSOCKS5", dependencies: ["NIONetbotMisc", swiftNIOCore]),
-        .target(
-            name: "NIOSS",
-            dependencies: ["NIONetbotMisc", "PrettyBytes", swiftCrypto, swiftNIOCore]
-        ),
-        .target(
-            name: "NIOTrojan",
-            dependencies: ["NIONetbotMisc", "PrettyBytes", swiftCrypto, swiftNIOCore, swiftNIOSSL]
-        ),
-        .target(
-            name: "NIOVMESS",
-            dependencies: ["NIONetbotMisc", "PrettyBytes", "SHAKE128", swiftCrypto, swiftNIOCore]
-        ),
-        .target(
-            name: "NIONetbot",
-            dependencies: [
-                "ConnectionPool",
-                "NIONetbotMisc",
-                "NIODNS",
-                "NIOHTTPProxy",
-                "NIOHTTPMitM",
-                "NIOSOCKS5",
-                "NIOSS",
-                "NIOTrojan",
-                "NIOVMESS",
-                swiftCrypto,
-                swiftNIOCore,
-                swiftNIOPosix,
-                swiftLog,
-                swiftNIOSSL,
-                swiftNIOHTTP1,
-                swiftNIOTransportServices,
-                .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
-                .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
-                .product(name: "NIOExtras", package: "swift-nio-extras")
-            ]
-        ),
-        .target(name: "PrettyBytes"),
-        .target(
-            name: "NetbotCLICore",
-            dependencies: [
-                "NIONetbot",
-                swiftArgumentParser,
-                swiftLog,
-                .product(name: "MaxMindDB", package: "swift-maxminddb")
-            ]
-        ),
-        .executableTarget(
-            name: "NetbotCLI",
-            dependencies: ["NetbotCLICore", swiftLog]
-        ),
-        .testTarget(name: "NIOHTTPMitMTests", dependencies: ["NIOHTTPMitM", swiftNIO]),
-        .testTarget(name: "NIONetbotMiscTests", dependencies: ["NIONetbotMisc", swiftNIO]),
-        .testTarget(
-            name: "NIOHTTPProxyTests",
-            dependencies: ["NIOHTTPProxy", swiftNIO, swiftNIOHTTP1, swiftNIOSSL]
-        ),
-        .testTarget(name: "NIOTrojanTests", dependencies: ["NIOTrojan", "PrettyBytes", swiftNIO]),
-        .testTarget(name: "SHAKE128Tests", dependencies: ["SHAKE128"]),
-        .testTarget(name: "NIOSOCKS5Tests", dependencies: ["NIOSOCKS5", swiftNIO]),
-        .testTarget(
-            name: "NIOSSTests",
-            dependencies: ["PrettyBytes", "NIOSS", swiftNIO],
-            exclude: [
-                "RequestEncoderTests.g.swift.gyb",
-                "ResponseDecoderTests.g.swift.gyb"
-            ]
-        ),
-        .testTarget(name: "NIOVMESSTests", dependencies: ["PrettyBytes", "NIOVMESS", swiftNIO]),
-        .testTarget(
-            name: "NIONetbotTests",
-            dependencies: [
-                "NIONetbot",
-                "NIONetbotMisc",
-                "NIOHTTPProxy",
-                "NIOSOCKS5",
-                "NIOSS",
-                "NIOVMESS",
-                swiftNIO,
-                swiftNIOSSL,
-                swiftNIOHTTP1,
-                swiftNIOTransportServices
-            ]
-        ),
-        .testTarget(
-            name: "NetbotCLICoreTests",
-            dependencies: [
-                "NetbotCLICore",
-                swiftNIO
-            ],
-            exclude: ["ParsableRuleTests.g.swift.gyb"]
-        )
-    ],
-    swiftLanguageVersions: [.v5]
+  name: "swift-nio-netbot",
+  platforms: [
+    .macOS(.v10_15),
+    .iOS(.v13),
+  ],
+  products: [
+    .library(name: "NECLICore", targets: ["NECLICore"]),
+    .library(name: "NEConnectionPool", targets: ["NEConnectionPool"]),
+    .library(name: "NECore", targets: ["NECore"]),
+    .library(name: "NEDNS", targets: ["NEDNS"]),
+    .library(name: "NEHTTP", targets: ["NEHTTP"]),
+    .library(name: "NEHTTPMitM", targets: ["NEHTTPMitM"]),
+    .library(name: "NEMisc", targets: ["NEMisc"]),
+    .library(name: "NEPrettyBytes", targets: ["NEPrettyBytes"]),
+    .library(name: "NESHAKE128", targets: ["NESHAKE128"]),
+    .library(name: "NESOCKS", targets: ["NESOCKS"]),
+    .library(name: "NESS", targets: ["NESS"]),
+    .library(name: "NETrojan", targets: ["NETrojan"]),
+    .library(name: "NEVMESS", targets: ["NEVMESS"]),
+    .executable(name: "netbotcli", targets: ["NECLI"]),
+  ],
+  dependencies: [
+    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.0.1"),
+    .package(url: "https://github.com/apple/swift-crypto.git", from: "2.1.0"),
+    .package(url: "https://github.com/apple/swift-log.git", from: "1.4.2"),
+    .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
+    .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
+    .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
+    .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0"),
+    .package(url: "https://github.com/apple/swift-format.git", branch: "main"),
+    .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0")
+  ],
+  targets: [
+    .executableTarget(
+      name: "NECLI",
+      dependencies: ["NECLICore", swiftLog, swiftArgumentParser]
+    ),
+    .target(name: "CNESHAKE128"),
+    .target(
+      name: "NECLICore",
+      dependencies: [
+        "NECore",
+        swiftLog,
+        .product(name: "MaxMindDB", package: "swift-maxminddb")
+      ]
+    ),
+    .target(name: "NEConnectionPool", dependencies: [swiftNIOCore, swiftNIOPosix, swiftLog]),
+    .target(
+      name: "NECore",
+      dependencies: [
+        "NEConnectionPool",
+        "NEDNS",
+        "NEHTTP",
+        "NEHTTPMitM",
+        "NEMisc",
+        "NESOCKS",
+        "NESS",
+        "NETrojan",
+        "NEVMESS",
+        swiftCrypto,
+        swiftNIOCore,
+        swiftNIOPosix,
+        swiftLog,
+        swiftNIOSSL,
+        swiftNIOHTTP1,
+        swiftNIOTransportServices,
+        .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
+        .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
+        .product(name: "NIOExtras", package: "swift-nio-extras")
+      ]
+    ),
+    .target(name: "NEDNS", dependencies: [swiftNIOCore, swiftNIOPosix]),
+    .target(name: "NEHTTP", dependencies: ["NEMisc", swiftNIOCore, swiftNIOHTTP1]),
+    .target(
+      name: "NEHTTPMitM",
+      dependencies: [swiftNIOCore, swiftNIOHTTP1, swiftNIOSSL, swiftLog]
+    ),
+    .target(name: "NEMisc", dependencies: [swiftNIOCore, swiftNIOPosix]),
+    .target(name: "NEPrettyBytes"),
+    .target(name: "NESHAKE128", dependencies: ["CNESHAKE128", "NEPrettyBytes", swiftCrypto]),
+    .target(name: "NESOCKS", dependencies: ["NEMisc", swiftNIOCore]),
+    .target(name: "NESS", dependencies: ["NEMisc", "NEPrettyBytes", swiftCrypto, swiftNIOCore]),
+    .target(
+      name: "NETrojan",
+      dependencies: ["NEMisc", "NEPrettyBytes", swiftCrypto, swiftNIOCore, swiftNIOSSL]
+    ),
+    .target(
+      name: "NEVMESS",
+      dependencies: ["NEMisc", "NEPrettyBytes", "NESHAKE128", swiftCrypto, swiftNIOCore]
+    ),
+    .testTarget(
+      name: "NECLICoreTests",
+      dependencies: [
+        "NECLICore",
+        swiftNIO
+      ],
+      exclude: ["ParsableRuleTests.g.swift.gyb"]
+    ),
+    .testTarget(
+      name: "NECoreTests",
+      dependencies: [
+        "NECore",
+        "NEHTTP",
+        "NEMisc",
+        "NESOCKS",
+        "NESS",
+        "NEVMESS",
+        swiftNIO,
+        swiftNIOSSL,
+        swiftNIOHTTP1,
+        swiftNIOTransportServices
+      ]
+    ),
+    .testTarget(name: "NEHTTPMitMTests", dependencies: ["NEHTTPMitM", swiftNIO]),
+    .testTarget(name: "NEHTTPTests", dependencies: ["NEHTTP", swiftNIO, swiftNIOHTTP1, swiftNIOSSL]),
+    .testTarget(name: "NEMiscTests", dependencies: ["NEMisc", swiftNIO]),
+    .testTarget(name: "NESHAKE128Tests", dependencies: ["NESHAKE128"]),
+    .testTarget(name: "NESOCKSTests", dependencies: ["NESOCKS", swiftNIO]),
+    .testTarget(
+      name: "NESSTests",
+      dependencies: ["NEPrettyBytes", "NESS", swiftNIO],
+      exclude: [
+        "RequestEncoderTests.g.swift.gyb",
+        "ResponseDecoderTests.g.swift.gyb"
+      ]
+    ),
+    .testTarget(name: "NETrojanTests", dependencies: ["NETrojan", "NEPrettyBytes", swiftNIO]),
+    .testTarget(name: "NEVMESSTests", dependencies: ["NEPrettyBytes", "NEVMESS", swiftNIO]),
+
+  ],
+  swiftLanguageVersions: [.v5]
 )

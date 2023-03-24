@@ -1,8 +1,4 @@
 {
-  "indentation" : {
-    "spaces" : 4
-  },
   "indentConditionalCompilationBlocks" : false,
-  "indentSwitchCaseLabels" : true,
   "lineBreakBeforeEachArgument" : true
 }
