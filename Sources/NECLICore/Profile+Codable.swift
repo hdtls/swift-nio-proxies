@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Foundation
 @_exported import NECore
 
 extension Profile: Codable {
@@ -71,6 +72,18 @@ extension Profile: Codable {
       },
       forKey: .policyGroups
     )
+  }
+}
+
+extension Profile {
+
+  /// Initialize an instance of `Profile` from specified url.
+  /// - Parameter url: The url where `Profile` contents stored.
+  public init(contentsOf url: URL) throws {
+    let data = try Data(contentsOf: url)
+    let jsonObject = try ProfileSerialization.jsonObject(with: data)
+    let jsonData = try JSONSerialization.data(withJSONObject: jsonObject)
+    self = try JSONDecoder().decode(Profile.self, from: jsonData)
   }
 }
 

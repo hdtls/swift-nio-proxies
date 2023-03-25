@@ -423,6 +423,9 @@ final public class ProfileSerialization {
       .replacingOccurrences(of: newLine + newLine, with: newLine)
       .data(using: .utf8) ?? .init()
   }
+}
+
+extension ProfileSerialization {
 
   private static func serialize(_ obj: Any) throws -> String {
     // For better performance, the most expensive conditions to evaluate should be last.
@@ -493,6 +496,7 @@ final public class ProfileSerialization {
       )
     }
   }
+
 }
 
 extension ProfileSerialization.JSONValue {
