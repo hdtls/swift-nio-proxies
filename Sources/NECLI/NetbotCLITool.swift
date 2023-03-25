@@ -24,18 +24,6 @@ import FoundationNetworking
 @main
 public struct NetbotCLITool: AsyncParsableCommand {
 
-  #if os(macOS)
-  /// A configuration object use for config this command.
-  public static var configuration: CommandConfiguration = .init(
-    commandName: "netbotcli",
-    abstract: "",
-    discussion: "",
-    version: "1.0.0",
-    subcommands: [
-      SystemProxyConfigCommand.self
-    ]
-  )
-  #else
   /// A configuration object use for config this command.
   public static var configuration: CommandConfiguration = .init(
     commandName: "netbotcli",
@@ -43,7 +31,6 @@ public struct NetbotCLITool: AsyncParsableCommand {
     discussion: "",
     version: "1.0.0"
   )
-  #endif
 
   /// The SOCKS5 proxy server listen address.
   @Option(help: "The SOCKS5 proxy server listen address.")
@@ -87,38 +74,41 @@ public struct NetbotCLITool: AsyncParsableCommand {
   public init() {}
 
   public func run() async throws {
-    // Downloading external resources...
-    let supportDirectory: URL = {
-      let url = FileManager.default.urls(
-        for: .applicationSupportDirectory,
-        in: .userDomainMask
-      )[0]
-      return url.appendingPathComponent("io.tenbits.Netbot")
-    }()
+    var profile = try await loadProfile()
 
-    // Default GeoLite2 database file url.
-    let maxminddbURL = supportDirectory.appendingPathComponent("GeoLite2-Country.mmdb")
+    // Overrides settings with input options
+    profile.basicSettings.socksListenAddress =
+      socksListenAddress ?? profile.basicSettings.socksListenAddress
+    profile.basicSettings.socksListenPort = socksListenPort ?? profile.basicSettings.socksListenPort
+    profile.basicSettings.httpListenAddress =
+      httpListenAddress ?? profile.basicSettings.httpListenAddress
+    profile.basicSettings.httpListenPort = httpListenPort ?? profile.basicSettings.httpListenPort
+    profile.basicSettings.logLevel = logLevel ?? profile.basicSettings.logLevel
 
-    let externalResourcesDirectory = supportDirectory.appendingPathComponent(
-      "External Resources"
-    )
-
-    try FileManager.default.createDirectory(
-      at: externalResourcesDirectory,
-      withIntermediateDirectories: true
-    )
-
-    var profile: Profile = try await loadProfile()
-
-    let logLevel = logLevel ?? profile.basicSettings.logLevel
-
+    // Bootstrap Logger with specified logLevel that defined in profile and overrided by input option
     LoggingSystem.bootstrap { label in
       var handler = StreamLogHandler.standardOutput(label: label)
-      handler.logLevel = logLevel
+      handler.logLevel = profile.basicSettings.logLevel
       return handler
     }
-
     let logger = Logger(label: "io.tenbits.Netbot")
+
+    // Default GeoLite2 database file url.
+    #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
+    let maxminddbURL: URL
+    if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
+      maxminddbURL = URL.supportDirectory.appending(path: "GeoLite2-Country.mmdb")
+    } else {
+      maxminddbURL = URL.supportDirectory.appendingPathComponent("GeoLite2-Country.mmdb")
+    }
+    #else
+    let maxminddbURL = URL.supportDirectory.appendingPathComponent("GeoLite2-Country.mmdb")
+    #endif
+    // Also for GeoLite2 database
+    try FileManager.default.createDirectory(
+      at: URL.supportDirectory,
+      withIntermediateDirectories: true
+    )
 
     // Perform GeoLite2-Country.mmdb downloading...
     if !FileManager.default.fileExists(atPath: maxminddbURL.path) {
@@ -131,82 +121,6 @@ public struct NetbotCLITool: AsyncParsableCommand {
       try FileManager.default.moveItem(at: url, to: maxminddbURL)
     }
 
-    let filtered = profile.rules.filter({ $0 is ExternalRuleResources })
-    if filtered.isEmpty {
-      do {
-        // Perform proxy rule external resources downloading...
-        logger.trace("Downloading external resources")
-        for e in filtered {
-          let resources = e as! ParsableRule & ExternalRuleResources
-          let externalResourcesURL = try resources.externalResourcesURL
-
-          logger.trace("Downloading from \(externalResourcesURL)")
-          let (srcURL, _) = try await URLSession(configuration: .ephemeral).download(
-            from: externalResourcesURL
-          )
-
-          // Remove older file first if exists.
-          let resourcesURL = externalResourcesDirectory.appendingPathComponent(
-            resources.externalResourcesStorageName
-          )
-          if FileManager.default.fileExists(atPath: resourcesURL.path) {
-            try FileManager.default.removeItem(at: resourcesURL)
-          }
-          try FileManager.default.moveItem(at: srcURL, to: resourcesURL)
-        }
-      } catch {}
-    }
-
-    // Reload profile after resources files downloaded.
-    profile = try await loadProfile()
-
-    #if canImport(SystemConfiguration)
-    var proxyctl: [String] = []
-
-    profile.basicSettings.socksListenAddress =
-      socksListenAddress ?? profile.basicSettings.socksListenAddress
-    if let socksListenAddress = profile.basicSettings.socksListenAddress {
-      proxyctl.append("--socks-listen-address")
-      proxyctl.append(socksListenAddress)
-    }
-
-    profile.basicSettings.socksListenPort =
-      socksListenPort ?? profile.basicSettings.socksListenPort
-    if let socksListenPort = profile.basicSettings.socksListenPort {
-      proxyctl.append("--socks-listen-port")
-      proxyctl.append("\(socksListenPort)")
-    }
-
-    profile.basicSettings.httpListenAddress =
-      httpListenAddress ?? profile.basicSettings.httpListenAddress
-    if let httpListenAddress = profile.basicSettings.httpListenAddress {
-      proxyctl.append("--http-listen-address")
-      proxyctl.append("\(httpListenAddress)")
-    }
-
-    profile.basicSettings.httpListenPort =
-      httpListenPort ?? profile.basicSettings.httpListenPort
-    if let httpListenPort = profile.basicSettings.httpListenPort {
-      proxyctl.append("--http-listen-port")
-      proxyctl.append("\(httpListenPort)")
-    }
-
-    if profile.basicSettings.excludeSimpleHostnames {
-      proxyctl.append("--exclude-simple-hostnames")
-    }
-
-    if !profile.basicSettings.exceptions.isEmpty {
-      proxyctl.append("--exceptions")
-      proxyctl.append(profile.basicSettings.exceptions.joined(separator: ","))
-    }
-
-    if !proxyctl.isEmpty {
-      proxyctl.insert("install", at: 0)
-
-      //            SystemProxyConfigCommand.main(proxyctl)
-    }
-    #endif
-
     try await App.init(
       profile: profile,
       outboundMode: outboundMode,
@@ -218,39 +132,68 @@ public struct NetbotCLITool: AsyncParsableCommand {
 
   private func loadProfile() async throws -> Profile {
     var profile: Profile = .init()
+    if let profileFile {
+      #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
+      let profileURL: URL
+      if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
+        profileURL = URL(filePath: profileFile, directoryHint: .notDirectory)
+      } else {
+        profileURL = URL(fileURLWithPath: profileFile)
+      }
+      #else
+      let profileURL = URL(fileURLWithPath: profileFile)
+      #endif
 
-    if let path = profileFile {
-      let data = try Data(contentsOf: URL(fileURLWithPath: path))
-      let jsonObject = try ProfileSerialization.jsonObject(with: data)
-      let jsonData = try JSONSerialization.data(
-        withJSONObject: jsonObject,
-        options: .fragmentsAllowed
-      )
-      profile = try JSONDecoder().decode(Profile.self, from: jsonData)
+      profile = try Profile(contentsOf: profileURL)
     }
 
-    let externalResourcesDirectory: URL = {
-      var url = FileManager.default.urls(
-        for: .applicationSupportDirectory,
-        in: .userDomainMask
-      )[0]
-      url.appendPathComponent("io.tenbits.Netbot")
-      return url.appendingPathComponent("External Resources")
-    }()
+    // External resources will be downloaded and saved into `URL.externalResourcesDirectory`,
+    // so we need to make sure an directory is here
+    try FileManager.default.createDirectory(
+      at: URL.externalResourcesDirectory,
+      withIntermediateDirectories: true
+    )
 
-    let rules: [ParsableRule] = profile.rules.map {
-      guard var resources = $0 as? ExternalRuleResources & ParsableRule else {
-        return $0
+    for (position, rule) in profile.rules.enumerated() {
+      guard var resources = rule as? ExternalRuleResources & ParsableRule else {
+        continue
       }
 
-      resources.loadAllRules(
-        from: externalResourcesDirectory.appendingPathComponent(
-          resources.externalResourcesStorageName
+      #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
+      let fileURL: URL
+      if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
+        fileURL = URL.externalResourcesDirectory.appending(
+          path: resources.externalResourcesStorageName,
+          directoryHint: .notDirectory
         )
+      } else {
+        fileURL = URL.externalResourcesDirectory.appendingPathComponent(
+          resources.externalResourcesStorageName,
+          isDirectory: false
+        )
+      }
+      #else
+      let fileURL = URL.externalResourcesDirectory.appendingPathComponent(
+        resources.externalResourcesStorageName,
+        isDirectory: false
       )
-      return resources
+      #endif
+
+      // Downloading external resources...
+      let (srcURL, _) = try await URLSession(configuration: .ephemeral).download(
+        from: resources.externalResourcesURL
+      )
+
+      // Remove older file first if exists.
+      if FileManager.default.fileExists(atPath: fileURL.path) {
+        try FileManager.default.removeItem(at: fileURL)
+      }
+      try FileManager.default.moveItem(at: srcURL, to: fileURL)
+
+      resources.loadAllRules(from: fileURL)
+
+      profile.rules[position] = resources
     }
-    profile.rules = rules
 
     return profile
   }
