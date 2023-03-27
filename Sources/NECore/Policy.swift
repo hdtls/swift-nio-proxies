@@ -86,12 +86,3 @@ public struct ProxyPolicy: Policy {
     self.destinationAddress = destinationAddress
   }
 }
-
-public enum Builtin: Sendable {
-
-  public static let policies: [any Policy] = [
-    DirectPolicy(),
-    RejectPolicy(),
-    RejectTinyGifPolicy(),
-  ]
-}

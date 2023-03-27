@@ -327,7 +327,7 @@ final public class App: Sendable {
     // The user may not have preferred policy, so if not
     // we should fallback.
     if let preferred = preferred {
-      fallback = (profile.policies + Builtin.policies).first { $0.name == preferred }
+      fallback = profile.policies.first { $0.name == preferred }
     }
 
     precondition(

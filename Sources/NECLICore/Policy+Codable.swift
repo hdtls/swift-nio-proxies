@@ -18,10 +18,10 @@ import NECore
 struct AnyPolicy {
 
   /// The actual policy value.
-  var base: any Policy
+  var base: Policy
 
   /// Initialize an instance of `AnyPolicy` with specified base value.
-  init(_ base: any Policy) {
+  init(_ base: Policy) {
     self.base = base
   }
 }
@@ -43,11 +43,11 @@ extension AnyPolicy: Codable {
 
     switch rawValue {
     case "direct":
-      base = DirectPolicy()
+      base = DirectPolicy(name: name)
     case "reject":
-      base = RejectPolicy()
+      base = RejectPolicy(name: name)
     case "reject-tinygif":
-      base = RejectTinyGifPolicy()
+      base = RejectTinyGifPolicy(name: name)
     default:
       let proxy = try container.decode(Proxy.self, forKey: .proxy)
       base = ProxyPolicy(name: name, proxy: proxy)

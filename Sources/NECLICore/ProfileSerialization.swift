@@ -129,7 +129,7 @@ final public class ProfileSerialization {
   public class func jsonObject(with data: ByteBuffer) throws -> Any {
     var _rulesKeyedByLine: [Int: String] = [:]
     var _groupKeyedByLine: [Int: [String: [String]]] = [:]
-    var _policies: [String] = Builtin.policies.map { $0.name }
+    var _policies: [String] = []
 
     /// Line number being parsed.
     var cursor: Int = 0
@@ -143,7 +143,7 @@ final public class ProfileSerialization {
       cursor += 1
 
       guard case .object(var _json) = json else {
-        preconditionFailure()
+        throw ProfileSerializationError.dataCorrupted
       }
 
       switch (next, currentGroup) {
@@ -163,7 +163,7 @@ final public class ProfileSerialization {
         }
 
         guard case .array(var array) = _json[currentGroup] ?? .array([]) else {
-          preconditionFailure()
+          throw ProfileSerializationError.dataCorrupted
         }
 
         array.append(.convertFromString(l))
@@ -177,41 +177,60 @@ final public class ProfileSerialization {
           throw ProfileSerializationError.dataCorrupted
         }
 
+        if ["DIRECT", "REJECT", "REJECT-TINYGIF"].contains(o.0) && o.0.lowercased() != o.1 {
+          throw ProfileSerializationError.invalidFile(
+            reason: .invalidLine(
+              cursor: cursor,
+              description:
+                "\(o.0) is used as builtin policy types, consider use another name instead."
+            )
+          )
+        }
+
         guard case .array(var array) = _json[currentGroup] ?? .array([]) else {
-          preconditionFailure()
+          throw ProfileSerializationError.dataCorrupted
         }
 
         _policies.append(o.0)
 
-        // Rebuild policies as json array.
-        let components = o.1.split(separator: ",")
+        let jsonValue: JSONValue
+        // direct reject and reject-tinygif does not requires extra configurations
+        if ["direct", "reject", "reject-tinygif"].contains(o.1) {
+          jsonValue = .object([
+            AnyPolicy.CodingKeys.name.rawValue: .string(o.0),
+            AnyPolicy.CodingKeys.type.rawValue: .string(o.1),
+          ])
+        } else {
+          // Rebuild policies as json array.
+          let components = o.1.split(separator: ",")
 
-        var configuration: [String: JSONValue] = [:]
-        components.suffix(from: 1)
-          .forEach {
-            let substrings = $0.split(
-              separator: "=",
-              omittingEmptySubsequences: false
-            ).map { $0.trimmingCharacters(in: .whitespaces) }
+          var configuration: [String: JSONValue] = [:]
+          components.suffix(from: 1)
+            .forEach {
+              let substrings = $0.split(
+                separator: "=",
+                omittingEmptySubsequences: false
+              ).map { $0.trimmingCharacters(in: .whitespaces) }
 
-            let jsonKey = substrings.first!
+              let jsonKey = substrings.first!
 
-            configuration[jsonKey] = .convertFromString(
-              substrings.last!,
-              forKey: jsonKey
-            )
-          }
+              configuration[jsonKey] = .convertFromString(
+                substrings.last!,
+                forKey: jsonKey
+              )
+            }
 
-        let `protocol` = JSONValue.string(
-          components[0].trimmingCharacters(in: .whitespaces)
-        )
-        configuration["protocol"] = `protocol`
+          let `protocol` = JSONValue.string(
+            components[0].trimmingCharacters(in: .whitespaces)
+          )
+          configuration["protocol"] = `protocol`
 
-        let jsonValue = JSONValue.object([
-          AnyPolicy.CodingKeys.name.rawValue: .string(o.0),
-          AnyPolicy.CodingKeys.type.rawValue: `protocol`,
-          AnyPolicy.CodingKeys.proxy.rawValue: .object(configuration),
-        ])
+          jsonValue = JSONValue.object([
+            AnyPolicy.CodingKeys.name.rawValue: .string(o.0),
+            AnyPolicy.CodingKeys.type.rawValue: `protocol`,
+            AnyPolicy.CodingKeys.proxy.rawValue: .object(configuration),
+          ])
+        }
 
         array.append(jsonValue)
 
@@ -225,7 +244,7 @@ final public class ProfileSerialization {
         }
         //
         guard case .array(var array) = _json[currentGroup] ?? .array([]) else {
-          preconditionFailure()
+          throw ProfileSerializationError.dataCorrupted
         }
 
         // Rebuild policy group as json array.
@@ -256,7 +275,7 @@ final public class ProfileSerialization {
         guard
           case .object(var dictionary) = _json[currentGroup] ?? .object([:])
         else {
-          preconditionFailure()
+          throw ProfileSerializationError.dataCorrupted
         }
 
         let jsonKey = o.0
@@ -267,6 +286,17 @@ final public class ProfileSerialization {
 
         json = .object(_json)
       }
+    }
+
+    // Add missing builtin policies
+    if !_policies.contains("REJECT-TINYGIF") {
+      _policies.append("REJECT-TINYGIF")
+    }
+    if !_policies.contains("REJECT") {
+      _policies.append("REJECT")
+    }
+    if !_policies.contains("DIRECT") {
+      _policies.append("DIRECT")
     }
 
     // File validating.
@@ -281,7 +311,6 @@ final public class ProfileSerialization {
       }
     }
 
-    // All proxy label defined in rule should
     try _rulesKeyedByLine.forEach { (cursor, line) in
       let rawValue = line.split(separator: ",").first!.trimmingCharacters(in: .whitespaces)
       guard let factory = RuleSystem.factory(for: .init(rawValue: rawValue)),
@@ -291,7 +320,7 @@ final public class ProfileSerialization {
           reason: .invalidLine(cursor: cursor, description: line)
         )
       }
-      // Validate rule policy.
+      // Rule.policy should be the name of one of policies and policyGroups
       let all =
         _policies
         + Array(

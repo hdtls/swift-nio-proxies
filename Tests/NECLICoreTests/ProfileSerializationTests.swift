@@ -70,6 +70,60 @@ final class ProfileSerializationTests: XCTestCase {
     XCTAssertEqual(policiesString1, policiesString)
   }
 
+  func testSerializeBuiltinPolicies() throws {
+    let expectedPoliciesString =
+      "{\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"}]}"
+
+    let policiesString = """
+      [Policies]
+      DIRECT = direct
+      REJECT = reject
+      REJECT-TINYGIF = reject-tinygif
+      """
+
+    let jsonObject = try ProfileSerialization.jsonObject(
+      with: policiesString.data(using: .utf8)!
+    )
+    let data = try JSONSerialization.data(withJSONObject: jsonObject, options: .sortedKeys)
+    let policiesJsonString = String(data: data, encoding: .utf8)
+    XCTAssertEqual(policiesJsonString, expectedPoliciesString)
+
+    let jsonData = try ProfileSerialization.data(withJSONObject: jsonObject)
+    let policiesString1 = String(data: jsonData, encoding: .utf8)
+    XCTAssertEqual(policiesString1, policiesString)
+
+    // Test serialize policy with builtin policy name must have specified type
+    var errorPolicyString = """
+      [Policies]
+      DIRECT = reject
+      """
+    XCTAssertThrowsError(
+      try ProfileSerialization.jsonObject(
+        with: errorPolicyString.data(using: .utf8)!
+      )
+    )
+
+    errorPolicyString = """
+      [Policies]
+      REJECT = reject-tinygif
+      """
+    XCTAssertThrowsError(
+      try ProfileSerialization.jsonObject(
+        with: errorPolicyString.data(using: .utf8)!
+      )
+    )
+
+    errorPolicyString = """
+      [Policies]
+      REJECT-TINYGIF = reject
+      """
+    XCTAssertThrowsError(
+      try ProfileSerialization.jsonObject(
+        with: errorPolicyString.data(using: .utf8)!
+      )
+    )
+  }
+
   func testSerializePolicyGroups() throws {
     let expectedPolicyGroupsJsonString =
       "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"]},{\"name\":\"PROXY\",\"policies\":[\"HTTP\"]}]}"
