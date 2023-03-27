@@ -3,18 +3,18 @@ version: "3"
 services:
 
   runtime-setup:
-    image: swift-netbot-core:22.04-5.7
+    image: swift-netbot-core:5.7-jammy
     build:
       args:
         ubuntu_version: "jammy"
         swift_version: "5.7"
 
   test:
-    image: swift-netbot-core:22.04-5.7
+    image: swift-netbot-core:5.7-jammy
     environment:
-#      - FORCE_TEST_DISCOVERY=--enable-test-discovery
+      - FORCE_TEST_DISCOVERY=--enable-test-discovery
       - WARN_AS_ERROR_ARG=-Xswiftc -warnings-as-errors
       - SANITIZER_ARG=--sanitize=thread
 
   shell:
-    image: swift-netbot-core:22.04-5.7
+    image: swift-netbot-core:5.7-jammy
