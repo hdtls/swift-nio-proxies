@@ -46,8 +46,19 @@ extension Profile: Codable {
       BasicSettings.self,
       forKey: .basicSettings
     )
-    let policies = try container.decodeIfPresent([AnyPolicy].self, forKey: .policies)?.map {
-      $0.base
+    var policies =
+      try container.decodeIfPresent([AnyPolicy].self, forKey: .policies)?.map {
+        $0.base
+      } ?? []
+    // If the built-in policies do not exist, insert them at the beginning of the array
+    if !policies.contains(where: { $0.name == "REJECT-TINYGIF" }) {
+      policies.insert(RejectTinyGifPolicy(), at: 0)
+    }
+    if !policies.contains(where: { $0.name == "REJECT" }) {
+      policies.insert(RejectPolicy(), at: 0)
+    }
+    if !policies.contains(where: { $0.name == "DIRECT" }) {
+      policies.insert(DirectPolicy(), at: 0)
     }
     let policyGroups = try container.decodeIfPresent([AnyPolicyGroup].self, forKey: .policyGroups)
 
@@ -55,7 +66,7 @@ extension Profile: Codable {
       basicSettings: basicSettings ?? .init(),
       rules: rules,
       manInTheMiddleSettings: manInTheMiddleSettings ?? .init(),
-      policies: policies ?? [],
+      policies: policies,
       policyGroups: policyGroups ?? []
     )
   }
