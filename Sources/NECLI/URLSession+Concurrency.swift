@@ -22,7 +22,7 @@ extension URLSession {
 
   func download(for request: URLRequest) async throws -> (URL, URLResponse) {
     try await withCheckedThrowingContinuation { continuation in
-      URLSession.shared.downloadTask(with: request) { url, response, error in
+      downloadTask(with: request) { url, response, error in
         guard let url = url, let response = response else {
           continuation.resume(throwing: error!)
           return
@@ -35,7 +35,7 @@ extension URLSession {
 
   func download(from url: URL) async throws -> (URL, URLResponse) {
     try await withCheckedThrowingContinuation { continuation in
-      URLSession.shared.downloadTask(with: URLRequest(url: url)) { url, response, error in
+      downloadTask(with: URLRequest(url: url)) { url, response, error in
         guard let url = url, let response = response else {
           continuation.resume(throwing: error!)
           return
