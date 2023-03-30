@@ -16,7 +16,7 @@
 public struct Profile: Sendable {
 
   /// The rules contains in this configuration.
-  public var rules: [any ParsableRule] = []
+  public var rules: [ParsableRule] = []
 
   /// A setting object that provides HTTP MitM settings for this process.
   public var manInTheMiddleSettings: ManInTheMiddleSettings = .init()
@@ -25,19 +25,19 @@ public struct Profile: Sendable {
   public var basicSettings: BasicSettings = .init()
 
   /// All proxy policy object contains in this configuration object.
-  public var policies: [any Policy] = []
+  public var policies: [Policy] = [DirectPolicy(), RejectPolicy(), RejectTinyGifPolicy()]
 
   /// All selectable policy groups contains in this configuration object.
-  public var policyGroups: [any PolicyGroup] = []
+  public var policyGroups: [PolicyGroup] = []
 
   /// Initialize an instance of `Profile` with the specified basicSettings, replicat, rules, manInTheMiddleSettings,
   /// polcies and policyGroups.
   public init(
     basicSettings: BasicSettings,
-    rules: [any ParsableRule],
+    rules: [ParsableRule],
     manInTheMiddleSettings: ManInTheMiddleSettings,
-    policies: [any Policy],
-    policyGroups: [any PolicyGroup]
+    policies: [Policy],
+    policyGroups: [PolicyGroup]
   ) {
     self.basicSettings = basicSettings
     self.rules = rules
@@ -48,16 +48,23 @@ public struct Profile: Sendable {
 
   /// Initialize an `Profile`.
   ///
-  /// Calling this method is equivalent to calling
-  /// `init(basicSettings:rules:manInTheMiddleSettings:policies:policyGroups:)`
-  /// with a default basicSettings, replica rules, manInTheMiddleSettings, policies and policyGroups object.
+  /// Calling this method is equivalent to calling:
+  ///   ```swift
+  ///   init(
+  ///     basicSettings: .init(),
+  ///     rules: [],
+  ///     manInTheMiddleSettings: .init(),
+  ///     policies: [DirectPolicy(), RejectPolicy(), RejectTinyGifPolicy()],
+  ///     policyGroups: []
+  ///   )
+  ///   ```
   public init() {
     self.init(
       basicSettings: .init(),
-      rules: .init(),
+      rules: [],
       manInTheMiddleSettings: .init(),
-      policies: .init(),
-      policyGroups: .init()
+      policies: [DirectPolicy(), RejectPolicy(), RejectTinyGifPolicy()],
+      policyGroups: []
     )
   }
 }
