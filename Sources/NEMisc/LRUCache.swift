@@ -12,50 +12,37 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-
-public actor LRUCache<Key: Hashable, Value> {
+public struct LRUCache<Key, Value> where Key: Hashable {
 
   private var entries: [Key: CacheEntry] = [:]
 
-  private unowned(unsafe) var head: CacheEntry?
+  private var head: CacheEntry?
 
-  private unowned(unsafe) var tail: CacheEntry?
-
-  /// The current total cost of values in the cache
-  public private(set) var totalCost: Int = 0
-
-  /// The maximum total cost permitted
-  public var totalCostLimit: Int {
-    didSet { clean() }
-  }
+  private var tail: CacheEntry?
 
   /// The maximum number of values permitted
-  public var capacity: Int {
-    didSet { clean() }
-  }
-
-  /// Initialize an instance of `LRUCache` with specified `capacity` and `totalCostLimit`.
-  public init(capacity: Int, totalCostLimit: Int = .max) {
-    self.capacity = capacity
-    self.totalCostLimit = totalCostLimit
-  }
-}
-
-extension LRUCache {
+  private let capacity: Int
 
   /// The number of values currently stored in the cache
   public var count: Int {
     entries.count
   }
 
-  /// Is the cache empty?
+  /// A boolean value to determine whether the cache is empty.
   public var isEmpty: Bool {
     entries.isEmpty
   }
 
-  /// Insert a value into the cache with optional `cost`
-  public func setValue(_ value: Value?, forKey key: Key, cost: Int = 0) {
+  /// Initialize an instance of `LRUCache` with specified `capacity`.
+  public init(capacity: Int) {
+    self.capacity = capacity
+    entries.reserveCapacity(capacity)
+  }
+
+  /// Set or remove cached value for specified key.
+  ///
+  /// Remove value from caches if value is `nil` else set new value for key.
+  public mutating func setValue(_ value: Value?, forKey key: Key) {
     guard let value = value else {
       removeValue(forKey: key)
       return
@@ -63,36 +50,28 @@ extension LRUCache {
 
     if let entry = entries[key] {
       entry.value = value
-      totalCost -= entry.cost
-      entry.cost = cost
       remove(entry)
       append(entry)
     } else {
-      let entry = CacheEntry(
-        value: value,
-        cost: cost,
-        key: key
-      )
+      let entry = CacheEntry(key: key, value: value)
       entries[key] = entry
       append(entry)
     }
-    totalCost += cost
     clean()
   }
 
   /// Remove a value  from the cache and return it
   @discardableResult
-  public func removeValue(forKey key: Key) -> Value? {
+  public mutating func removeValue(forKey key: Key) -> Value? {
     guard let entry = entries.removeValue(forKey: key) else {
       return nil
     }
     remove(entry)
-    totalCost -= entry.cost
     return entry.value
   }
 
   /// Fetch a value from the cache
-  public func value(forKey key: Key) -> Value? {
+  public mutating func value(forKey key: Key) -> Value? {
     if let entry = entries[key] {
       remove(entry)
       append(entry)
@@ -102,7 +81,7 @@ extension LRUCache {
   }
 
   /// Remove all values from the cache
-  public func removeAllValues() {
+  public mutating func removeAllValues() {
     entries.removeAll()
     head = nil
     tail = nil
@@ -111,26 +90,23 @@ extension LRUCache {
 
 extension LRUCache {
 
-  final private class CacheEntry {
-
-    var value: Value
-
-    var cost: Int
+  final fileprivate class CacheEntry {
 
     let key: Key
 
-    unowned(unsafe) var prev: CacheEntry?
+    var value: Value
 
-    unowned(unsafe) var next: CacheEntry?
+    var prev: CacheEntry?
 
-    init(value: Value, cost: Int, key: Key) {
-      self.value = value
-      self.cost = cost
+    var next: CacheEntry?
+
+    init(key: Key, value: Value) {
       self.key = key
+      self.value = value
     }
   }
 
-  private func remove(_ entry: CacheEntry) {
+  fileprivate mutating func remove(_ entry: CacheEntry) {
     if head === entry {
       head = entry.next
     }
@@ -142,7 +118,7 @@ extension LRUCache {
     entry.next = nil
   }
 
-  private func append(_ entry: CacheEntry) {
+  fileprivate mutating func append(_ entry: CacheEntry) {
     assert(entry.next == nil)
     if head == nil {
       head = entry
@@ -152,13 +128,10 @@ extension LRUCache {
     tail = entry
   }
 
-  private func clean() {
-    while totalCost > totalCostLimit || count > capacity,
-      let entry = head
-    {
+  fileprivate mutating func clean() {
+    while count > capacity, let entry = head {
       remove(entry)
       entries.removeValue(forKey: entry.key)
-      totalCost -= entry.cost
     }
   }
 }
