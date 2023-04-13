@@ -3,15 +3,14 @@ version: "3"
 services:
 
   runtime-setup:
-    image: swift-netbot-core:nightly-5.8-jammy
+    image: swift-netbot-core:5.8-jammy
     build:
       args:
-        swift_repo: "swiftlang/swift"
-        swift_version: "nightly-5.8"
         ubuntu_version: "jammy"
+        swift_version: "5.8"
 
   test:
-    image: swift-netbot-core:nightly-5.8-jammy
+    image: swift-netbot-core:5.8-jammy
     environment:
       - FORCE_TEST_DISCOVERY=--enable-test-discovery
       - WARN_AS_ERROR_ARG=-Xswiftc -warnings-as-errors
@@ -19,4 +18,4 @@ services:
       - IMPORT_CHECK_ARG=--explicit-target-dependency-import-check error
 
   shell:
-    image: swift-netbot-core:nightly-5.8-jammy
+    image: swift-netbot-core:5.8-jammy
