@@ -26,95 +26,57 @@ import NIOHTTPCompression
 import NIOPosix
 import NIOSSL
 
-final public class App: Sendable {
+final public class Netbot: @unchecked Sendable {
 
-  private actor MutableStorage {
+  @Protected public var outboundMode: OutboundMode = .direct
 
-    var profile: Profile
+  @Protected public var isHTTPCaptureEnabled: Bool = false
 
-    var outboundMode: OutboundMode
+  @Protected public var isHTTPMitMEnabled: Bool = false
 
-    var isHTTPCaptureEnabled: Bool = false
+  @Protected private var quiesces: [(ServerQuiescingHelper, EventLoopPromise<Void>)] = []
 
-    var isMitmEnabled: Bool = false
-
-    var serverQuiesces: [(ServerQuiescingHelper, EventLoopPromise<Void>)]
-
-    init(
-      profile: Profile,
-      outboundMode: OutboundMode = .direct,
-      enableHTTPCapture: Bool = false,
-      enableMitm: Bool = false
-    ) {
-      self.profile = profile
-      self.outboundMode = outboundMode
-      self.isHTTPCaptureEnabled = enableHTTPCapture
-      self.isMitmEnabled = enableMitm
-      self.serverQuiesces = []
-    }
-
-    func enableHTTPCapture(_ isEnabled: Bool) {
-      isHTTPCaptureEnabled = isEnabled
-    }
-
-    func enableHTTPMitM(_ isEnabled: Bool) {
-      isMitmEnabled = isEnabled
-    }
-
-    func appendServerQuiesces(_ sq: (ServerQuiescingHelper, EventLoopPromise<Void>)) {
-      serverQuiesces.append(sq)
-    }
-  }
+  private let profile: Profile
 
   private let logger: Logger
 
-  private let storage: MutableStorage
-
   private let eventLoopGroup: EventLoopGroup
 
-  public init(
-    logger: Logger = .init(label: "io.tenbits.Netbot"),
-    profile: Profile,
-    outboundMode: OutboundMode = .direct,
-    enableHTTPCapture: Bool = false,
-    enableMitm: Bool = false
-  ) {
+  public init(profile: Profile, logger: Logger, outboundMode: OutboundMode = .direct) {
+    self.profile = profile
     self.logger = logger
+    self.outboundMode = outboundMode
     self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
-    self.storage = .init(
-      profile: profile,
-      outboundMode: outboundMode,
-      enableHTTPCapture: enableHTTPCapture,
-      enableMitm: enableMitm
-    )
+  }
+
+  public func enableHTTPCapture(_ isEnabled: Bool = true) {
+    isHTTPCaptureEnabled = isEnabled
+  }
+
+  public func enableHTTPMitM(_ isEnabled: Bool = true) {
+    isHTTPMitMEnabled = isEnabled
   }
 
   public func run() async throws {
+    let basicSettings = profile.basicSettings
+
     do {
-      if let address = await storage.profile.basicSettings.httpListenAddress,
-        let port = await storage.profile.basicSettings.httpListenPort
-      {
+      if let address = basicSettings.httpListenAddress, let port = basicSettings.httpListenPort {
         let (_, quiesce) = try await startVPNTunnel(
           protocol: .http,
           bindAddress: address,
           bindPort: port
         )
-        await self.storage.appendServerQuiesces(
-          (quiesce, eventLoopGroup.next().makePromise())
-        )
+        quiesces.append((quiesce, eventLoopGroup.next().makePromise()))
       }
 
-      if let address = await storage.profile.basicSettings.socksListenAddress,
-        let port = await storage.profile.basicSettings.socksListenPort
-      {
+      if let address = basicSettings.socksListenAddress, let port = basicSettings.socksListenPort {
         let (_, quiesce) = try await startVPNTunnel(
           protocol: .socks5,
           bindAddress: address,
           bindPort: port
         )
-        await self.storage.appendServerQuiesces(
-          (quiesce, eventLoopGroup.next().makePromise())
-        )
+        quiesces.append((quiesce, eventLoopGroup.next().makePromise()))
       }
     } catch {
       try await eventLoopGroup.shutdownGracefully()
@@ -128,15 +90,13 @@ final public class App: Sendable {
       self.logger.trace(
         "received signal, initiating shutdown which should complete after the last request finished."
       )
-      Task {
-        await self.shutdown()
-      }
+      self.shutdown()
     }
     signal(SIGINT, SIG_IGN)
     signalSource.resume()
 
     do {
-      for (_, promise) in await storage.serverQuiesces {
+      for (_, promise) in quiesces {
         try await promise.futureResult.get()
       }
       try await eventLoopGroup.shutdownGracefully()
@@ -148,20 +108,20 @@ final public class App: Sendable {
   }
 
   private func startVPNTunnel(
-    `protocol`: Proxy.`Protocol`,
+    protocol: Proxy.`Protocol`,
     bindAddress: String,
     bindPort: Int
   ) async throws -> (Channel, ServerQuiescingHelper) {
     let quiesce = ServerQuiescingHelper(group: eventLoopGroup)
 
     let bootstrap = ServerBootstrap(group: eventLoopGroup)
-      .serverChannelOption(ChannelOptions.backlog, value: 256)
-      .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
       .serverChannelInitializer { channel in
         channel.pipeline.addHandler(
           quiesce.makeServerChannelHandler(channel: channel)
         )
       }
+      .serverChannelOption(ChannelOptions.backlog, value: 256)
+      .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
       .childChannelInitializer { channel in
         let eventLoop = channel.eventLoop.next()
 
@@ -248,11 +208,10 @@ final public class App: Sendable {
     forTarget address: NetAddress,
     eventLoop: EventLoop
   ) async throws -> Channel {
+    var fallback: Policy! = DirectPolicy(destinationAddress: address)
 
-    let profile = await storage.profile
-
-    guard await storage.outboundMode != .direct else {
-      return try await DirectPolicy().makeConnection(logger: logger, on: eventLoop).get()
+    guard outboundMode != .direct else {
+      return try await fallback.makeConnection(logger: logger, on: eventLoop).get()
     }
 
     // DNS lookup for `req.address`.
@@ -310,14 +269,11 @@ final public class App: Sendable {
     )
 
     // Policy evaluating.
-    var fallback: Policy! = DirectPolicy()
-
     var preferred: String?
 
-    // Check whether there is a `PolicyGroup`
-    // with then same name as the rule's policy in
-    // `policyGroups`, if group exists use group's
-    // `selected` as policy ID else use rule's policy as ID.
+    // Check whether there is a `PolicyGroup` with then same name as the rule's policy in
+    // `policyGroups`, if group exists use group's `selected` as policy ID else use rule's
+    // policy as ID.
     if let g = profile.policyGroups.first(where: { $0.name == savedFinalRule.policy }) {
       preferred = g.policies.first
     } else {
@@ -348,15 +304,12 @@ final public class App: Sendable {
     serverHostname: String?,
     tls: Bool
   ) async throws {
-    guard await storage.isMitmEnabled, let serverHostname = serverHostname else {
+    guard isHTTPMitMEnabled, let serverHostname = serverHostname else {
       return
     }
 
-    let profile = await storage.profile
-    let enableHTTPCapture = await storage.isHTTPCaptureEnabled
-
     // If we don't need MitM and HTTP capture just return.
-    guard tls || enableHTTPCapture else {
+    guard isHTTPCaptureEnabled || tls else {
       return
     }
 
@@ -408,7 +361,7 @@ final public class App: Sendable {
     let glue = try await peer.pipeline.handler(type: GlueHandler.self).get()
     try await peer.pipeline.addHandler(ssl1, position: .before(glue))
 
-    guard enableHTTPCapture else {
+    guard isHTTPCaptureEnabled else {
       return
     }
 
@@ -465,11 +418,11 @@ final public class App: Sendable {
     )
   }
 
-  public func shutdown() async {
+  public func shutdown() {
     logger.debug("Netbot shutting down.")
     logger.trace("Shutting down eventLoopGroup \(String(describing: eventLoopGroup)).")
 
-    for (quiesce, promise) in await self.storage.serverQuiesces {
+    for (quiesce, promise) in quiesces {
       quiesce.initiateShutdown(promise: promise)
     }
   }
