@@ -70,67 +70,13 @@ public struct NetbotCLITool: AsyncParsableCommand {
   @Flag(help: "Enable MitM, should be enabled only when needed.")
   public var enableMitm: Bool = false
 
+  @Flag(help: "Forced download external resources and MaxMindDB.")
+  public var forcedDownloadResources = false
+
   /// Initialize an instance of `NetbotCLITool`.
   public init() {}
 
   public func run() async throws {
-    var profile = try await loadProfile()
-
-    // Overrides settings with input options
-    profile.basicSettings.socksListenAddress =
-      socksListenAddress ?? profile.basicSettings.socksListenAddress
-    profile.basicSettings.socksListenPort = socksListenPort ?? profile.basicSettings.socksListenPort
-    profile.basicSettings.httpListenAddress =
-      httpListenAddress ?? profile.basicSettings.httpListenAddress
-    profile.basicSettings.httpListenPort = httpListenPort ?? profile.basicSettings.httpListenPort
-    profile.basicSettings.logLevel = logLevel ?? profile.basicSettings.logLevel
-
-    // Bootstrap Logger with specified logLevel that defined in profile and overrided by input option
-    LoggingSystem.bootstrap { label in
-      var handler = StreamLogHandler.standardOutput(label: label)
-      handler.logLevel = profile.basicSettings.logLevel
-      return handler
-    }
-    let logger = Logger(label: "io.tenbits.Netbot")
-
-    // Default GeoLite2 database file url.
-    #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
-    let maxminddbURL: URL
-    if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
-      maxminddbURL = URL.supportDirectory.appending(path: "GeoLite2-Country.mmdb")
-    } else {
-      maxminddbURL = URL.supportDirectory.appendingPathComponent("GeoLite2-Country.mmdb")
-    }
-    #else
-    let maxminddbURL = URL.supportDirectory.appendingPathComponent("GeoLite2-Country.mmdb")
-    #endif
-    // Also for GeoLite2 database
-    try FileManager.default.createDirectory(
-      at: URL.supportDirectory,
-      withIntermediateDirectories: true
-    )
-
-    // Perform GeoLite2-Country.mmdb downloading...
-    if !FileManager.default.fileExists(atPath: maxminddbURL.path) {
-      logger.trace("Downloading GeoLite2-Country.mmdb")
-      logger.trace("Downloading from https://git.io/GeoLite2-Country.mmdb")
-      let (url, _) = try await URLSession(configuration: .ephemeral).download(
-        from: URL(string: "https://git.io/GeoLite2-Country.mmdb")!
-      )
-
-      try FileManager.default.moveItem(at: url, to: maxminddbURL)
-    }
-
-    try await App.init(
-      profile: profile,
-      outboundMode: outboundMode,
-      enableHTTPCapture: enableHTTPCapture,
-      enableMitm: enableMitm
-    )
-    .run()
-  }
-
-  private func loadProfile() async throws -> Profile {
     var profile: Profile = .init()
     if let profileFile {
       #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
@@ -147,6 +93,14 @@ public struct NetbotCLITool: AsyncParsableCommand {
       profile = try Profile(contentsOf: profileURL)
     }
 
+    // Bootstrap Logger with specified logLevel that defined in profile and overrided by input option
+    LoggingSystem.bootstrap { label in
+      var handler = StreamLogHandler.standardOutput(label: label)
+      handler.logLevel = profile.basicSettings.logLevel
+      return handler
+    }
+    let logger = Logger(label: "io.tenbits.Netbot")
+
     // External resources will be downloaded and saved into `URL.externalResourcesDirectory`,
     // so we need to make sure an directory is here
     try FileManager.default.createDirectory(
@@ -154,6 +108,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
       withIntermediateDirectories: true
     )
 
+    var isLogged = false
     for (position, rule) in profile.rules.enumerated() {
       guard var resources = rule as? ExternalRuleResources & ParsableRule else {
         continue
@@ -179,22 +134,70 @@ public struct NetbotCLITool: AsyncParsableCommand {
       )
       #endif
 
-      // Downloading external resources...
-      let (srcURL, _) = try await URLSession(configuration: .ephemeral).download(
-        from: resources.externalResourcesURL
-      )
+      // Only download external resources if file not exist or executable require force download.
+      if !FileManager.default.fileExists(atPath: fileURL.path) || forcedDownloadResources {
+        if !isLogged {
+          logger.info("Downloading external resources...")
+          isLogged = true
+        }
+        // Downloading external resources...
+        let url = try resources.externalResourcesURL
+        logger.trace("Downloading external resources from: \(url)")
+        let (srcURL, _) = try await URLSession(configuration: .default).download(from: url)
 
-      // Remove older file first if exists.
-      if FileManager.default.fileExists(atPath: fileURL.path) {
-        try FileManager.default.removeItem(at: fileURL)
+        // Remove older file first if exists.
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+          try FileManager.default.removeItem(at: fileURL)
+        }
+        try FileManager.default.moveItem(at: srcURL, to: fileURL)
       }
-      try FileManager.default.moveItem(at: srcURL, to: fileURL)
 
       resources.loadAllRules(from: fileURL)
 
       profile.rules[position] = resources
     }
 
-    return profile
+    // Overrides settings with input options
+    profile.basicSettings.socksListenAddress =
+      socksListenAddress ?? profile.basicSettings.socksListenAddress
+    profile.basicSettings.socksListenPort = socksListenPort ?? profile.basicSettings.socksListenPort
+    profile.basicSettings.httpListenAddress =
+      httpListenAddress ?? profile.basicSettings.httpListenAddress
+    profile.basicSettings.httpListenPort = httpListenPort ?? profile.basicSettings.httpListenPort
+    profile.basicSettings.logLevel = logLevel ?? profile.basicSettings.logLevel
+
+    // Default GeoLite2 database file url.
+    #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
+    let maxminddbURL: URL
+    if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
+      maxminddbURL = URL.supportDirectory.appending(path: "GeoLite2-Country.mmdb")
+    } else {
+      maxminddbURL = URL.supportDirectory.appendingPathComponent("GeoLite2-Country.mmdb")
+    }
+    #else
+    let maxminddbURL = URL.supportDirectory.appendingPathComponent("GeoLite2-Country.mmdb")
+    #endif
+    // Also for GeoLite2 database
+    try FileManager.default.createDirectory(
+      at: URL.supportDirectory,
+      withIntermediateDirectories: true
+    )
+
+    // Perform GeoLite2-Country.mmdb downloading...
+    if !FileManager.default.fileExists(atPath: maxminddbURL.path) || forcedDownloadResources {
+      logger.info("Downloading GeoLite2-Country.mmdb")
+      logger.trace("Downloading GeoLite2-Country.mmdb from https://git.io/GeoLite2-Country.mmdb")
+      let (url, _) = try await URLSession(configuration: .ephemeral).download(
+        from: URL(string: "https://git.io/GeoLite2-Country.mmdb")!
+      )
+
+      if FileManager.default.fileExists(atPath: maxminddbURL.path) {
+        try FileManager.default.removeItem(at: maxminddbURL)
+      }
+      try FileManager.default.moveItem(at: url, to: maxminddbURL)
+    }
+
+    let app = Netbot(profile: profile, logger: logger, outboundMode: outboundMode)
+    try await app.run()
   }
 }
