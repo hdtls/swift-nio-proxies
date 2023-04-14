@@ -189,7 +189,5 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
   }
 }
 
-#if swift(>=5.7)
 @available(*, unavailable)
 extension LengthFieldBasedFrameEncoder: Sendable {}
-#endif

@@ -53,7 +53,6 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
   /// The completion handler when proxy connection established.
   private let completion: (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
 
-  #if swift(>=5.7)
   /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
   ///
   /// - Parameters:
@@ -77,30 +76,6 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     self.completion = completion
     self.state = .idle
   }
-  #else
-  /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
-  ///
-  /// - Parameters:
-  ///   - username: Username for proxy authentication.
-  ///   - passwordReference: Password for proxy authentication.
-  ///   - authenticationRequired: A boolean value deterinse whether server should evaluate proxy authentication request.
-  ///   - channelInitializer: The outbound channel initializer, returns the initialized outbound channel using the given request info.
-  ///   - completion: The completion handler when proxy connection established, returns `EventLoopFuture<Void>` using given request info, server channel and outbound client channel.
-  public init(
-    username: String,
-    passwordReference: String,
-    authenticationRequired: Bool,
-    channelInitializer: @escaping (RequestInfo) -> EventLoopFuture<Channel>,
-    completion: @escaping (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
-  ) {
-    self.username = username
-    self.passwordReference = passwordReference
-    self.authenticationRequired = authenticationRequired
-    self.channelInitializer = channelInitializer
-    self.completion = completion
-    self.state = .idle
-  }
-  #endif
 
   public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
     guard state != .active else {
@@ -280,10 +255,8 @@ extension HTTPProxyServerHandler {
   }
 }
 
-#if swift(>=5.7)
 @available(*, unavailable)
 extension HTTPProxyServerHandler: Sendable {}
-#endif
 
 extension HTTPHeaders {
 

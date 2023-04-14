@@ -277,8 +277,6 @@ final public class GetaddrinfoResolver: Resolver {
   }
 }
 
-#if swift(>=5.7)
 extension NIOBSDSocket.SocketType: Sendable {}
 
 extension GetaddrinfoResolver: Sendable {}
-#endif

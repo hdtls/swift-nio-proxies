@@ -120,13 +120,8 @@ final public class Netbot: @unchecked Sendable {
       .childChannelInitializer { channel in
         let eventLoop = channel.eventLoop.next()
 
-        #if swift(>=5.7)
         let channelInitializer: @Sendable (RequestInfo) -> EventLoopFuture<Channel>
         let completion: @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
-        #else
-        let channelInitializer: (RequestInfo) -> EventLoopFuture<Channel>
-        let completion: (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
-        #endif
 
         channelInitializer = { req in
           let promise = eventLoop.makePromise(of: Channel.self)

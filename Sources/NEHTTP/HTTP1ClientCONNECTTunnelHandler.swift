@@ -243,7 +243,5 @@ extension HTTP1ClientCONNECTTunnelHandler {
   }
 }
 
-#if swift(>=5.7)
 @available(*, unavailable)
 extension HTTP1ClientCONNECTTunnelHandler: Sendable {}
-#endif

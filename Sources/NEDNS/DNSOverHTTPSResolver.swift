@@ -23,7 +23,7 @@ import Foundation
 #endif
 
 /// A DNS resolver for DoH implementation.
-final public class DNSOverHTTPSResolver: Resolver {
+final public class DNSOverHTTPSResolver: Resolver, Sendable {
 
   private actor TaskActor {
     private var storage: [String: Task<Data, Error>] = [:]
@@ -155,7 +155,3 @@ final public class DNSOverHTTPSResolver: Resolver {
     }
   }
 }
-
-#if swift(>=5.7)
-extension DNSOverHTTPSResolver: Sendable {}
-#endif

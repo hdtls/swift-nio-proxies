@@ -339,7 +339,5 @@ public enum SOCKSUserEvent: Equatable, Sendable {
   case handshakeCompleted
 }
 
-#if swift(>=5.7)
 @available(*, unavailable)
 extension SOCKS5ClientHandler: Sendable {}
-#endif

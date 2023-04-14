@@ -16,7 +16,7 @@ import Foundation
 @_exported import NIOCore
 
 /// Represent a socket address or domain port to which we may want to connect or bind.
-public enum NetAddress: Equatable, Hashable {
+public enum NetAddress: Equatable, Hashable, Sendable {
   case domainPort(host: String, port: Int)
   case socketAddress(SocketAddress)
 }
@@ -41,10 +41,6 @@ extension NetAddress {
     }
   }
 }
-
-#if swift(>=5.5) && canImport(_Concurrency)
-extension NetAddress: Sendable {}
-#endif
 
 /// SOCKS address type defined in RFC 1928.
 private enum SOCKSAddressType: UInt8, CaseIterable {

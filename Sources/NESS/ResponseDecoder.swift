@@ -126,7 +126,5 @@ final public class ResponseDecoder: ByteToMessageDecoder {
   }
 }
 
-#if swift(>=5.7)
 @available(*, unavailable)
 extension ResponseDecoder: Sendable {}
-#endif

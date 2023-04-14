@@ -50,8 +50,11 @@ public struct CertCache: @unchecked Sendable {
   private let privateKey: Certificate.PrivateKey
 
   private init(ref: OpaquePointer, passphrase: String?) throws {
-    var pkey: OpaquePointer? /*<EVP_PKEY>*/ = nil
-    var cert: OpaquePointer? /*<X509>*/ = nil
+    // <EVP_PKEY>
+    var pkey: OpaquePointer? = nil
+
+    // <X509>
+    var cert: OpaquePointer? = nil
     var caCerts: OpaquePointer? = nil
 
     guard CNIOBoringSSL_PKCS12_parse(ref, passphrase, &pkey, &cert, &caCerts) == 1 else {

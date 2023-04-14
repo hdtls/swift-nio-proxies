@@ -16,7 +16,7 @@ import Foundation
 @_exported import NIOCore
 
 /// Represents an proxy request in an application.
-public struct RequestInfo: Equatable, Hashable {
+public struct RequestInfo: Equatable, Hashable, Sendable {
 
   /// The address of the receiver.
   public var address: NetAddress
@@ -28,7 +28,3 @@ public struct RequestInfo: Equatable, Hashable {
     self.address = address
   }
 }
-
-#if swift(>=5.6)
-extension RequestInfo: Sendable {}
-#endif

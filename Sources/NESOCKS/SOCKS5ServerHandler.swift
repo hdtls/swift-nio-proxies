@@ -302,7 +302,5 @@ extension SOCKS5ServerHandler {
   }
 }
 
-#if swift(>=5.7)
 @available(*, unavailable)
 extension SOCKS5ServerHandler: Sendable {}
-#endif

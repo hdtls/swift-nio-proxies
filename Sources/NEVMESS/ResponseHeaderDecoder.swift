@@ -369,7 +369,5 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
   }
 }
 
-#if swift(>=5.7)
 @available(*, unavailable)
 extension ResponseHeaderDecoder: Sendable {}
-#endif

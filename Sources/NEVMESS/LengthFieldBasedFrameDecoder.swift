@@ -213,7 +213,5 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
   }
 }
 
-#if swift(>=5.7)
 @available(*, unavailable)
 extension LengthFieldBasedFrameDecoder: Sendable {}
-#endif

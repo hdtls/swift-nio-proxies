@@ -1,4 +1,4 @@
-// swift-tools-version:5.6
+// swift-tools-version:5.7
 //===----------------------------------------------------------------------===//
 //
 // This source file is part of the Netbot open source project
@@ -64,7 +64,7 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0"),
     .package(url: "https://github.com/apple/swift-format.git", from: "508.0.0"),
     .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0"),
-    .package(url: "https://github.com/apple/swift-certificates.git", from: "0.2.0")
+    .package(url: "https://github.com/apple/swift-certificates.git", from: "0.2.0"),
   ],
   targets: [
     .executableTarget(
@@ -77,7 +77,7 @@ let package = Package(
       dependencies: [
         "NECore",
         swiftLog,
-        .product(name: "MaxMindDB", package: "swift-maxminddb")
+        .product(name: "MaxMindDB", package: "swift-maxminddb"),
       ]
     ),
     .target(name: "NEConnectionPool", dependencies: [swiftNIOCore, swiftNIOPosix, swiftLog]),
@@ -102,7 +102,7 @@ let package = Package(
         swiftNIOTransportServices,
         .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
         .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
-        .product(name: "NIOExtras", package: "swift-nio-extras")
+        .product(name: "NIOExtras", package: "swift-nio-extras"),
       ]
     ),
     .target(name: "NEDNS", dependencies: [swiftNIOCore, swiftNIOPosix]),
@@ -128,7 +128,7 @@ let package = Package(
       name: "NECLICoreTests",
       dependencies: [
         "NECLICore",
-        swiftNIO
+        swiftNIO,
       ],
       exclude: ["ParsableRuleTests.g.swift.gyb"]
     ),
@@ -144,11 +144,14 @@ let package = Package(
         swiftNIO,
         swiftNIOSSL,
         swiftNIOHTTP1,
-        swiftNIOTransportServices
+        swiftNIOTransportServices,
       ]
     ),
     .testTarget(name: "NEHTTPMitMTests", dependencies: ["NEHTTPMitM", swiftNIO]),
-    .testTarget(name: "NEHTTPTests", dependencies: ["NEHTTP", swiftNIO, swiftNIOHTTP1, swiftNIOSSL]),
+    .testTarget(
+      name: "NEHTTPTests",
+      dependencies: ["NEHTTP", swiftNIO, swiftNIOHTTP1, swiftNIOSSL]
+    ),
     .testTarget(name: "NEMiscTests", dependencies: ["NEMisc", swiftNIO]),
     .testTarget(name: "NESHAKE128Tests", dependencies: ["NESHAKE128"]),
     .testTarget(name: "NESOCKSTests", dependencies: ["NESOCKS", swiftNIO]),
@@ -157,7 +160,7 @@ let package = Package(
       dependencies: ["NEPrettyBytes", "NESS", swiftNIO],
       exclude: [
         "RequestEncoderTests.g.swift.gyb",
-        "ResponseDecoderTests.g.swift.gyb"
+        "ResponseDecoderTests.g.swift.gyb",
       ]
     ),
     .testTarget(name: "NETrojanTests", dependencies: ["NETrojan", "NEPrettyBytes", swiftNIO]),
