@@ -28,6 +28,12 @@ import NIOSSL
 
 final public class Netbot: @unchecked Sendable {
 
+  private let profile: Profile
+
+  private let logger: Logger
+
+  private let eventLoopGroup: EventLoopGroup
+
   @Protected public var outboundMode: OutboundMode = .direct
 
   @Protected public var isHTTPCaptureEnabled: Bool = false
@@ -36,25 +42,14 @@ final public class Netbot: @unchecked Sendable {
 
   @Protected private var quiesces: [(ServerQuiescingHelper, EventLoopPromise<Void>)] = []
 
-  private let profile: Profile
-
-  private let logger: Logger
-
-  private let eventLoopGroup: EventLoopGroup
+  @Protected private var certCache: CertCache?
 
   public init(profile: Profile, logger: Logger, outboundMode: OutboundMode = .direct) {
     self.profile = profile
     self.logger = logger
-    self.outboundMode = outboundMode
     self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
-  }
-
-  public func enableHTTPCapture(_ isEnabled: Bool = true) {
-    isHTTPCaptureEnabled = isEnabled
-  }
-
-  public func enableHTTPMitM(_ isEnabled: Bool = true) {
-    isHTTPMitMEnabled = isEnabled
+    self.outboundMode = outboundMode
+    self.certCache = try? CertCache(manInTheMiddleSettings: profile.manInTheMiddleSettings)
   }
 
   public func run() async throws {
@@ -324,25 +319,15 @@ final public class Netbot: @unchecked Sendable {
       return
     }
 
-    // If detect SSL handshake then setup SSL pipeline to decrypt SSL.
-    guard let base64EncodedP12String = profile.manInTheMiddleSettings.base64EncodedP12String
-    else {
-      // To enable the HTTP MitM feature, you must provide the corresponding configuration.
-      throw NIOSSLError.failedToLoadCertificate
+    if certCache == nil {
+      // Lazy load
+      certCache = try CertCache(manInTheMiddleSettings: profile.manInTheMiddleSettings)
     }
 
-    let trustStore = try CertificateStore(
-      passphrase: profile.manInTheMiddleSettings.passphrase,
-      base64EncodedP12String: base64EncodedP12String
-    )
-    await trustStore.setUpMitMHosts(profile.manInTheMiddleSettings.hostnames)
-
-    guard let p12 = try await trustStore.certificate(identifiedBy: serverHostname) else {
+    guard let (certificateChain, privateKey) = try certCache?.value(forKey: serverHostname) else {
       return
     }
 
-    let certificateChain = p12.certificateChain.map(NIOSSLCertificateSource.certificate)
-    let privateKey = NIOSSLPrivateKeySource.privateKey(p12.privateKey)
     var configuration = TLSConfiguration.makeServerConfiguration(
       certificateChain: certificateChain,
       privateKey: privateKey

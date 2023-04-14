@@ -12,6 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+@_exported import NEHTTPMitM
+
 /// A profile object that defines behavior and policies for a Netbot process.
 public struct Profile: Sendable {
 

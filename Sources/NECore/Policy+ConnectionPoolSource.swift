@@ -14,6 +14,7 @@
 
 import Foundation
 @_exported import Logging
+@_exported import NEConnectionPool
 import NEHTTP
 import NESOCKS
 import NESS
@@ -21,8 +22,6 @@ import NEVMESS
 @_exported import NIOCore
 import NIOPosix
 import NIOSSL
-
-@_exported import protocol NEConnectionPool.ConnectionPoolSource
 
 #if canImport(Network)
 import NIOTransportServices

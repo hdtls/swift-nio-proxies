@@ -67,8 +67,8 @@ public struct NetbotCLITool: AsyncParsableCommand {
   public var enableHTTPCapture: Bool = false
 
   /// A boolean value that determines whether MitM should be enabled.
-  @Flag(help: "Enable MitM, should be enabled only when needed.")
-  public var enableMitm: Bool = false
+  @Flag(help: "Enable HTTP MitM, should be enabled only when needed.")
+  public var enableHTTPMitm: Bool = false
 
   @Flag(help: "Forced download external resources and MaxMindDB.")
   public var forcedDownloadResources = false
@@ -198,6 +198,8 @@ public struct NetbotCLITool: AsyncParsableCommand {
     }
 
     let app = Netbot(profile: profile, logger: logger, outboundMode: outboundMode)
+    app.isHTTPCaptureEnabled = enableHTTPCapture
+    app.isHTTPMitMEnabled = enableHTTPMitm
     try await app.run()
   }
 }

@@ -30,6 +30,7 @@ let swiftNIOTransportServices: Target.Dependency = .product(
 )
 let swiftCrypto: Target.Dependency = .product(name: "Crypto", package: "swift-crypto")
 let swiftLog: Target.Dependency = .product(name: "Logging", package: "swift-log")
+let swiftX509: Target.Dependency = .product(name: "X509", package: "swift-certificates")
 
 let package = Package(
   name: "swift-nio-netbot",
@@ -62,7 +63,8 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
     .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0"),
     .package(url: "https://github.com/apple/swift-format.git", branch: "main"),
-    .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0")
+    .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0"),
+    .package(url: "https://github.com/apple/swift-certificates.git", from: "0.2.0")
   ],
   targets: [
     .executableTarget(
@@ -107,7 +109,7 @@ let package = Package(
     .target(name: "NEHTTP", dependencies: ["NEMisc", swiftNIOCore, swiftNIOHTTP1]),
     .target(
       name: "NEHTTPMitM",
-      dependencies: [swiftNIOCore, swiftNIOHTTP1, swiftNIOSSL, swiftLog]
+      dependencies: [swiftNIOCore, swiftNIOHTTP1, swiftNIOSSL, swiftLog, swiftX509]
     ),
     .target(name: "NEMisc", dependencies: [swiftNIOCore, swiftNIOPosix]),
     .target(name: "NEPrettyBytes"),
