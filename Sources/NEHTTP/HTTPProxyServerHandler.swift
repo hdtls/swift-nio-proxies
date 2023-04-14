@@ -146,13 +146,18 @@ extension HTTPProxyServerHandler {
       return
     }
 
+    let promise = context.eventLoop.makePromise(of: Void.self)
+
     // Only CONNECT tunnel need remove default http server pipelines.
     if head.method == .CONNECT {
       // New request is complete. We don't want any more data from now on.
-      _ = context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
+      context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
         .flatMap {
           context.pipeline.removeHandler($0)
         }
+        .cascade(to: promise)
+    } else {
+      promise.succeed()
     }
 
     // Proxy Authorization
@@ -177,14 +182,18 @@ extension HTTPProxyServerHandler {
 
     let req = RequestInfo(address: .domainPort(host: head.host, port: head.port))
 
-    self.channelInitializer(req).whenComplete {
-      switch $0 {
-      case .success(let channel):
-        self.glue(req, with: channel, and: context)
-      case .failure(let error):
-        self.channelClose(context: context, reason: error)
+    promise.futureResult
+      .flatMap {
+        self.channelInitializer(req)
       }
-    }
+      .whenComplete {
+        switch $0 {
+        case .success(let channel):
+          self.glue(req, with: channel, and: context)
+        case .failure(let error):
+          self.channelClose(context: context, reason: error)
+        }
+      }
   }
 
   private func glue(_ req: RequestInfo, with channel: Channel, and context: ChannelHandlerContext) {
