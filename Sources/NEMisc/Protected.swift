@@ -43,8 +43,8 @@ public struct Protected<T> {
   /// - Parameter closure: The closure to execute.
   ///
   /// - Returns:           The return value of the closure passed.
-  public func read<U>(_ closure: (T) -> U) -> U {
-    lock.withLock { closure(self.value) }
+  public func read<U>(_ closure: (T) throws -> U) rethrows -> U {
+    try lock.withLock { try closure(self.value) }
   }
 
   /// Synchronously modify the protected value.
@@ -53,8 +53,8 @@ public struct Protected<T> {
   ///
   /// - Returns:           The modified value.
   @discardableResult
-  public mutating func write<U>(_ closure: (inout T) -> U) -> U {
-    lock.withLock { closure(&self.value) }
+  public mutating func write<U>(_ closure: (inout T) throws -> U) rethrows -> U {
+    try lock.withLock { try closure(&self.value) }
   }
 
   public subscript<Property>(dynamicMember keyPath: WritableKeyPath<T, Property>) -> Property {
