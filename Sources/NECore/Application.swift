@@ -335,16 +335,10 @@ final public class Netbot: @unchecked Sendable {
     serverHostname: String?,
     tls: Bool
   ) async throws {
-    guard isHTTPMitMEnabled, let serverHostname = serverHostname else {
-      return
-    }
-
-    // If we don't need MitM and HTTP capture just return.
-    guard isHTTPCaptureEnabled || tls else {
-      return
-    }
-
-    guard tls else {
+    guard let serverHostname, tls, isHTTPMitMEnabled else {
+      guard !tls, isHTTPCaptureEnabled else {
+        return
+      }
       // This we don't need MitM but need enable HTTP capture.
       let recognizer = try await channel.pipeline.handler(type: NIOTLSRecognizer.self).get()
       let glue = try await peer.pipeline.handler(type: GlueHandler.self).get()
