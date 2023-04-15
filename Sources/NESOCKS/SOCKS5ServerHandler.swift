@@ -260,9 +260,14 @@ extension SOCKS5ServerHandler {
   }
 
   private func glue(_ req: RequestInfo, with channel: Channel, and context: ChannelHandlerContext) {
+    guard let remoteAddress = channel.remoteAddress else {
+      // TODO: Error Handling, channel may inactive.
+      return
+    }
+
     let response = Response(
       reply: .succeeded,
-      boundAddress: .socketAddress(channel.remoteAddress!)
+      boundAddress: .socketAddress(remoteAddress)
     )
 
     var buffer = context.channel.allocator.buffer(capacity: 16)
