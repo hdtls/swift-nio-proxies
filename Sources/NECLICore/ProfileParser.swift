@@ -79,13 +79,15 @@ struct ProfileParser {
     let maxLength = self.byteBuffer.countDistance(to: .newLine) ?? self.byteBuffer.readableBytes
 
     // Ensure that have equal mark and the equal is in current line.
-    guard let keyLength = keyLength, keyLength <= maxLength else {
+    guard let keyLength, keyLength <= maxLength else {
       return .string(readStringTillNextLine())
     }
 
-    let key = self.byteBuffer.readString(length: keyLength)!.trimmingCharacters(
-      in: .whitespaces
-    )
+    guard var key = self.byteBuffer.readString(length: keyLength) else {
+      return .string(readStringTillNextLine())
+    }
+
+    key = key.trimmingCharacters(in: .whitespaces)
 
     self.pop()  // =
 
@@ -110,10 +112,9 @@ struct ProfileParser {
   }
 
   private mutating func readStringTillNextLine() -> String {
-    let readLength =
-      self.byteBuffer.countDistance(to: .newLine) ?? self.byteBuffer.readableBytes
+    let readLength = self.byteBuffer.countDistance(to: .newLine) ?? self.byteBuffer.readableBytes
 
-    let output = self.byteBuffer.readString(length: readLength)!
+    let output = self.byteBuffer.readString(length: readLength) ?? ""
 
     guard let first = output.first, let last = output.last else {
       return output.trimmingCharacters(in: .whitespaces)

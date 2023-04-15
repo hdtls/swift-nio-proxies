@@ -61,10 +61,11 @@ extension CheckedParsableRule {
     }
 
     guard components.first == label.rawValue else {
-      guard RuleSystem.labels.contains(.init(rawValue: components.first!)) else {
+      let label = RuleSystem.Label(rawValue: components.first ?? "")
+      guard RuleSystem.labels.contains(label), let canBeParsedAs = RuleSystem.factory(for: label)
+      else {
         throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
       }
-      let canBeParsedAs = RuleSystem.factory(for: .init(rawValue: components.first!))!
       throw ProfileSerializationError.failedToParseRule(
         reason: .failedToParseAs(Self.self, butCanBeParsedAs: canBeParsedAs)
       )
@@ -331,7 +332,7 @@ public struct RuleSetRule: ExternalRuleResources, ParsableRule, CheckedParsableR
         guard !literal.isEmpty, !literal.hasPrefix("#"), !literal.hasPrefix(";") else {
           return nil
         }
-        let label = String(literal.split(separator: ",").first!)
+        let label = String(literal.split(separator: ",").first ?? "")
         let description = literal + ",\(policy)"
         guard let factory = RuleSystem.factory(for: .init(rawValue: label)) else {
           return nil
@@ -351,10 +352,11 @@ extension FinalRule: CheckedParsableRule {
     }
 
     guard components.first == label.rawValue else {
-      guard RuleSystem.labels.contains(.init(rawValue: components.first!)) else {
+      let label = RuleSystem.Label(rawValue: components.first ?? "")
+      guard RuleSystem.labels.contains(label), let canBeParsedAs = RuleSystem.factory(for: label)
+      else {
         throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
       }
-      let canBeParsedAs = RuleSystem.factory(for: .init(rawValue: components.first!))!
       throw ProfileSerializationError.failedToParseRule(
         reason: .failedToParseAs(Self.self, butCanBeParsedAs: canBeParsedAs)
       )

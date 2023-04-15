@@ -25,13 +25,16 @@ extension ByteBuffer {
       return nil
     }
 
-    let version = readInteger(as: UInt8.self)!
+    guard let version = readInteger(as: UInt8.self) else {
+      return nil
+    }
     moveReaderIndex(forwardBy: 1)
 
     // safe to bang as we've already checked the buffer size
-    let methods = readBytes(length: Int(numberOfMethods))!.map {
-      Authentication.Method(rawValue: $0)
-    }
+    let methods =
+      readBytes(length: Int(numberOfMethods))?.map {
+        Authentication.Method(rawValue: $0)
+      } ?? []
 
     return .init(version: .init(rawValue: version), methods: methods)
   }
@@ -53,10 +56,9 @@ extension ByteBuffer {
     guard readableBytes >= 2 else {
       return nil
     }
-
-    let version = readInteger(as: UInt8.self)!
-    let method = readInteger(as: UInt8.self)!
-
+    guard let version = readInteger(as: UInt8.self), let method = readInteger(as: UInt8.self) else {
+      return nil
+    }
     return .init(version: .init(rawValue: version), method: .init(rawValue: method))
   }
 
@@ -76,7 +78,7 @@ extension ByteBuffer {
       return nil
     }
 
-    let username = buffer.readString(length: Int(lengthOfUsername))!
+    let username = buffer.readString(length: Int(lengthOfUsername)) ?? ""
 
     guard
       let lenthOfPassword = buffer.readInteger(as: UInt8.self),
@@ -85,7 +87,7 @@ extension ByteBuffer {
       return nil
     }
 
-    let password = buffer.readString(length: Int(lenthOfPassword))!
+    let password = buffer.readString(length: Int(lenthOfPassword)) ?? ""
 
     self = buffer
 
@@ -111,10 +113,9 @@ extension ByteBuffer {
     guard readableBytes >= 2 else {
       return nil
     }
-
-    let version = readInteger(as: UInt8.self)!
-    let status = readInteger(as: UInt8.self)!
-
+    guard let version = readInteger(as: UInt8.self), let status = readInteger(as: UInt8.self) else {
+      return nil
+    }
     return .init(version: version, status: status)
   }
 

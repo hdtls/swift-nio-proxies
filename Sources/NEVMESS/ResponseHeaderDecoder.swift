@@ -107,7 +107,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
       }
 
       let d = try AES.GCM.open(
-        .init(combined: nonce + data.readBytes(length: readLength)!),
+        .init(combined: nonce + (data.readBytes(length: readLength) ?? [])),
         using: symmetricKey
       )
       assert(d.count == 2)
@@ -134,7 +134,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
       }
 
       var headPartData = try AES.GCM.open(
-        .init(combined: nonce + data.readBytes(length: readLength)!),
+        .init(combined: nonce + (data.readBytes(length: readLength) ?? [])),
         using: symmetricKey
       )
       assert(headPartData.count >= 4)

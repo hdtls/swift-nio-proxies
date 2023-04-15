@@ -119,7 +119,7 @@ final public class NIOTLSRecognizer: Recognizer {
       // Skip bytes that represent as version and record data length.
       byteBuffer.moveReaderIndex(forwardBy: 4)
 
-      let handshakeType = byteBuffer.readInteger(as: UInt8.self)!
+      let handshakeType = byteBuffer.readInteger(as: UInt8.self) ?? 0
 
       // SSL3_MT_HELLO_REQUEST (x'00')
       // SSL3_MT_CLIENT_HELLO (x'01')

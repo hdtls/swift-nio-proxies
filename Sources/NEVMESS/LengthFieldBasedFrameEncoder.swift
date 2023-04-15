@@ -73,7 +73,7 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
     var frameBuffer: Data = .init()
 
     while mutableData.readableBytes > 0 {
-      let message = mutableData.readBytes(length: min(maxLength, mutableData.readableBytes))!
+      let message = mutableData.readBytes(length: min(maxLength, mutableData.readableBytes)) ?? []
 
       var padding = 0
       if configuration.options.shouldPadding {
@@ -140,7 +140,7 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
       ) {
         var symmetricKey = KDF16.deriveKey(
           inputKeyMaterial: .init(data: symmetricKey),
-          info: ["auth_len".data(using: .utf8)!]
+          info: [Data("auth_len".utf8)]
         )
 
         if configuration.algorithm == .aes128gcm {

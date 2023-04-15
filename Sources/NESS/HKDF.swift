@@ -60,7 +60,7 @@ func hkdfDerivedSymmetricKey<Salt: DataProtocol>(
   let inputKeyMaterial = SymmetricKey(
     data: bytesToKey(secretKey, saltByteCount: salt.count, outputByteCount: outputByteCount)
   )
-  let info = "ss-subkey".data(using: .utf8)!
+  let info = Data("ss-subkey".utf8)
 
   #if (os(macOS) || os(iOS) || os(watchOS) || os(tvOS))
   if #available(iOS 14.0, macOS 11.0, watchOS 7.0, tvOS 14.0, *) {

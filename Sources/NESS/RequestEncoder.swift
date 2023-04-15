@@ -31,9 +31,9 @@ final public class RequestEncoder: ChannelOutboundHandler {
 
   private let destinationAddress: NetAddress
 
-  private var symmetricKey: SymmetricKey!
+  private var symmetricKey: SymmetricKey?
 
-  private var nonce: [UInt8]!
+  private var nonce: [UInt8]?
 
   /// Initialize an instance of `RequestEncoder` with specified `algorithm`, `passwordReference` and `destinationAddress`.
   /// - Parameters:
@@ -46,11 +46,8 @@ final public class RequestEncoder: ChannelOutboundHandler {
     self.destinationAddress = destinationAddress
   }
 
-  public func write(
-    context: ChannelHandlerContext,
-    data: NIOAny,
-    promise: EventLoopPromise<Void>?
-  ) {
+  public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?)
+  {
     do {
       if symmetricKey == nil {
         let byteCount = algorithm == .aes128Gcm ? 16 : 32
@@ -71,11 +68,11 @@ final public class RequestEncoder: ChannelOutboundHandler {
         // Prepare address data.
         var byteBuffer = context.channel.allocator.buffer(capacity: 36)
         byteBuffer.writeAddress(destinationAddress)
-        let message = byteBuffer.readBytes(length: byteBuffer.readableBytes)!
+        let message = byteBuffer.readBytes(length: byteBuffer.readableBytes) ?? []
 
         // Prepare address size data
         byteBuffer.writeInteger(UInt16(message.count))
-        let sizeBytes = byteBuffer.readBytes(length: byteBuffer.readableBytes)!
+        let sizeBytes = byteBuffer.readBytes(length: byteBuffer.readableBytes) ?? []
 
         byteBuffer.discardReadBytes()
 
@@ -95,7 +92,7 @@ final public class RequestEncoder: ChannelOutboundHandler {
             capacity: MemoryLayout<UInt16>.size
           )
           byteBuffer.writeInteger(UInt16(message.count))
-          let sizeBytes = byteBuffer.readBytes(length: byteBuffer.readableBytes)!
+          let sizeBytes = byteBuffer.readBytes(length: byteBuffer.readableBytes) ?? []
 
           byteBuffer.discardReadBytes()
 
@@ -112,9 +109,11 @@ final public class RequestEncoder: ChannelOutboundHandler {
 
   /// Process message into structure [ciphertext][tag].
   /// - Parameter message: the plaintext waiting to encrypt which confirm to `DataProtocol`
-  private func process<Plaintext>(message: Plaintext) throws -> Data
-  where Plaintext: DataProtocol {
+  private func process<Plaintext>(message: Plaintext) throws -> Data where Plaintext: DataProtocol {
     var bytes: Data = .init()
+    guard let symmetricKey, let nonce else {
+      return bytes
+    }
 
     switch algorithm {
     case .aes128Gcm, .aes256Gcm:
@@ -135,7 +134,7 @@ final public class RequestEncoder: ChannelOutboundHandler {
       bytes.append(sealedBox.tag)
     }
 
-    nonce.increment(nonce.count)
+    self.nonce?.increment(nonce.count)
     return bytes
   }
 }

@@ -117,7 +117,7 @@ final public class DNSOverHTTPSResolver: Resolver, Sendable {
           "Content-Type": "application/dns-message",
           "Content-Length": "\(buffer.readableBytes)",
         ]
-        urlRequest.httpBody = Data(buffer.readBytes(length: buffer.readableBytes)!)
+        urlRequest.httpBody = Data(buffer.readBytes(length: buffer.readableBytes) ?? [])
 
         return try await withCheckedThrowingContinuation {
           continuation in
@@ -126,8 +126,7 @@ final public class DNSOverHTTPSResolver: Resolver, Sendable {
               continuation.resume(throwing: error!)
               return
             }
-
-            continuation.resume(returning: data!)
+            continuation.resume(returning: data ?? Data())
           }.resume()
         }
       }

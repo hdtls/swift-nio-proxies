@@ -62,7 +62,7 @@ public struct FinalRule: ParsableRule {
     }
 
     expression = ""
-    policy = components.last!
+    policy = components[1]
   }
 
   public func match(_ pattern: String) -> Bool {

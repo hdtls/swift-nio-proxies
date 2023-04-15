@@ -166,7 +166,7 @@ func generateCmdKey(_ id: UUID) -> SymmetricKey {
   withUnsafeBytes(of: id) {
     var hasher = Insecure.MD5.init()
     hasher.update(bufferPointer: $0)
-    hasher.update(data: "c48619fe-8f02-49e0-b9e9-edf763e17e21".data(using: .utf8)!)
+    hasher.update(data: Data("c48619fe-8f02-49e0-b9e9-edf763e17e21".utf8))
     return .init(data: hasher.finalize())
   }
 }

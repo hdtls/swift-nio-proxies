@@ -149,7 +149,7 @@ extension Data {
     let data = self
     var byteBuffer = ByteBuffer(bytes: data)
     defer {
-      self = Data(byteBuffer.readBytes(length: byteBuffer.readableBytes)!)
+      self = Data(byteBuffer.readBytes(length: byteBuffer.readableBytes) ?? [])
     }
     return try byteBuffer.readAddress()
   }
@@ -161,7 +161,7 @@ extension Data {
   public mutating func writeAddress(_ address: NetAddress) -> Int {
     var byteBuffer = ByteBuffer()
     defer {
-      append(contentsOf: byteBuffer.readBytes(length: byteBuffer.readableBytes)!)
+      append(contentsOf: byteBuffer.readBytes(length: byteBuffer.readableBytes) ?? [])
     }
     return byteBuffer.writeAddress(address)
   }

@@ -53,7 +53,7 @@ final public class ResponseDecoder: ByteToMessageDecoder {
 
   private let passwordReference: String
 
-  private var symmetricKey: SymmetricKey!
+  private var symmetricKey: SymmetricKey?
 
   private var nonce: [UInt8]
 
@@ -81,7 +81,7 @@ final public class ResponseDecoder: ByteToMessageDecoder {
       guard buffer.readableBytes >= saltByteCount else {
         return .needMoreData
       }
-      let salt = buffer.readBytes(length: saltByteCount)!
+      let salt = buffer.readBytes(length: saltByteCount) ?? []
       symmetricKey = hkdfDerivedSymmetricKey(
         secretKey: passwordReference,
         salt: salt,
@@ -96,7 +96,7 @@ final public class ResponseDecoder: ByteToMessageDecoder {
     guard buffer.readableBytes > readLength else {
       return .needMoreData
     }
-    var byteBuffer = try process(message: buffer.readBytes(length: readLength)!, on: context)
+    var byteBuffer = try process(message: buffer.readBytes(length: readLength) ?? [], on: context)
     let size = byteBuffer.readInteger(as: UInt16.self)
 
     // Check if buffer is enougth to decode as response message.
@@ -106,7 +106,7 @@ final public class ResponseDecoder: ByteToMessageDecoder {
       return .needMoreData
     }
     readLength = Int(size) + tagByteCount
-    byteBuffer = try process(message: buffer.readBytes(length: readLength)!, on: context)
+    byteBuffer = try process(message: buffer.readBytes(length: readLength) ?? [], on: context)
     context.fireChannelRead(wrapInboundOut(byteBuffer))
     return .continue
   }
@@ -114,6 +114,10 @@ final public class ResponseDecoder: ByteToMessageDecoder {
   private func process(message: [UInt8], on context: ChannelHandlerContext) throws -> ByteBuffer {
     var data: Data = .init()
     let combined = nonce + message
+
+    guard let symmetricKey else {
+      return context.channel.allocator.buffer(bytes: data)
+    }
 
     switch algorithm {
     case .aes128Gcm, .aes256Gcm:

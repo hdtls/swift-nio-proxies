@@ -41,7 +41,7 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
 
   private var encoder: LengthFieldBasedFrameEncoder
 
-  private var buffer: ByteBuffer?
+  private var buffer: ByteBuffer = .init()
 
   private enum State {
     case idle
@@ -98,7 +98,7 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
 
   public func handlerRemoved(context: ChannelHandlerContext) {
     state = .complete
-    buffer = nil
+    buffer.clear()
   }
 
   public func write(
@@ -107,7 +107,7 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
     promise: EventLoopPromise<Void>?
   ) {
     do {
-      buffer?.clear()
+      buffer.clear()
 
       switch state {
       case .idle:
@@ -115,7 +115,7 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
           "\(self) \(#function) called before it was added to a channel."
         )
       case .preparing:
-        buffer?.writeBytes(try prepareHeadPart())
+        buffer.writeBytes(try prepareHeadPart())
         state = .processing
         break
       case .processing:
@@ -126,8 +126,8 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
         return
       }
 
-      try encoder.encode(data: unwrapOutboundIn(data), out: &buffer!)
-      context.write(wrapOutboundOut(buffer!), promise: promise)
+      try encoder.encode(data: unwrapOutboundIn(data), out: &buffer)
+      context.write(wrapOutboundOut(buffer), promise: promise)
     } catch {
       state = .fail(error)
       promise?.fail(error)

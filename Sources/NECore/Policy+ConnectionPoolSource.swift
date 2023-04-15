@@ -84,8 +84,9 @@ extension ProxyPolicy: ConnectionPoolSource {
 
   public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
     do {
-      precondition(destinationAddress != nil)
-      let destinationAddress = destinationAddress!
+      guard let destinationAddress else {
+        fatalError()
+      }
 
       var bootstrap = try makeClientTCPBootstrap(group: eventLoop)
 
@@ -127,7 +128,7 @@ extension ProxyPolicy: ConnectionPoolSource {
       case .vmess:
         return bootstrap.channelInitializer { channel in
           channel.pipeline.addVMESSClientHandlers(
-            username: UUID(uuidString: proxy.username)!,
+            username: UUID(uuidString: proxy.username) ?? UUID(),
             destinationAddress: destinationAddress
           )
         }

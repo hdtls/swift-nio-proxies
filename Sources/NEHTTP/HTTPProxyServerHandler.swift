@@ -205,7 +205,8 @@ extension HTTPProxyServerHandler {
     if headPart.method == .CONNECT {
       // Ok, upgrade has completed! We now need to begin the upgrade process.
       // First, send the 200 connection established message.
-      // This content-length header is MUST NOT, but we need to workaround NIO's insistence that we set one.
+      // This content-length header is MUST NOT, but we need to workaround NIO's insistence that
+      // we set one.
       var headers = HTTPHeaders()
       headers.add(name: .contentLength, value: "0")
       let head = HTTPResponseHead(version: .http1_1, status: .ok, headers: headers)

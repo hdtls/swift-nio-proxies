@@ -198,7 +198,7 @@ final public class Netbot: @unchecked Sendable {
     forTarget address: NetAddress,
     eventLoop: EventLoop
   ) async throws -> Channel {
-    var fallback: Policy! = DirectPolicy(destinationAddress: address)
+    var fallback: Policy = DirectPolicy(destinationAddress: address)
 
     guard outboundMode != .direct else {
       return try await fallback.makeConnection(logger: logger, on: eventLoop).get()
@@ -214,9 +214,17 @@ final public class Netbot: @unchecked Sendable {
       async let a = resolver.initiateAQuery(host: host, port: port).get()
       async let aaaa = resolver.initiateAAAAQuery(host: host, port: port).get()
       let addresses = try await a + aaaa
-      patterns = [host] + addresses.map { $0.ipAddress ?? $0.pathname! }
+      patterns = [host] + addresses.compactMap { $0.ipAddress ?? $0.pathname }
     case .socketAddress(let addrinfo):
-      patterns = [addrinfo.ipAddress ?? addrinfo.pathname!]
+      guard let ipAddress = addrinfo.ipAddress else {
+        guard let pathname = addrinfo.pathname else {
+          patterns = []
+          break
+        }
+        patterns = [pathname]
+        break
+      }
+      patterns = [ipAddress]
     }
 
     logger.info(
@@ -272,14 +280,9 @@ final public class Netbot: @unchecked Sendable {
 
     // The user may not have preferred policy, so if not
     // we should fallback.
-    if let preferred = preferred {
-      fallback = profile.policies.first { $0.name == preferred }
+    if let preferred, let first = profile.policies.first(where: { $0.name == preferred }) {
+      fallback = first
     }
-
-    precondition(
-      fallback != nil,
-      "Illegal selectable policy groups, all policies group should be one of the policies in same profile."
-    )
 
     logger.info("Policy evaluating - \(fallback.name)", metadata: ["Request": "\(address)"])
 

@@ -151,7 +151,7 @@ struct SHA224Digest: DigestPrivate {
   }
 
   static var byteCount: Int {
-    return Int(SHA224_DIGEST_LENGTH)
+    return 28
   }
 
   func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {
@@ -186,12 +186,12 @@ struct SHA224Digest: DigestPrivate {
 /// The SHA-224 Hash Function
 struct SHA224: HashFunctionImplementationDetails {
   static var blockByteCount: Int {
-    get { return Int(SHA224_CBLOCK) }
+    get { return 64 }
 
     set { fatalError("Cannot set SHA224.blockByteCount") }
   }
   static var byteCount: Int {
-    get { return Int(SHA224_DIGEST_LENGTH) }
+    get { return 28 }
 
     set { fatalError("Cannot set SHA224.byteCount") }
   }

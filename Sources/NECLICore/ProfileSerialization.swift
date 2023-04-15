@@ -249,7 +249,7 @@ final public class ProfileSerialization {
     }
 
     try _rulesKeyedByLine.forEach { (cursor, line) in
-      let rawValue = line.split(separator: ",").first!.trimmingCharacters(in: .whitespaces)
+      let rawValue = line.split(separator: ",").first?.trimmingCharacters(in: .whitespaces) ?? ""
       guard let factory = RuleSystem.factory(for: .init(rawValue: rawValue)),
         let rule = factory.init(line)
       else {
@@ -363,7 +363,9 @@ final public class ProfileSerialization {
         }
       } else if let dictionary = value as? [String: Any] {
         try dictionary.keys.sorted().forEach { k in
-          let v = dictionary[k]!
+          guard let v = dictionary[k] else {
+            fatalError("This should never happen!!")
+          }
           let k = k.convertToKebabCase()
           components.append("\(k) = \(try serialize(v))")
         }
@@ -402,10 +404,10 @@ extension ProfileSerialization {
             omittingEmptySubsequences: false
           ).map { $0.trimmingCharacters(in: .whitespaces) }
 
-          let jsonKey = substrings.first!
+          let jsonKey = substrings.first ?? ""
 
           configuration[jsonKey] = .convertFromString(
-            substrings.last!,
+            substrings.last ?? "",
             forKey: jsonKey
           )
         }
@@ -481,8 +483,7 @@ extension ProfileSerialization {
       return num.description
     case is NSNull:
       return "null"
-    case is NSNumber:
-      let num = obj as! NSNumber
+    case let num as NSNumber:
       return num.description
     default:
       throw NSError(
@@ -638,7 +639,7 @@ extension String {
       let stringKey = self
       guard !stringKey.isEmpty else { return stringKey }
 
-      return stringKey.first!.lowercased()
+      return (stringKey.first?.lowercased() ?? "")
         + stringKey.dropFirst().map {
           $0.isUppercase ? "-\($0.lowercased())" : "\($0)"
         }.joined()

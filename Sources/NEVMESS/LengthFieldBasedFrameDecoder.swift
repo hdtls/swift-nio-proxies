@@ -94,7 +94,7 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
       return nil
     }
 
-    let frameLengthData = buffer.readBytes(length: frameLength)!
+    let frameLengthData = buffer.readBytes(length: frameLength) ?? []
 
     var padding = 0
     if configuration.options.shouldPadding {
@@ -121,7 +121,7 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
 
     var symmetricKey = KDF16.deriveKey(
       inputKeyMaterial: .init(data: symmetricKey),
-      info: ["auth_len".data(using: .utf8)!]
+      info: [Data("auth_len".utf8)]
     )
 
     let nonce = withUnsafeBytes(of: frameOffset.bigEndian) {
@@ -153,7 +153,9 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
     -> ByteBuffer?
   {
     // TCP
-    let size: (frameLength: UInt16, padding: Int) = self.size!
+    guard let size: (frameLength: UInt16, padding: Int) = self.size else {
+      return nil
+    }
 
     guard buffer.readableBytes >= Int(size.frameLength) else {
       return nil
@@ -170,7 +172,7 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
 
     // Remove random padding bytes.
     let combined =
-      nonce + buffer.readBytes(length: Int(size.frameLength))!.dropLast(size.padding)
+      nonce + (buffer.readBytes(length: Int(size.frameLength))?.dropLast(size.padding) ?? [])
 
     var frame: Data
     if configuration.algorithm == .aes128gcm {

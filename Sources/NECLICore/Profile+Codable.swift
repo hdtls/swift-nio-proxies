@@ -29,14 +29,14 @@ extension Profile: Codable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
     let ruleLiterals = try container.decodeIfPresent([String].self, forKey: .rules) ?? []
-    let rules = try ruleLiterals.map {
+    let rules = try ruleLiterals.compactMap {
       var components = $0.split(separator: ",")
       let id = String(components.removeFirst())
       guard let factory = RuleSystem.factory(for: .init(rawValue: id)) else {
         throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
       }
       try factory.validate($0)
-      return factory.init($0)!
+      return factory.init($0)
     }
     let manInTheMiddleSettings = try container.decodeIfPresent(
       ManInTheMiddleSettings.self,
