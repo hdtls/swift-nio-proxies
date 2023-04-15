@@ -26,6 +26,9 @@ import NIOHTTPCompression
 import NIOPosix
 import NIOSSL
 
+/// A Netbot is an easy way to create network proxy servers.
+///
+/// For current version we support start HTTP and SOCKS as local proxy servers if possible.
 final public class Netbot: @unchecked Sendable {
 
   private let profile: Profile
@@ -34,16 +37,29 @@ final public class Netbot: @unchecked Sendable {
 
   private let eventLoopGroup: EventLoopGroup
 
+  /// The outbound mode control how requests will be process.
   @Protected public var outboundMode: OutboundMode = .direct
 
+  /// A boolean value indicate whether HTTP capture should be enabled, default is false.
+  ///
+  /// Enabling HTTP capture will reduce performance.
   @Protected public var isHTTPCaptureEnabled: Bool = false
 
+  /// A boolean value indicate whether HTTP MitM should be enabled, default is false.
+  ///
+  /// Enabling HTTP capture will reduce performance.
   @Protected public var isHTTPMitMEnabled: Bool = false
 
   @Protected private var quiesces: [(ServerQuiescingHelper, EventLoopPromise<Void>)] = []
 
   @Protected private var certCache: CertCache?
 
+  /// Initialize an instance of `Netbot` with specified profile logger and outboundMode.
+  ///
+  /// - Parameters:
+  ///   - profile: The `Profile` object contains all settings for this process.
+  ///   - logger: The `Logger` object used to log message.
+  ///   - outboundMode: The connections outbound mode, default is `.direct`.
   public init(profile: Profile, logger: Logger, outboundMode: OutboundMode = .direct) {
     self.profile = profile
     self.logger = logger
@@ -52,6 +68,9 @@ final public class Netbot: @unchecked Sendable {
     self.certCache = try? CertCache(manInTheMiddleSettings: profile.manInTheMiddleSettings)
   }
 
+  /// Run VPN servers and wait for shutdown.
+  ///
+  /// For current version only HTTP and SOCKS proxy server is supported.
   public func run() async throws {
     let basicSettings = profile.basicSettings
 
@@ -102,6 +121,12 @@ final public class Netbot: @unchecked Sendable {
     }
   }
 
+  /// Start a VPN tunnel for specified protocol.
+  /// - Parameters:
+  ///   - protocol: The VPN protocol.
+  ///   - bindAddress: The address for VPN tunnel to bind on.
+  ///   - bindPort: The port for VPN tunnel to bind on.
+  /// - Returns: Started VPN tunnel and server quiescing helper pair.
   private func startVPNTunnel(
     protocol: Proxy.`Protocol`,
     bindAddress: String,
@@ -169,10 +194,7 @@ final public class Netbot: @unchecked Sendable {
           preconditionFailure()
         }
       }
-      .childChannelOption(
-        ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY),
-        value: SocketOptionValue(1)
-      )
+      .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
       .childChannelOption(
         ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR),
         value: SocketOptionValue(1)
@@ -194,6 +216,7 @@ final public class Netbot: @unchecked Sendable {
     return (channel, quiesce)
   }
 
+  /// Initialize client channel for target on eventLoop.
   private func initializePeer(
     forTarget address: NetAddress,
     eventLoop: EventLoop
@@ -291,6 +314,21 @@ final public class Netbot: @unchecked Sendable {
     return try await fallback.makeConnection(logger: logger, on: eventLoop).get()
   }
 
+  /// Configure HTTP MitM pipeline and HTTP capture pipeline.
+  ///
+  /// The HTTP MitM pipeline can only be configured when the `serverHostname` is not nil, the current connection is an https
+  /// request (`tls` is true) and `Netbot` enables the HTTP MitM capability (`Netbot.isHTTPMitMEnabled` is true).
+  ///
+  /// Also, if `serverHostname` is not included in the hostname that needs to enable HTTP MiTM, the HTTP MitM pipeline will not
+  /// be configured too.
+  ///
+  /// And the HTTP capture only works on plain http request or decrypted https request.
+  ///
+  /// - Parameters:
+  ///   - channel: Server channel.
+  ///   - peer: Client channel.
+  ///   - serverHostname: The destination hostname.
+  ///   - tls: A boolean value indicate whether this connection is HTTPS connection.
   private func configureHTTPMitmAndCapturePipeline(
     on channel: Channel,
     peer: Channel,
@@ -322,10 +360,14 @@ final public class Netbot: @unchecked Sendable {
       certCache = try CertCache(manInTheMiddleSettings: profile.manInTheMiddleSettings)
     }
 
+    // Find whether need perform HTTP MitM action for this hostname, if value exists, then prepare
+    // HTTP MitM pipeline else just return and HTTP capture should also be ignored because in this
+    // situation the connection is HTTPS request, capture http body has no effect.
     guard let (certificateChain, privateKey) = try certCache?.value(forKey: serverHostname) else {
       return
     }
 
+    // Set up server channel pipeline to decrypt HTTPS stream.
     var configuration = TLSConfiguration.makeServerConfiguration(
       certificateChain: certificateChain,
       privateKey: privateKey
@@ -337,7 +379,8 @@ final public class Netbot: @unchecked Sendable {
     let recognizer = try await channel.pipeline.handler(type: NIOTLSRecognizer.self).get()
     try await channel.pipeline.addHandler(ssl0, position: .after(recognizer))
 
-    // Peer channel pipeline setup.
+    // Because we have decrypted HTTPS stream, so we need set up client channel to encode decrypted
+    // plain HTTP request to HTTPS request.
     configuration = TLSConfiguration.makeClientConfiguration()
     context = try NIOSSLContext(configuration: configuration)
     let ssl1 = try NIOSSLClientHandler(context: context, serverHostname: serverHostname)
@@ -354,6 +397,7 @@ final public class Netbot: @unchecked Sendable {
     )
   }
 
+  /// Configure HTTP capture pipeline at specified position.
   private func configureHTTPCapturePipeline(
     on master: (channel: Channel, position: ChannelPipeline.Position),
     peer: (channel: Channel, position: ChannelPipeline.Position)
@@ -401,6 +445,9 @@ final public class Netbot: @unchecked Sendable {
     )
   }
 
+  /// Shutdown Netbot.
+  ///
+  /// Actually, it perform initiate shutdown for `ServerQuiescingHelper`.
   public func shutdown() {
     logger.debug("Netbot shutting down.")
     logger.trace("Shutting down eventLoopGroup \(String(describing: eventLoopGroup)).")
