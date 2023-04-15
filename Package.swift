@@ -63,8 +63,9 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
     .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0"),
     .package(url: "https://github.com/apple/swift-format.git", from: "508.0.0"),
-    .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0"),
     .package(url: "https://github.com/apple/swift-certificates.git", from: "0.2.0"),
+    .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.2.0"),
+    .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0"),
   ],
   targets: [
     .executableTarget(
