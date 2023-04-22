@@ -18,7 +18,7 @@
 
 /// A channel handler that wraps a channel in HTTP CONNECT tunnel.
 /// This handler can be used in channels that are acting as the client in the HTTP CONNECT tunnel proxy dialog.
-final public class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, RemovableChannelHandler {
+final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChannelHandler {
 
   public typealias InboundIn = HTTPClientResponsePart
   public typealias OutboundIn = NIOAny
@@ -139,7 +139,7 @@ final public class HTTP1ClientCONNECTTunnelHandler: ChannelDuplexHandler, Remova
   }
 }
 
-extension HTTP1ClientCONNECTTunnelHandler {
+extension HTTPProxyClientHandler {
 
   private typealias BufferedWrite = (data: NIOAny, promise: EventLoopPromise<Void>?)
 
@@ -157,7 +157,7 @@ extension HTTP1ClientCONNECTTunnelHandler {
   }
 }
 
-extension HTTP1ClientCONNECTTunnelHandler {
+extension HTTPProxyClientHandler {
 
   /// Sending HTTP CONNECT request to proxy server and perform a timeout schedule task.
   private func performCONNECTHandshake(context: ChannelHandlerContext) {
@@ -244,4 +244,4 @@ extension HTTP1ClientCONNECTTunnelHandler {
 }
 
 @available(*, unavailable)
-extension HTTP1ClientCONNECTTunnelHandler: Sendable {}
+extension HTTPProxyClientHandler: Sendable {}

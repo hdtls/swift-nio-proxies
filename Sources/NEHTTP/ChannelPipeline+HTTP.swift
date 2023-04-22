@@ -129,7 +129,7 @@ extension ChannelPipeline.SynchronousOperations {
   ) throws {
     eventLoop.assertInEventLoop()
     let handlers: [ChannelHandler] = [
-      HTTP1ClientCONNECTTunnelHandler(
+      HTTPProxyClientHandler(
         username: username,
         passwordReference: passwordReference,
         authenticationRequired: authenticationRequired,

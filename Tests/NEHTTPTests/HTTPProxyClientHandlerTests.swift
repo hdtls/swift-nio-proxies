@@ -19,7 +19,7 @@ import XCTest
 class HTTPProxyClientHandlerTests: XCTestCase {
 
   var channel: EmbeddedChannel!
-  var handler: HTTP1ClientCONNECTTunnelHandler!
+  var handler: HTTPProxyClientHandler!
 
   override func setUpWithError() throws {
     XCTAssertNil(self.channel)
