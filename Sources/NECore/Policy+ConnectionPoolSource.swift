@@ -24,22 +24,21 @@ import NIOPosix
 import NIOSSL
 
 #if canImport(Network)
+import Network
 import NIOTransportServices
 #endif
 
-func makeClientTCPBootstrap(group: EventLoopGroup, serverHostname: String? = nil) throws
+func makeUniversalClientTCPBootstrap(group: EventLoopGroup, serverHostname: String? = nil) throws
   -> NIOClientTCPBootstrap
 {
-  //    #if canImport(Network)
-  //    if #available(macOS 10.14, iOS 12, tvOS 12, watchOS 3, *) {
-  //        // We run on a new-enough Darwin so we can use Network.framework
-  //        let bootstrap = NIOClientTCPBootstrap(
-  //            NIOTSConnectionBootstrap(group: group),
-  //            tls: NIOTSClientTLSProvider()
-  //        )
-  //        return bootstrap
-  //    }
-  //    #endif
+  #if canImport(Network)
+  // We run on a new-enough Darwin so we can use Network.framework
+  let bootstrap = NIOClientTCPBootstrap(
+    NIOTSConnectionBootstrap(group: group),
+    tls: NIOTSClientTLSProvider()
+  )
+  return bootstrap
+  #else
   // We are on a non-Darwin platform, so we'll use BSD sockets.
   let sslContext = try NIOSSLContext(configuration: TLSConfiguration.makeClientConfiguration())
   return try NIOClientTCPBootstrap(
@@ -49,6 +48,7 @@ func makeClientTCPBootstrap(group: EventLoopGroup, serverHostname: String? = nil
       serverHostname: serverHostname
     )
   )
+  #endif
 }
 
 extension DirectPolicy: ConnectionPoolSource {
@@ -58,8 +58,17 @@ extension DirectPolicy: ConnectionPoolSource {
       guard case .domainPort(let serverHostname, let serverPort) = destinationAddress else {
         throw SocketAddressError.unsupported
       }
-      return try makeClientTCPBootstrap(group: eventLoop)
-        .connect(host: serverHostname, port: serverPort)
+      let bootstrap = try makeUniversalClientTCPBootstrap(group: eventLoop)
+
+      if let bootstrap = bootstrap.underlyingBootstrap as? NIOTSConnectionBootstrap {
+        let parameters = NWParameters.tcp
+        parameters.preferNoProxies = true
+        let host: NWEndpoint.Host = .init(serverHostname)
+        let port: NWEndpoint.Port = .init(rawValue: UInt16(serverPort))!
+        return bootstrap.withExistingNWConnection(.init(host: host, port: port, using: parameters))
+      } else {
+        return bootstrap.connect(host: serverHostname, port: serverPort)
+      }
     } catch {
       return eventLoop.makeFailedFuture(error)
     }
@@ -88,7 +97,7 @@ extension ProxyPolicy: ConnectionPoolSource {
         fatalError()
       }
 
-      var bootstrap = try makeClientTCPBootstrap(group: eventLoop)
+      var bootstrap = try makeUniversalClientTCPBootstrap(group: eventLoop)
 
       if proxy.overTls {
         bootstrap = bootstrap.enableTLS()
@@ -96,7 +105,7 @@ extension ProxyPolicy: ConnectionPoolSource {
 
       switch proxy.protocol {
       case .http:
-        return bootstrap.channelInitializer { channel in
+        bootstrap = bootstrap.channelInitializer { channel in
           channel.pipeline.addHTTPProxyClientHandlers(
             username: proxy.username,
             passwordReference: proxy.passwordReference,
@@ -105,9 +114,8 @@ extension ProxyPolicy: ConnectionPoolSource {
             destinationAddress: destinationAddress
           )
         }
-        .connect(host: proxy.serverAddress, port: proxy.port)
       case .socks5:
-        return bootstrap.channelInitializer { channel in
+        bootstrap = bootstrap.channelInitializer { channel in
           channel.pipeline.addSOCKSClientHandlers(
             username: proxy.username,
             passwordReference: proxy.passwordReference,
@@ -115,24 +123,31 @@ extension ProxyPolicy: ConnectionPoolSource {
             destinationAddress: destinationAddress
           )
         }
-        .connect(host: proxy.serverAddress, port: proxy.port)
       case .shadowsocks:
-        return bootstrap.channelInitializer { channel in
+        bootstrap = bootstrap.channelInitializer { channel in
           channel.pipeline.addSSClientHandlers(
             algorithm: proxy.algorithm,
             passwordReference: proxy.passwordReference,
             destinationAddress: destinationAddress
           )
         }
-        .connect(host: proxy.serverAddress, port: proxy.port)
       case .vmess:
-        return bootstrap.channelInitializer { channel in
+        bootstrap = bootstrap.channelInitializer { channel in
           channel.pipeline.addVMESSClientHandlers(
             username: UUID(uuidString: proxy.username) ?? UUID(),
             destinationAddress: destinationAddress
           )
         }
-        .connect(host: proxy.serverAddress, port: proxy.port)
+      }
+
+      if let bootstrap = bootstrap.underlyingBootstrap as? NIOTSConnectionBootstrap {
+        let parameters = NWParameters.tcp
+        parameters.preferNoProxies = true
+        let host: NWEndpoint.Host = .init(proxy.serverAddress)
+        let port: NWEndpoint.Port = .init(rawValue: UInt16(proxy.port))!
+        return bootstrap.withExistingNWConnection(.init(host: host, port: port, using: parameters))
+      } else {
+        return bootstrap.connect(host: proxy.serverAddress, port: proxy.port)
       }
     } catch {
       return eventLoop.makeFailedFuture(error)

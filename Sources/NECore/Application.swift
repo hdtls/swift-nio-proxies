@@ -26,6 +26,14 @@ import NIOHTTPCompression
 import NIOPosix
 import NIOSSL
 
+#if canImport(Network)
+import NIOTransportServices
+
+typealias ServerBootstrap = NIOTransportServices.NIOTSListenerBootstrap
+#else
+typealias ServerBootstrap = NIO.ServerBootstrap
+#endif
+
 /// A Netbot is an easy way to create network proxy servers.
 ///
 /// For current version we support start HTTP and SOCKS as local proxy servers if possible.
@@ -63,7 +71,11 @@ final public class Netbot: @unchecked Sendable {
   public init(profile: Profile, logger: Logger, outboundMode: OutboundMode = .direct) {
     self.profile = profile
     self.logger = logger
+    #if canImport(Network)
+    self.eventLoopGroup = NIOTSEventLoopGroup()
+    #else
     self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
+    #endif
     self.outboundMode = outboundMode
     self.certCache = try? CertCache(manInTheMiddleSettings: profile.manInTheMiddleSettings)
   }
@@ -140,8 +152,8 @@ final public class Netbot: @unchecked Sendable {
           quiesce.makeServerChannelHandler(channel: channel)
         )
       }
-      .serverChannelOption(ChannelOptions.backlog, value: 256)
       .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
+      .serverChannelOption(ChannelOptions.socketOption(.init(rawValue: SO_REUSEPORT)), value: 1)
       .childChannelInitializer { channel in
         let eventLoop = channel.eventLoop.next()
 
@@ -194,12 +206,7 @@ final public class Netbot: @unchecked Sendable {
           preconditionFailure()
         }
       }
-      .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
-      .childChannelOption(
-        ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR),
-        value: SocketOptionValue(1)
-      )
-      .childChannelOption(ChannelOptions.maxMessagesPerRead, value: 1)
+      .childChannelOption(ChannelOptions.tcpOption(.tcp_nodelay), value: 1)
 
     let channel = try await bootstrap.bind(host: bindAddress, port: bindPort).get()
 
