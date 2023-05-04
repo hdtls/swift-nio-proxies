@@ -200,6 +200,11 @@ public struct NetbotCLITool: AsyncParsableCommand {
     let app = Netbot(profile: profile, logger: logger, outboundMode: outboundMode)
     app.isHTTPCaptureEnabled = enableHTTPCapture
     app.isHTTPMitMEnabled = enableHTTPMitm
-    try await app.run()
+    do {
+      try await app.run()
+    } catch {
+      logger.error("\(error)")
+      try await app.shutdownGracefully()
+    }
   }
 }

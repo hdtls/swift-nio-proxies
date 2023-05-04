@@ -58,7 +58,7 @@ final public class Netbot: @unchecked Sendable {
   /// Enabling HTTP capture will reduce performance.
   @Protected public var isHTTPMitMEnabled: Bool = false
 
-  @Protected private var quiesces: [(ServerQuiescingHelper, EventLoopPromise<Void>)] = []
+  @Protected private var services: [(Channel, ServerQuiescingHelper, EventLoopPromise<Void>)] = []
 
   @Protected private var certCache: CertCache?
 
@@ -86,50 +86,44 @@ final public class Netbot: @unchecked Sendable {
   public func run() async throws {
     let basicSettings = profile.basicSettings
 
-    do {
+    let queue = DispatchQueue(label: "io.tenbits.Netbot.signal.queue")
+    let source = DispatchSource.makeSignalSource(signal: SIGINT, queue: queue)
+    source.setEventHandler {
+      Task.detached {
+        try await self.shutdownGracefully()
+      }
+    }
+    signal(SIGINT, SIG_IGN)
+    source.resume()
+
+    try await withThrowingTaskGroup(of: Void.self) { g in
       if let address = basicSettings.httpListenAddress, let port = basicSettings.httpListenPort {
-        let (_, quiesce) = try await startVPNTunnel(
-          protocol: .http,
-          bindAddress: address,
-          bindPort: port
-        )
-        quiesces.append((quiesce, eventLoopGroup.next().makePromise()))
+        g.addTask {
+          let (channel, quiesce) = try await self.startVPNTunnel(
+            protocol: .http,
+            bindAddress: address,
+            bindPort: port
+          )
+          let promise = channel.eventLoop.makePromise(of: Void.self)
+          self.services.append((channel, quiesce, promise))
+          try await promise.futureResult.get()
+        }
       }
 
       if let address = basicSettings.socksListenAddress, let port = basicSettings.socksListenPort {
-        let (_, quiesce) = try await startVPNTunnel(
-          protocol: .socks5,
-          bindAddress: address,
-          bindPort: port
-        )
-        quiesces.append((quiesce, eventLoopGroup.next().makePromise()))
+        g.addTask {
+          let (channel, quiesce) = try await self.startVPNTunnel(
+            protocol: .socks5,
+            bindAddress: address,
+            bindPort: port
+          )
+          let promise = channel.eventLoop.makePromise(of: Void.self)
+          self.services.append((channel, quiesce, promise))
+          try await promise.futureResult.get()
+        }
       }
-    } catch {
-      try await eventLoopGroup.shutdownGracefully()
-      throw error
-    }
 
-    let signalQueue = DispatchQueue(label: "io.tenbits.Netbot.signalHandlingQueue")
-    let signalSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: signalQueue)
-    signalSource.setEventHandler {
-      signalSource.cancel()
-      self.logger.trace(
-        "received signal, initiating shutdown which should complete after the last request finished."
-      )
-      self.shutdown()
-    }
-    signal(SIGINT, SIG_IGN)
-    signalSource.resume()
-
-    do {
-      for (_, promise) in quiesces {
-        try await promise.futureResult.get()
-      }
-      try await eventLoopGroup.shutdownGracefully()
-
-      logger.trace("Netbot shutdown complete.")
-    } catch {
-      logger.warning("Shutting down failed: \(error).")
+      try await g.waitForAll()
     }
   }
 
@@ -449,13 +443,24 @@ final public class Netbot: @unchecked Sendable {
   /// Shutdown Netbot.
   ///
   /// Actually, it perform initiate shutdown for `ServerQuiescingHelper`.
-  public func shutdown() {
-    logger.debug("Netbot shutting down.")
-    logger.trace("Shutting down eventLoopGroup \(String(describing: eventLoopGroup)).")
+  public func shutdownGracefully() async throws {
+    // Wait until all server channel closed.
+    try await withThrowingTaskGroup(of: Void.self) { g in
+      for (channel, quiesce, promise) in services {
+        g.addTask {
+          self.logger.trace("Shutting down channel \(channel).")
+          quiesce.initiateShutdown(promise: promise)
+          try await promise.futureResult.get()
+        }
+      }
 
-    for (quiesce, promise) in quiesces {
-      quiesce.initiateShutdown(promise: promise)
+      try await g.waitForAll()
     }
+
+    logger.trace("Shutting down eventLoopGroup \(String(describing: eventLoopGroup)).")
+    try await eventLoopGroup.shutdownGracefully()
+
+    logger.trace("Netbot shutdown complete.")
   }
 
   deinit {
