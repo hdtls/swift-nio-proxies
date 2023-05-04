@@ -23,6 +23,11 @@ jobs:
     steps:
       - name: Checkout repository...
         uses: actions/checkout@v3
+
+      - name: Setup swift ${{ matrix.swift-version  }}
+        uses: hdtls/setup-swift@main
+        with: 
+          swift-version: ${{matrix.swift-version}}
       
       - name: Build and test...
         run: swift test --sanitize thread -Xswiftc -warnings-as-errors
