@@ -60,6 +60,7 @@ extension DirectPolicy: ConnectionPoolSource {
       }
       let bootstrap = try makeUniversalClientTCPBootstrap(group: eventLoop)
 
+      #if canImport(Network)
       if let bootstrap = bootstrap.underlyingBootstrap as? NIOTSConnectionBootstrap {
         let parameters = NWParameters.tcp
         parameters.preferNoProxies = true
@@ -69,6 +70,9 @@ extension DirectPolicy: ConnectionPoolSource {
       } else {
         return bootstrap.connect(host: serverHostname, port: serverPort)
       }
+      #else
+      return bootstrap.connect(host: serverHostname, port: serverPort)
+      #endif
     } catch {
       return eventLoop.makeFailedFuture(error)
     }
@@ -140,6 +144,7 @@ extension ProxyPolicy: ConnectionPoolSource {
         }
       }
 
+      #if canImport(Network)
       if let bootstrap = bootstrap.underlyingBootstrap as? NIOTSConnectionBootstrap {
         let parameters = NWParameters.tcp
         parameters.preferNoProxies = true
@@ -149,6 +154,9 @@ extension ProxyPolicy: ConnectionPoolSource {
       } else {
         return bootstrap.connect(host: proxy.serverAddress, port: proxy.port)
       }
+      #else
+      return bootstrap.connect(host: proxy.serverAddress, port: proxy.port)
+      #endif
     } catch {
       return eventLoop.makeFailedFuture(error)
     }

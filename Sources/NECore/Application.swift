@@ -31,7 +31,7 @@ import NIOTransportServices
 
 typealias ServerBootstrap = NIOTransportServices.NIOTSListenerBootstrap
 #else
-typealias ServerBootstrap = NIO.ServerBootstrap
+typealias ServerBootstrap = NIOPosix.ServerBootstrap
 #endif
 
 /// A Netbot is an easy way to create network proxy servers.
