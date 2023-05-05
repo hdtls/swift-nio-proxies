@@ -19,16 +19,13 @@ import Foundation
 public enum NetAddress: Equatable, Hashable, Sendable {
   case domainPort(host: String, port: Int)
   case socketAddress(SocketAddress)
-}
-
-extension NetAddress {
 
   public var host: String? {
     switch self {
     case .domainPort(let host, _):
       return host
     case .socketAddress(let socketAddress):
-      return socketAddress.ipAddress ?? socketAddress.pathname
+      return socketAddress.ipAddress
     }
   }
 
@@ -42,88 +39,28 @@ extension NetAddress {
   }
 }
 
-/// SOCKS address type defined in RFC 1928.
-private enum SOCKSAddressType: UInt8, CaseIterable {
-  /// IP V4 address: X'01'
+/// SOCKS address identifier defined in RFC 1928.
+private enum AddressFlag: UInt8 {
+  // IPv4 address identifier
   case v4 = 0x01
 
-  /// DOMAINNAME: X'03'
+  // Domain address identifier
   case domain = 0x03
 
-  /// IP V6 address
+  // IPv6 address identifier
   case v6 = 0x04
 }
 
 extension ByteBuffer {
 
-  /// Read `NetAddress` from buffer.
+  /// ByteBuffer parse helper.
   ///
-  /// This method is used to parse address that encoded as SOCKS address defined in RFC 1928.
+  /// This function gives the user a chance to parse from a byte buffer, once the parse success then the buffer will read parsed bytes
+  /// and return the parsed object, else byte buffer will fall back to the original state nil will be returned.
   ///
-  /// - Throws: May throw  `NetAddressError.invalidAddressType` if address type is illegal.
-  /// - Returns: If success return `NetAddress` else return nil for need more bytes.
-  public mutating func readAddress() throws -> NetAddress? {
-    try parseUnwinding { buffer in
-      guard let rawValue = buffer.readInteger(as: UInt8.self) else {
-        return nil
-      }
-
-      guard let type = SOCKSAddressType(rawValue: rawValue) else {
-        throw SocketAddressError.unsupported
-      }
-
-      // Unlike IPv4 and IPv6 address domain name have a variable length
-      if case .domain = type {
-        guard let length = buffer.readInteger(as: UInt8.self),
-          let host = buffer.readString(length: Int(length)),
-          let port = buffer.readInteger(as: UInt16.self)
-        else {
-          return nil
-        }
-        return .domainPort(host: host, port: Int(port))
-      }
-
-      guard let packedIPAddress = buffer.readSlice(length: type == .v4 ? 4 : 16),
-        let port = buffer.readInteger(as: UInt16.self)
-      else {
-        return nil
-      }
-
-      return .socketAddress(try .init(packedIPAddress: packedIPAddress, port: Int(port)))
-    }
-  }
-
-  /// Apply `NetAddress` to `ByteBuffer`.
-  /// - Parameter address: The address waiting to write.
-  /// - Returns: Byte count.
-  @discardableResult
-  public mutating func writeAddress(_ address: NetAddress) -> Int {
-    switch address {
-    case .socketAddress(.v4(let address)):
-      return writeInteger(SOCKSAddressType.v4.rawValue)
-        + withUnsafeBytes(of: address.address.sin_addr) { ptr in
-          writeBytes(ptr)
-        }
-        + writeInteger(address.address.sin_port.bigEndian)
-    case .socketAddress(.v6(let address)):
-      return writeInteger(SOCKSAddressType.v6.rawValue)
-        + withUnsafeBytes(of: address.address.sin6_addr) { ptr in
-          writeBytes(ptr)
-        }
-        + writeInteger(address.address.sin6_port.bigEndian)
-    case .socketAddress(.unixDomainSocket):
-      // enforced in the channel initalisers.
-      fatalError("UNIX domain sockets are not supported")
-    case .domainPort(let domain, let port):
-      return writeInteger(SOCKSAddressType.domain.rawValue)
-        + writeInteger(UInt8(domain.utf8.count))
-        + writeString(domain)
-        + writeInteger(UInt16(port))
-    }
-  }
-
-  public mutating func parseUnwinding<T>(_ closure: (inout ByteBuffer) throws -> T?) rethrows
-    -> T?
+  /// - Parameter closure: The parse operation closure.
+  /// - Returns: The parsed object if success or nil.
+  public mutating func parseUnwinding<T>(_ closure: (inout ByteBuffer) throws -> T?) rethrows -> T?
   {
     let save = self
     do {
@@ -137,13 +74,81 @@ extension ByteBuffer {
       throw error
     }
   }
+}
 
+extension ByteBuffer {
+
+  /// Read `NetAddress` from buffer.
+  ///
+  /// This method is used to parse address that encoded as SOCKS address defined in RFC 1928.
+  ///
+  /// - Throws: May throw  `SocketAddressError.unsupported` if address type is illegal,
+  ///     or `SocketAddressError.FailedToParseIPByteBuffer(address:)` if failed to parse ipaddress.
+  /// - Returns: If success return `NetAddress` else return nil for need more bytes.
+  public mutating func readAddress() throws -> NetAddress? {
+    try parseUnwinding { buffer in
+      guard let rawValue = buffer.readInteger(as: UInt8.self) else {
+        return nil
+      }
+
+      guard let type = AddressFlag(rawValue: rawValue) else {
+        throw SocketAddressError.unsupported
+      }
+
+      switch type {
+      case .domain:
+        // Unlike IPv4 and IPv6 address domain name have a variable length
+        guard let length = buffer.readInteger(as: UInt8.self),
+          let host = buffer.readString(length: Int(length)),
+          let port = buffer.readInteger(as: UInt16.self)
+        else {
+          return nil
+        }
+        return .domainPort(host: host, port: Int(port))
+      case .v4, .v6:
+        guard let packedIPAddress = buffer.readSlice(length: type == .v4 ? 4 : 16),
+          let port = buffer.readInteger(as: UInt16.self)
+        else {
+          return nil
+        }
+        return .socketAddress(try .init(packedIPAddress: packedIPAddress, port: Int(port)))
+      }
+    }
+  }
+
+  /// Write `NetAddress` to `ByteBuffer`.
+  /// - Parameter address: The address waiting to write.
+  /// - Returns: Byte count.
+  @discardableResult
+  public mutating func writeAddress(_ address: NetAddress) -> Int {
+    switch address {
+    case .socketAddress(.v4(let address)):
+      return writeInteger(AddressFlag.v4.rawValue)
+        + withUnsafeBytes(of: address.address.sin_addr) { ptr in
+          writeBytes(ptr)
+        }
+        + writeInteger(address.address.sin_port.bigEndian)
+    case .socketAddress(.v6(let address)):
+      return writeInteger(AddressFlag.v6.rawValue)
+        + withUnsafeBytes(of: address.address.sin6_addr) { ptr in
+          writeBytes(ptr)
+        }
+        + writeInteger(address.address.sin6_port.bigEndian)
+    case .socketAddress(.unixDomainSocket):
+      // enforced in the channel initalisers.
+      fatalError("UNIX domain sockets are not supported")
+    case .domainPort(let domain, let port):
+      return writeInteger(AddressFlag.domain.rawValue)
+        + writeInteger(UInt8(domain.utf8.count))
+        + writeString(domain)
+        + writeInteger(UInt16(port))
+    }
+  }
 }
 
 extension Data {
 
   /// Read `NetAddress` from buffer.
-  /// - Throws: May throw  `NetAddressError.invalidAddressType` if address type is illegal.
   /// - Returns: If success return `NetAddress` else return nil for need more bytes.
   public mutating func readAddress() throws -> NetAddress? {
     let data = self
@@ -154,7 +159,7 @@ extension Data {
     return try byteBuffer.readAddress()
   }
 
-  /// Apply `NetAddress` to `ByteBuffer`.
+  /// Write `NetAddress` to `ByteBuffer`.
   /// - Parameter address: The address waiting to write.
   /// - Returns: Byte count.
   @discardableResult
@@ -169,6 +174,8 @@ extension Data {
 
 extension String {
 
+  /// Indicate whether string is an IP address.
+  /// - Returns: True if the given string is an IP address.
   public func isIPAddress() -> Bool {
     (try? SocketAddress(ipAddress: self, port: 0)) != nil
   }
