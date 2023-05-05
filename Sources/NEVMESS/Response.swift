@@ -12,9 +12,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
 @_exported import NEMisc
 @_exported import NIOCore
+
+#if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
+import Foundation
+#else
+@preconcurrency import Foundation
+#endif
 
 /// `Response` object defines VMESS response data object.
 public struct Response: Sendable {

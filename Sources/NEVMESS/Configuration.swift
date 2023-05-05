@@ -12,7 +12,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+#if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
 import Foundation
+#else
+@preconcurrency import Foundation
+#endif
 
 /// `Configuration` object defines VMESS request infomation.
 public struct Configuration: Sendable {
