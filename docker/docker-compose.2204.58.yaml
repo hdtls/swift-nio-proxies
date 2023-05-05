@@ -12,7 +12,6 @@ services:
   test:
     image: swift-netbot-core:5.8-jammy
     environment:
-      - FORCE_TEST_DISCOVERY=--enable-test-discovery
       - WARN_AS_ERROR_ARG=-Xswiftc -warnings-as-errors
       - SANITIZER_ARG=--sanitize=thread
       - IMPORT_CHECK_ARG=--explicit-target-dependency-import-check error
