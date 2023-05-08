@@ -36,7 +36,10 @@
 
 // THIS FILE IS MOSTLY COPIED FROM [vapor](https://github.com/vapor/vapor)
 
+import Foundation
 @_exported import NIOHTTP1
+
+let crlf: StaticString = "\r\n"
 
 extension HTTPHeaders {
   /// Type used for the name of a HTTP header in the `HTTPHeaders` storage.
@@ -542,5 +545,170 @@ extension HTTPHeaders: CustomDebugStringConvertible {
       desc.append("\(key): \(val)")
     }
     return desc.joined(separator: "\n")
+  }
+}
+
+extension HTTPHeaders {
+
+  /// Returns a new HTTPHeaders made by removing from all hop-by-hop fields.
+  ///
+  /// - Returns: The headers without hop-by-hop fields.
+  func trimmingFieldsInHopByHop() -> HTTPHeaders {
+    var headers = self
+    headers.remove(name: .proxyConnection)
+    headers.remove(name: .proxyAuthenticate)
+    headers.remove(name: .proxyAuthorization)
+    headers.remove(name: .te)
+    headers.remove(name: .trailer)
+    headers.remove(name: .transferEncoding)
+    headers.remove(name: .upgrade)
+    headers.remove(name: .connection)
+    return headers
+  }
+}
+
+extension HTTPHeaders {
+
+  /// A basic username and password.
+  struct BasicAuthorization: Equatable {
+    /// The username, sometimes an email address
+    let username: String
+
+    /// The plaintext password
+    let password: String
+  }
+
+  var proxyBasicAuthorization: BasicAuthorization? {
+    set {
+      if let basic = newValue {
+        let credentials = "\(basic.username):\(basic.password)"
+        let encoded = Data(credentials.utf8).base64EncodedString()
+        replaceOrAdd(name: .proxyAuthorization, value: "Basic \(encoded)")
+      } else {
+        remove(name: .proxyAuthorization)
+      }
+    }
+    get {
+      guard let string = self.first(name: .proxyAuthorization) else {
+        return nil
+      }
+
+      let headerParts = string.components(separatedBy: "Basic ")
+      guard headerParts.count == 2 else {
+        return nil
+      }
+
+      guard let data = Data(base64Encoded: headerParts[1]) else {
+        return nil
+      }
+
+      let parts = String(decoding: data, as: UTF8.self).split(
+        separator: ":",
+        maxSplits: 1
+      )
+
+      guard parts.count == 2 else {
+        return nil
+      }
+
+      return .init(username: .init(parts[0]), password: .init(parts[1]))
+    }
+  }
+}
+
+extension HTTPRequestHead {
+
+  var host: String {
+    let hostField = headers.first(name: .host) ?? uri
+    return hostField.components(separatedBy: ":").first ?? ""
+  }
+
+  var port: Int {
+    let hostFields: [Substring] = headers.first(name: .host)?.split(separator: ":") ?? []
+
+    var port: Int?
+
+    if hostFields.count >= 2 {
+      // Standard host field
+      port = Int(hostFields[1])
+    }
+
+    if let port {
+      return port
+    }
+
+    let defaultPort = method == .CONNECT ? 443 : 80
+
+    guard let portField = uri.split(separator: ":").last else {
+      return defaultPort
+    }
+    return Int(portField) ?? defaultPort
+  }
+}
+
+extension HTTPMethod {
+
+  internal enum HasBody {
+    case yes
+    case no
+    case unlikely
+  }
+
+  /// Whether requests with this verb may have a request body.
+  internal var hasRequestBody: HasBody {
+    switch self {
+    case .TRACE:
+      return .no
+    case .POST, .PUT, .PATCH:
+      return .yes
+    case .GET, .CONNECT, .OPTIONS, .HEAD, .DELETE:
+      fallthrough
+    default:
+      return .unlikely
+    }
+  }
+}
+
+extension ByteBuffer {
+
+  /// Serializes this HTTP header block to bytes suitable for writing to the wire.
+  ///
+  /// - Parameter buffer: A buffer to write the serialized bytes into. Will increment
+  ///     the writer index of this buffer.
+  mutating func writeHTTPHeaders(_ headers: HTTPHeaders) {
+    for field in headers {
+      writeString(field.name)
+      writeStaticString(": ")
+      writeString(field.value)
+      writeStaticString(crlf)
+    }
+    writeStaticString(crlf)
+  }
+
+  mutating func writeHTTPVersion(_ version: HTTPVersion) {
+    switch (version.minor, version.major) {
+    case (1, 0):
+      writeStaticString("HTTP/1.0")
+    case (1, 1):
+      writeStaticString("HTTP/1.1")
+    default:
+      writeStaticString("HTTP/")
+      writeString(String(version.major))
+      writeStaticString(".")
+      writeString(String(version.minor))
+    }
+  }
+
+  mutating func writeHTTPRequestHead(_ request: HTTPRequestHead) {
+    writeString(request.method.rawValue)
+    writeWhitespace()
+    writeString(request.uri)
+    writeWhitespace()
+    writeHTTPVersion(request.version)
+    writeStaticString(crlf)
+  }
+
+  mutating func writeWhitespace() {
+    writeInteger(32, as: UInt8.self)
   }
 }

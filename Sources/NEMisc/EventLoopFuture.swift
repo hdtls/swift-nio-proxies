@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
+// Copyright (c) 2023 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -14,6 +14,11 @@
 
 @_exported import NIOCore
 
-public enum UserEvent {
-  case established(channel: Channel)
+extension EventLoopFuture {
+
+  public var value: Value {
+    get async throws {
+      try await get()
+    }
+  }
 }

@@ -98,13 +98,12 @@ extension ByteBuffer {
       switch type {
       case .domain:
         // Unlike IPv4 and IPv6 address domain name have a variable length
-        guard let length = buffer.readInteger(as: UInt8.self),
-          let host = buffer.readString(length: Int(length)),
+        guard let slice = buffer.readLengthPrefixedSlice(as: UInt8.self),
           let port = buffer.readInteger(as: UInt16.self)
         else {
           return nil
         }
-        return .domainPort(host: host, port: Int(port))
+        return .domainPort(host: String(buffer: slice), port: Int(port))
       case .v4, .v6:
         guard let packedIPAddress = buffer.readSlice(length: type == .v4 ? 4 : 16),
           let port = buffer.readInteger(as: UInt16.self)
@@ -121,28 +120,34 @@ extension ByteBuffer {
   /// - Returns: Byte count.
   @discardableResult
   public mutating func writeAddress(_ address: NetAddress) -> Int {
+    var totalBytesWritten = 0
+
     switch address {
     case .socketAddress(.v4(let address)):
-      return writeInteger(AddressFlag.v4.rawValue)
-        + withUnsafeBytes(of: address.address.sin_addr) { ptr in
-          writeBytes(ptr)
-        }
-        + writeInteger(address.address.sin_port.bigEndian)
+      totalBytesWritten += writeInteger(AddressFlag.v4.rawValue)
+      totalBytesWritten += withUnsafeBytes(of: address.address.sin_addr) { ptr in
+        writeBytes(ptr)
+      }
+      totalBytesWritten += writeInteger(address.address.sin_port.bigEndian)
     case .socketAddress(.v6(let address)):
-      return writeInteger(AddressFlag.v6.rawValue)
-        + withUnsafeBytes(of: address.address.sin6_addr) { ptr in
-          writeBytes(ptr)
-        }
-        + writeInteger(address.address.sin6_port.bigEndian)
+      totalBytesWritten += writeInteger(AddressFlag.v6.rawValue)
+      totalBytesWritten += withUnsafeBytes(of: address.address.sin6_addr) { ptr in
+        writeBytes(ptr)
+      }
+      totalBytesWritten += writeInteger(address.address.sin6_port.bigEndian)
     case .socketAddress(.unixDomainSocket):
       // enforced in the channel initalisers.
       fatalError("UNIX domain sockets are not supported")
     case .domainPort(let domain, let port):
-      return writeInteger(AddressFlag.domain.rawValue)
-        + writeInteger(UInt8(domain.utf8.count))
-        + writeString(domain)
-        + writeInteger(UInt16(port))
+      totalBytesWritten += writeInteger(AddressFlag.domain.rawValue)
+      // swift-format-ignore: NeverUseForceTry
+      totalBytesWritten += try! writeLengthPrefixed(as: UInt8.self) {
+        $0.writeString(domain)
+      }
+      totalBytesWritten += writeInteger(UInt16(port))
     }
+
+    return totalBytesWritten
   }
 }
 
@@ -154,7 +159,7 @@ extension Data {
     let data = self
     var byteBuffer = ByteBuffer(bytes: data)
     defer {
-      self = Data(byteBuffer.readBytes(length: byteBuffer.readableBytes) ?? [])
+      self = Data(Array(buffer: byteBuffer))
     }
     return try byteBuffer.readAddress()
   }
@@ -166,7 +171,7 @@ extension Data {
   public mutating func writeAddress(_ address: NetAddress) -> Int {
     var byteBuffer = ByteBuffer()
     defer {
-      append(contentsOf: byteBuffer.readBytes(length: byteBuffer.readableBytes) ?? [])
+      append(contentsOf: Array(buffer: byteBuffer))
     }
     return byteBuffer.writeAddress(address)
   }
