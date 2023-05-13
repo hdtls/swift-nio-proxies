@@ -21,6 +21,7 @@
 final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChannelHandler {
 
   public typealias InboundIn = HTTPClientResponsePart
+
   public typealias OutboundIn = NIOAny
 
   /// The usename used to authenticate this proxy connection.
@@ -38,7 +39,13 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
   /// The destination for this proxy connection.
   private let destinationAddress: NetAddress
 
-  private var state: ConnectionState
+  private enum Progress: Equatable {
+    case waitingForData
+    case waitingForComplete
+    case completed
+  }
+
+  private var progress: Progress = .waitingForData
 
   /// The HTTP proxy connection time out time amount.
   private let timeoutInterval: TimeAmount
@@ -73,7 +80,6 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
     self.authenticationRequired = authenticationRequired
     self.preferHTTPTunneling = preferHTTPTunneling
     self.destinationAddress = destinationAddress
-    self.state = .idle
     self.bufferedWrites = .init(initialCapacity: 6)
     self.timeoutInterval = timeoutInterval
   }
@@ -95,24 +101,23 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
   }
 
   public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-    guard state != .active else {
+    guard progress == .waitingForComplete else {
       context.fireChannelRead(data)
       return
     }
 
-    switch (unwrapInboundIn(data), state) {
-    case (.head(let head), .handshaking):
+    switch (unwrapInboundIn(data), progress) {
+    case (.head(let head), .waitingForComplete):
       if !(200..<300).contains(head.status.code) {
         scheduled?.cancel()
-        state = .failed
         channelClose(
           context: context,
           reason: HTTPProxyError.unacceptableStatusCode(head.status)
         )
       }
-    case (.body, .handshaking):
+    case (.body, .waitingForComplete):
       break
-    case (.end, .handshaking):
+    case (.end, .waitingForComplete):
       established(context: context)
     default:
       scheduled?.cancel()
@@ -132,7 +137,7 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
     bufferedWrites.mark()
 
     // Unbuffer writes when handshake is success.
-    guard state == .active else {
+    guard progress == .completed else {
       return
     }
     unbufferWrites(context: context)
@@ -161,24 +166,24 @@ extension HTTPProxyClientHandler {
 
   /// Sending HTTP CONNECT request to proxy server and perform a timeout schedule task.
   private func performCONNECTHandshake(context: ChannelHandlerContext) {
-    guard context.channel.isActive, state == .idle else {
+    guard context.channel.isActive, progress == .waitingForData else {
       return
     }
 
     scheduled = context.eventLoop.scheduleTask(in: timeoutInterval) {
-      switch self.state {
-      case .idle:
+      switch self.progress {
+      case .waitingForData:
         preconditionFailure(
           "How can we have a scheduled timeout, if the connection is not even up?"
         )
-      case .handshaking:
+      case .waitingForComplete:
         self.channelClose(context: context, reason: HTTPProxyError.connectionTimedOut)
-      case .active, .failed:
+      case .completed:
         break
       }
     }
 
-    state = .handshaking
+    progress = .waitingForComplete
 
     let uri: String
     switch destinationAddress {
@@ -221,19 +226,14 @@ extension HTTPProxyClientHandler {
       .flatMap {
         context.pipeline.removeHandler($0)
       }
-      .whenComplete {
-        switch $0 {
-        case .success:
-          self.state = .active
-          self.unbufferWrites(context: context)
-          self.scheduled?.cancel()
-          context.fireUserInboundEventTriggered(
-            UserEvent.established(channel: context.channel)
-          )
-          context.pipeline.removeHandler(self, promise: nil)
-        case .failure(let error):
-          self.channelClose(context: context, reason: error)
-        }
+      .flatMap {
+        self.progress = .completed
+        self.unbufferWrites(context: context)
+        self.scheduled?.cancel()
+        return context.pipeline.removeHandler(self)
+      }
+      .whenFailure { error in
+        self.channelClose(context: context, reason: error)
       }
   }
 

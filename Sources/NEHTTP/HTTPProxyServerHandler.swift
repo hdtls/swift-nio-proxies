@@ -21,15 +21,23 @@
 final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChannelHandler {
 
   public typealias InboundIn = HTTPServerRequestPart
+
   public typealias InboundOut = HTTPServerRequestPart
+
   public typealias OutboundOut = HTTPServerResponsePart
 
-  private enum Event {
+  private enum EventBuffer {
     case channelRead(data: NIOAny)
     case channelReadComplete
   }
 
-  private var state: ConnectionState
+  private enum Progress: Equatable {
+    case waitingForData
+    case waitingForComplete
+    case completed
+  }
+
+  private var progress: Progress = .waitingForData
 
   /// The task request head part. this value is updated after `head` part received.
   private var headPart: HTTPRequestHead!
@@ -45,13 +53,16 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
 
   /// When a proxy request is received, we will send a new request to the target server.
   /// During the request is established, we need to buffer events.
-  private var eventBuffer: CircularBuffer<Event> = .init(initialCapacity: 0)
+  private var eventBuffer: CircularBuffer<EventBuffer> = .init(initialCapacity: 0)
 
-  /// The `EventLoopFuture<Channel>` to used when creating outbound client channel.
-  private var channelInitializer: (RequestInfo) -> EventLoopFuture<Channel>
+  public typealias ClientInitializer = @Sendable (RequestInfo) -> EventLoopFuture<Channel>
+
+  private var clientInitializer: ClientInitializer
+
+  public typealias Completion = @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
 
   /// The completion handler when proxy connection established.
-  private let completion: (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
+  private let completion: Completion
 
   /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
   ///
@@ -61,72 +72,54 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
   ///   - authenticationRequired: A boolean value deterinse whether server should evaluate proxy authentication request.
   ///   - channelInitializer: The outbound channel initializer, returns the initialized outbound channel using the given request info.
   ///   - completion: The completion handler when proxy connection established, returns `EventLoopFuture<Void>` using given request info, server channel and outbound client channel.
-  @preconcurrency
   public init(
     username: String,
     passwordReference: String,
     authenticationRequired: Bool,
-    channelInitializer: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Channel>,
-    completion: @escaping @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
+    channelInitializer: @escaping ClientInitializer,
+    completion: @escaping Completion
   ) {
     self.username = username
     self.passwordReference = passwordReference
     self.authenticationRequired = authenticationRequired
-    self.channelInitializer = channelInitializer
+    self.clientInitializer = channelInitializer
     self.completion = completion
-    self.state = .idle
   }
 
   public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-    guard state != .active else {
+    guard progress == .waitingForData else {
       // All inbound events will be buffered until handle remove from pipeline.
       eventBuffer.append(.channelRead(data: data))
       return
     }
 
     switch unwrapInboundIn(data) {
-    case .head(let head) where state == .idle:
+    case .head(let head) where progress == .waitingForData:
       headPart = head
-      state = .handshaking
       guard head.method != .CONNECT else {
         return
       }
       // Strip hop-by-hop header based on rfc2616.
       headPart.headers = headPart.headers.trimmingFieldsInHopByHop()
       eventBuffer.append(.channelRead(data: wrapInboundOut(.head(headPart))))
-      evaluateClientGreeting(context: context)
     case .body where headPart != nil && headPart.method != .CONNECT:
       eventBuffer.append(.channelRead(data: data))
     case .end where headPart != nil:
-      guard headPart.method != .CONNECT else {
-        evaluateClientGreeting(context: context)
-        return
+      progress = .waitingForComplete
+      if headPart.method != .CONNECT {
+        eventBuffer.append(.channelRead(data: data))
       }
-      eventBuffer.append(.channelRead(data: data))
+      setupHTTPProxyPipeline(context: context)
     default:
       channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
     }
   }
 
-  public func removeHandler(
-    context: ChannelHandlerContext,
-    removalToken: ChannelHandlerContext.RemovalToken
-  ) {
-    precondition(context.handler === self)
-    guard state == .active else {
-
-      return
-    }
-
-    flushBuffers(context: context)
-
-    context.leavePipeline(removalToken: removalToken)
+  public func channelReadComplete(context: ChannelHandlerContext) {
+    eventBuffer.append(.channelReadComplete)
   }
-}
 
-extension HTTPProxyServerHandler {
-
-  func flushBuffers(context: ChannelHandlerContext) {
+  private func flushBuffers(context: ChannelHandlerContext) {
     // We're being removed from the pipeline. If we have buffered events, deliver them.
     while !eventBuffer.isEmpty {
       switch eventBuffer.removeFirst() {
@@ -137,32 +130,11 @@ extension HTTPProxyServerHandler {
       }
     }
   }
-}
 
-extension HTTPProxyServerHandler {
-
-  private func evaluateClientGreeting(context: ChannelHandlerContext) {
-    guard let head = headPart else {
-      return
-    }
-
-    let promise = context.eventLoop.makePromise(of: Void.self)
-
-    // Only CONNECT tunnel need remove default http server pipelines.
-    if head.method == .CONNECT {
-      // New request is complete. We don't want any more data from now on.
-      context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
-        .flatMap {
-          context.pipeline.removeHandler($0)
-        }
-        .cascade(to: promise)
-    } else {
-      promise.succeed()
-    }
-
+  private func authorize(message: HTTPHeaders.BasicAuthorization?, context: ChannelHandlerContext) {
     // Proxy Authorization
     if authenticationRequired {
-      guard let authorization = head.headers.proxyBasicAuthorization else {
+      guard let authorization = message else {
         channelClose(
           context: context,
           reason: HTTPProxyError.unacceptableStatusCode(.proxyAuthenticationRequired)
@@ -179,62 +151,79 @@ extension HTTPProxyServerHandler {
         return
       }
     }
-
-    let req = RequestInfo(address: .domainPort(host: head.host, port: head.port))
-
-    promise.futureResult
-      .flatMap {
-        self.channelInitializer(req)
-      }
-      .whenComplete {
-        switch $0 {
-        case .success(let channel):
-          self.glue(req, with: channel, and: context)
-        case .failure(let error):
-          self.channelClose(context: context, reason: error)
-        }
-      }
   }
 
-  private func glue(_ req: RequestInfo, with channel: Channel, and context: ChannelHandlerContext) {
-    precondition(state == .handshaking, "invalid http order")
+  private func setupHTTPProxyPipeline(context: ChannelHandlerContext) {
+    guard let headPart else {
+      channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
+      return
+    }
+
+    authorize(message: headPart.headers.proxyBasicAuthorization, context: context)
+
+    let req = RequestInfo(address: .domainPort(host: headPart.host, port: headPart.port))
 
     let promise = context.eventLoop.makePromise(of: Void.self)
 
-    // Only CONNECT tunnel need established response and remove default http server pipelines.
     if headPart.method == .CONNECT {
-      // Ok, upgrade has completed! We now need to begin the upgrade process.
-      // First, send the 200 connection established message.
-      // This content-length header is MUST NOT, but we need to workaround NIO's insistence that
-      // we set one.
-      var headers = HTTPHeaders()
-      headers.add(name: .contentLength, value: "0")
-      let head = HTTPResponseHead(version: .http1_1, status: .ok, headers: headers)
-      context.write(wrapOutboundOut(.head(head)), promise: nil)
-      context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
-
-      context.pipeline.handler(type: HTTPResponseEncoder.self)
+      context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
         .flatMap {
           context.pipeline.removeHandler($0)
         }
+        .flatMapError { _ in
+          context.eventLoop.makeSucceededVoidFuture()
+        }
         .cascade(to: promise)
     } else {
-      promise.succeed(())
+      // For plain http proxy we need re-encode request to byte buffer.
+      context.pipeline.addHandler(PlainHTTPRequestEncoder())
+        .cascade(to: promise)
     }
 
-    let (localGlue, peerGlue) = GlueHandler.matchedPair()
     promise.futureResult
       .flatMap {
-        self.completion(req, context.channel, channel)
+        self.clientInitializer(req)
       }
-      .flatMapThrowing {
-        self.state = .active
-        context.fireUserInboundEventTriggered(UserEvent.established(channel: channel))
-        try context.pipeline.syncOperations.addHandler(localGlue)
-        try channel.pipeline.syncOperations.addHandler(peerGlue)
-      }
-      .flatMap {
-        context.pipeline.removeHandler(self)
+      .flatMap { clientChannel in
+        let promise = context.eventLoop.makePromise(of: Void.self)
+        // Only CONNECT tunnel need established response and remove default http server pipelines.
+        if headPart.method == .CONNECT {
+          // Ok, upgrade has completed! We now need to begin the upgrade process.
+          // First, send the 200 connection established message.
+          // This content-length header is MUST NOT, but we need to workaround NIO's insistence that
+          // we set one.
+          var headers = HTTPHeaders()
+          headers.add(name: .contentLength, value: "0")
+          let head = HTTPResponseHead(version: .http1_1, status: .ok, headers: headers)
+          context.write(self.wrapOutboundOut(.head(head)), promise: nil)
+          context.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: promise)
+        } else {
+          promise.succeed()
+        }
+
+        return promise.futureResult
+          .flatMap {
+            context.pipeline.handler(type: HTTPResponseEncoder.self)
+          }
+          .flatMap {
+            context.pipeline.removeHandler($0)
+          }
+          .flatMapError { _ in
+            context.eventLoop.makeSucceededVoidFuture()
+          }
+          .flatMap {
+            self.completion(req, context.channel, clientChannel)
+          }
+          .flatMapThrowing {
+            let (localGlue, peerGlue) = GlueHandler.matchedPair()
+            try context.pipeline.syncOperations.addHandler(localGlue)
+            try clientChannel.pipeline.syncOperations.addHandler(peerGlue)
+            self.progress = .completed
+            self.flushBuffers(context: context)
+          }
+          .flatMap {
+            context.pipeline.removeHandler(self)
+          }
       }
       .whenFailure { error in
         self.channelClose(context: context, reason: error)
@@ -247,7 +236,7 @@ extension HTTPProxyServerHandler {
     if let err = reason as? HTTPProxyError {
       switch err {
       case .invalidHTTPOrdering:
-        head = HTTPResponseHead.init(version: .http1_1, status: .internalServerError)
+        head = HTTPResponseHead.init(version: .http1_1, status: .badRequest)
       case .unacceptableStatusCode(let code):
         head = HTTPResponseHead.init(version: .http1_1, status: code)
       case .connectionTimedOut:
@@ -267,21 +256,3 @@ extension HTTPProxyServerHandler {
 
 @available(*, unavailable)
 extension HTTPProxyServerHandler: Sendable {}
-
-extension HTTPHeaders {
-
-  /// Returns a new HTTPHeaders made by removing from all hop-by-hop fields.
-  /// - Returns: The headers without hop-by-hop fields.
-  func trimmingFieldsInHopByHop() -> HTTPHeaders {
-    var headers = self
-    headers.remove(name: .proxyConnection)
-    headers.remove(name: .proxyAuthenticate)
-    headers.remove(name: .proxyAuthorization)
-    headers.remove(name: .te)
-    headers.remove(name: .trailer)
-    headers.remove(name: .transferEncoding)
-    headers.remove(name: .upgrade)
-    headers.remove(name: .connection)
-    return headers
-  }
-}
