@@ -23,7 +23,7 @@ import NEVMESS
 import NIOPosix
 import NIOSSL
 
-#if canImport(Network)
+#if canImport(Network) && ENABLE_NIO_TRANSPORT_SERVICES
 import Network
 import NIOTransportServices
 #endif
@@ -31,7 +31,7 @@ import NIOTransportServices
 func makeUniversalClientTCPBootstrap(group: EventLoopGroup, serverHostname: String? = nil) throws
   -> NIOClientTCPBootstrap
 {
-  #if canImport(Network)
+  #if canImport(Network) && ENABLE_NIO_TRANSPORT_SERVICES
   // We run on a new-enough Darwin so we can use Network.framework
   let bootstrap = NIOClientTCPBootstrap(
     NIOTSConnectionBootstrap(group: group),
@@ -60,7 +60,7 @@ extension DirectPolicy: ConnectionPoolSource {
       }
       let bootstrap = try makeUniversalClientTCPBootstrap(group: eventLoop)
 
-      #if canImport(Network)
+      #if canImport(Network) && ENABLE_NIO_TRANSPORT_SERVICES
       if let bootstrap = bootstrap.underlyingBootstrap as? NIOTSConnectionBootstrap {
         let parameters = NWParameters.tcp
         parameters.preferNoProxies = true
@@ -144,7 +144,7 @@ extension ProxyPolicy: ConnectionPoolSource {
         }
       }
 
-      #if canImport(Network)
+      #if canImport(Network) && ENABLE_NIO_TRANSPORT_SERVICES
       if let bootstrap = bootstrap.underlyingBootstrap as? NIOTSConnectionBootstrap {
         let parameters = NWParameters.tcp
         parameters.preferNoProxies = true

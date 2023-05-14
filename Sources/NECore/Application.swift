@@ -26,7 +26,7 @@ import NIOHTTPCompression
 import NIOPosix
 import NIOSSL
 
-#if canImport(Network)
+#if canImport(Network) && ENABLE_NIO_TRANSPORT_SERVICES
 import NIOTransportServices
 
 typealias ServerBootstrap = NIOTransportServices.NIOTSListenerBootstrap
@@ -71,7 +71,7 @@ final public class Netbot: @unchecked Sendable {
   public init(profile: Profile, logger: Logger, outboundMode: OutboundMode = .direct) {
     self.profile = profile
     self.logger = logger
-    #if canImport(Network)
+    #if canImport(Network) && ENABLE_NIO_TRANSPORT_SERVICES
     self.eventLoopGroup = NIOTSEventLoopGroup()
     #else
     self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
