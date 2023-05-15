@@ -30,7 +30,7 @@ let swiftNIOTransportServices: Target.Dependency = .product(
 )
 let swiftCrypto: Target.Dependency = .product(name: "Crypto", package: "swift-crypto")
 let swiftLog: Target.Dependency = .product(name: "Logging", package: "swift-log")
-let swiftX509: Target.Dependency = .product(name: "X509", package: "swift-certificates")
+let swiftCertificates: Target.Dependency = .product(name: "X509", package: "swift-certificates")
 
 let package = Package(
   name: "swift-nio-netbot",
@@ -40,7 +40,6 @@ let package = Package(
   ],
   products: [
     .library(name: "NECLICore", targets: ["NECLICore"]),
-    .library(name: "NEConnectionPool", targets: ["NEConnectionPool"]),
     .library(name: "NECore", targets: ["NECore"]),
     .library(name: "NEDNS", targets: ["NEDNS"]),
     .library(name: "NEHTTP", targets: ["NEHTTP"]),
@@ -50,7 +49,6 @@ let package = Package(
     .library(name: "NESHAKE128", targets: ["NESHAKE128"]),
     .library(name: "NESOCKS", targets: ["NESOCKS"]),
     .library(name: "NESS", targets: ["NESS"]),
-    .library(name: "NETrojan", targets: ["NETrojan"]),
     .library(name: "NEVMESS", targets: ["NEVMESS"]),
     .executable(name: "netbotcli", targets: ["NECLI"]),
   ],
@@ -68,31 +66,21 @@ let package = Package(
     .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0"),
   ],
   targets: [
-    .executableTarget(
-      name: "NECLI",
-      dependencies: ["NECLICore", swiftLog, swiftArgumentParser]
-    ),
+    .executableTarget(name: "NECLI", dependencies: ["NECLICore", swiftLog, swiftArgumentParser]),
     .target(name: "CNESHAKE128"),
     .target(
       name: "NECLICore",
-      dependencies: [
-        "NECore",
-        swiftLog,
-        .product(name: "MaxMindDB", package: "swift-maxminddb"),
-      ]
+      dependencies: ["NECore", swiftLog, .product(name: "MaxMindDB", package: "swift-maxminddb")]
     ),
-    .target(name: "NEConnectionPool", dependencies: [swiftNIOCore, swiftNIOPosix, swiftLog]),
     .target(
       name: "NECore",
       dependencies: [
-        "NEConnectionPool",
         "NEDNS",
         "NEHTTP",
         "NEHTTPMitM",
         "NEMisc",
         "NESOCKS",
         "NESS",
-        "NETrojan",
         "NEVMESS",
         swiftCrypto,
         swiftNIOCore,
@@ -110,17 +98,13 @@ let package = Package(
     .target(name: "NEHTTP", dependencies: ["NEMisc", swiftNIOCore, swiftNIOHTTP1]),
     .target(
       name: "NEHTTPMitM",
-      dependencies: [swiftNIOCore, swiftNIOHTTP1, swiftNIOSSL, swiftLog, swiftX509]
+      dependencies: [swiftNIOCore, swiftNIOHTTP1, swiftNIOSSL, swiftLog, swiftCertificates]
     ),
     .target(name: "NEMisc", dependencies: [swiftNIOCore, swiftNIOPosix]),
     .target(name: "NEPrettyBytes"),
     .target(name: "NESHAKE128", dependencies: ["CNESHAKE128", "NEPrettyBytes", swiftCrypto]),
     .target(name: "NESOCKS", dependencies: ["NEMisc", swiftNIOCore]),
     .target(name: "NESS", dependencies: ["NEMisc", "NEPrettyBytes", swiftCrypto, swiftNIOCore]),
-    .target(
-      name: "NETrojan",
-      dependencies: ["NEMisc", "NEPrettyBytes", swiftCrypto, swiftNIOCore, swiftNIOSSL]
-    ),
     .target(
       name: "NEVMESS",
       dependencies: ["NEMisc", "NEPrettyBytes", "NESHAKE128", swiftCrypto, swiftNIOCore]
@@ -164,9 +148,7 @@ let package = Package(
         "ResponseDecoderTests.g.swift.gyb",
       ]
     ),
-    .testTarget(name: "NETrojanTests", dependencies: ["NETrojan", "NEPrettyBytes", swiftNIO]),
     .testTarget(name: "NEVMESSTests", dependencies: ["NEPrettyBytes", "NEVMESS", swiftNIO]),
-
   ],
   swiftLanguageVersions: [.v5]
 )
