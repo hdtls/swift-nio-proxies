@@ -170,14 +170,16 @@ final public class Netbot: @unchecked Sendable {
           channel,
           peer in
           channel.pipeline.addHandler(
-            NIOTLSRecognizer { ssl, channel in
+            NIOTLSRecognizer { isTLSConnection, channel in
               let promise = channel.eventLoop.makePromise(of: Void.self)
               promise.completeWithTask {
-                try await self.configureHTTPMitmAndCapturePipeline(
-                  on: channel,
+                try await self.configureHTTPCapabilitiesPipeline(
+                  for: channel,
                   peer: peer,
                   serverHostname: req.address.host,
-                  tls: ssl
+                  isTLSConnection: isTLSConnection,
+                  enableHTTPMitM: self.isHTTPMitMEnabled,
+                  enableHTTPCapture: self.isHTTPCaptureEnabled
                 )
               }
               return promise.futureResult
@@ -329,23 +331,27 @@ final public class Netbot: @unchecked Sendable {
   ///   - channel: Server channel.
   ///   - peer: Client channel.
   ///   - serverHostname: The destination hostname.
-  ///   - tls: A boolean value indicate whether this connection is HTTPS connection.
-  private func configureHTTPMitmAndCapturePipeline(
-    on channel: Channel,
+  ///   - isTLSConnection: A boolean value determines whether this connection is HTTPS connection.
+  ///   - enableHTTPMitM: A boolean value determines whether should enable HTTP MitM for this connection.
+  ///   - enableHTTPCapture: A boolean value determines whether should enable HTTP capture for this connection.
+  private func configureHTTPCapabilitiesPipeline(
+    for channel: Channel,
     peer: Channel,
     serverHostname: String?,
-    tls: Bool
+    isTLSConnection: Bool,
+    enableHTTPMitM: Bool,
+    enableHTTPCapture: Bool
   ) async throws {
-    guard let serverHostname, tls, isHTTPMitMEnabled else {
-      guard !tls, isHTTPCaptureEnabled else {
+    guard let serverHostname, isTLSConnection, enableHTTPMitM else {
+      guard !isTLSConnection, enableHTTPCapture else {
         return
       }
       // This we don't need MitM but need enable HTTP capture.
       let recognizer = try await channel.pipeline.handler(type: NIOTLSRecognizer.self).get()
       let glue = try await peer.pipeline.handler(type: GlueHandler.self).get()
       try await configureHTTPCapturePipeline(
-        on: (channel, .after(recognizer)),
-        peer: (peer, .after(glue))
+        for: (channel, .after(recognizer)),
+        peer: (peer, .before(glue))
       )
       return
     }
@@ -382,19 +388,19 @@ final public class Netbot: @unchecked Sendable {
     let glue = try await peer.pipeline.handler(type: GlueHandler.self).get()
     try await peer.pipeline.addHandler(ssl1, position: .before(glue))
 
-    guard isHTTPCaptureEnabled else {
+    guard enableHTTPCapture else {
       return
     }
 
     try await configureHTTPCapturePipeline(
-      on: (channel, .after(ssl0)),
+      for: (channel, .after(ssl0)),
       peer: (peer, .after(ssl1))
     )
   }
 
   /// Configure HTTP capture pipeline at specified position.
   private func configureHTTPCapturePipeline(
-    on master: (channel: Channel, position: ChannelPipeline.Position),
+    for master: (channel: Channel, position: ChannelPipeline.Position),
     peer: (channel: Channel, position: ChannelPipeline.Position)
   ) async throws {
     // As we know HTTP capture only supported for HTTP protocols so we need a
@@ -441,8 +447,6 @@ final public class Netbot: @unchecked Sendable {
   }
 
   /// Shutdown Netbot.
-  ///
-  /// Actually, it perform initiate shutdown for `ServerQuiescingHelper`.
   public func shutdownGracefully() async throws {
     // Wait until all server channel closed.
     try await withThrowingTaskGroup(of: Void.self) { g in
