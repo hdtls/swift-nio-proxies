@@ -54,22 +54,26 @@ private func htoi(_ value: UInt8) throws -> UInt8 {
 }
 
 extension DataProtocol {
+
   public var hexString: String {
     let hexLen = self.count * 2
-    let ptr = UnsafeMutablePointer<UInt8>.allocate(capacity: hexLen)
+    var hexChars = [UInt8](repeating: 0, count: hexLen)
     var offset = 0
 
-    for i in self {
-      ptr[Int(offset * 2)] = itoh((i >> 4) & 0xF)
-      ptr[Int(offset * 2 + 1)] = itoh(i & 0xF)
-      offset += 1
+    self.regions.forEach { (_) in
+      for i in self {
+        hexChars[Int(offset * 2)] = itoh((i >> 4) & 0xF)
+        hexChars[Int(offset * 2 + 1)] = itoh(i & 0xF)
+        offset += 1
+      }
     }
 
-    return String(bytesNoCopy: ptr, length: hexLen, encoding: .utf8, freeWhenDone: true) ?? ""
+    return String(bytes: hexChars, encoding: .utf8)!
   }
 }
 
 extension MutableDataProtocol {
+
   public mutating func appendByte(_ byte: UInt64) {
     withUnsafePointer(
       to: byte.littleEndian,
@@ -79,6 +83,7 @@ extension MutableDataProtocol {
 }
 
 extension Data {
+
   public init(hexString: String) throws {
     self.init()
 
@@ -86,11 +91,31 @@ extension Data {
       throw ByteHexEncodingErrors.incorrectString
     }
 
-    let stringBytes: [UInt8] = Array(hexString.utf8)
+    let stringBytes: [UInt8] = Array(hexString.lowercased().data(using: String.Encoding.utf8)!)
 
-    for i in 0...((hexString.count / 2) - 1) {
-      let char1 = stringBytes[2 * i]
-      let char2 = stringBytes[2 * i + 1]
+    for i in stride(from: stringBytes.startIndex, to: stringBytes.endIndex - 1, by: 2) {
+      let char1 = stringBytes[i]
+      let char2 = stringBytes[i + 1]
+
+      try self.append(htoi(char1) << 4 + htoi(char2))
+    }
+  }
+}
+
+extension Array where Element == UInt8 {
+
+  public init(hexString: String) throws {
+    self.init()
+
+    guard hexString.count.isMultiple(of: 2), !hexString.isEmpty else {
+      throw ByteHexEncodingErrors.incorrectString
+    }
+
+    let stringBytes: [UInt8] = Array(hexString.data(using: String.Encoding.utf8)!)
+
+    for i in stride(from: stringBytes.startIndex, to: stringBytes.endIndex - 1, by: 2) {
+      let char1 = stringBytes[i]
+      let char2 = stringBytes[i + 1]
 
       try self.append(htoi(char1) << 4 + htoi(char2))
     }
