@@ -118,7 +118,7 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
       frameBuffer.append(frame)
       frameBuffer.append(contentsOf: SecureBytes(count: padding))
 
-      frameOffset += 1
+      frameOffset &+= 1
     }
 
     return frameBuffer

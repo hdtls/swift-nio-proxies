@@ -182,7 +182,8 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
       frame = try ChaChaPoly.open(.init(combined: combined), using: symmetricKey)
     }
 
-    frameOffset += 1
+    frameOffset &+= 1
+
     self.size = nil
 
     let frameBuffer = context.channel.allocator.buffer(bytes: frame)
