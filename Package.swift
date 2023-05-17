@@ -90,8 +90,9 @@ let package = Package(
         swiftNIOHTTP1,
         swiftNIOTransportServices,
         .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
-        .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
         .product(name: "NIOExtras", package: "swift-nio-extras"),
+        .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
+        .product(name: "NIOWebSocket", package: "swift-nio"),
       ]
     ),
     .target(name: "NEDNS", dependencies: [swiftNIOCore, swiftNIOPosix]),
@@ -130,6 +131,7 @@ let package = Package(
         swiftNIOSSL,
         swiftNIOHTTP1,
         swiftNIOTransportServices,
+        .product(name: "NIOWebSocket", package: "swift-nio"),
       ]
     ),
     .testTarget(name: "NEHTTPMitMTests", dependencies: ["NEHTTPMitM", swiftNIO]),
