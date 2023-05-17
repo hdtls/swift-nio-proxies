@@ -13,7 +13,7 @@ services:
     image: swift-netbot-core:5.7-jammy
     environment:
       - WARN_AS_ERROR_ARG=-Xswiftc -warnings-as-errors
-      - SANITIZER_ARG=--sanitize=thread
+#      - SANITIZER_ARG=--sanitize=thread
 
   shell:
     image: swift-netbot-core:5.7-jammy

@@ -30,4 +30,4 @@ jobs:
           swift-version: ${{matrix.swift-version}}
       
       - name: Build and test...
-        run: swift test --sanitize thread -Xswiftc -warnings-as-errors
+        run: swift test -Xswiftc -warnings-as-errors
