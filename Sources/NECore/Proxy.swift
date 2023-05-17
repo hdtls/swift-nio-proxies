@@ -18,7 +18,7 @@
 public struct Proxy: Sendable {
 
   /// Proxy protocol definition.
-  public enum `Protocol`: String, CaseIterable, Codable, CustomStringConvertible, Sendable {
+  public enum `Protocol`: String, CaseIterable, CustomStringConvertible, Sendable {
     case http
     case socks5
     case shadowsocks = "ss"
@@ -69,6 +69,12 @@ public struct Proxy: Sendable {
   /// A boolean value determinse whether connection should enable TLS.
   public var overTls: Bool = false
 
+  /// A boolean value determinse whether stream should transfer using `WebSocket` protocol.
+  public var overWebSocket: Bool = false
+
+  /// Path for `WebSocket`.
+  public var webSocketPath: String = ""
+
   /// A boolean value determinse whether SSL should skip certification verification.
   public var skipCertificateVerification: Bool = false
 
@@ -92,6 +98,8 @@ public struct Proxy: Sendable {
     authenticationRequired: Bool = false,
     prefererHttpTunneling: Bool = false,
     overTls: Bool = false,
+    overWebSocket: Bool = false,
+    webSocketPath: String = "",
     skipCertificateVerification: Bool = false,
     sni: String = "",
     certificatePinning: String = "",
@@ -105,6 +113,8 @@ public struct Proxy: Sendable {
     self.authenticationRequired = authenticationRequired
     self.prefererHttpTunneling = prefererHttpTunneling
     self.overTls = overTls
+    self.overWebSocket = overWebSocket
+    self.webSocketPath = webSocketPath
     self.skipCertificateVerification = skipCertificateVerification
     self.sni = sni
     self.certificatePinning = certificatePinning

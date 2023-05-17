@@ -21,6 +21,7 @@ import NEVMESS
 @_exported import NIOCore
 import NIOPosix
 import NIOSSL
+import NIOWebSocket
 
 #if canImport(Network) && ENABLE_NIO_TRANSPORT_SERVICES
 import Network
@@ -184,47 +185,75 @@ public struct ProxyPolicy: Policy {
         fatalError()
       }
 
-      var bootstrap = try makeUniversalClientTCPBootstrap(group: eventLoop)
+      var bootstrap =
+        try makeUniversalClientTCPBootstrap(group: eventLoop, serverHostname: proxy.serverAddress)
+        .channelInitializer { channel in
+          guard proxy.overWebSocket else {
+            return channel.pipeline.addClientHandlers(
+              proxy: proxy,
+              destinationAddress: destinationAddress
+            )
+          }
+
+          let requestWriter = HTTPRequestWriter(
+            host: proxy.serverAddress,
+            port: proxy.port,
+            uri: proxy.webSocketPath
+          )
+
+          let webSocketUpgrader = NIOWebSocketClientUpgrader(
+            automaticErrorHandling: false
+          ) { channel, res in
+            return channel.eventLoop.makeFutureWithTask {
+              // As upgrader handler always added in last position and upgrader may complete after
+              // `GlueHandler` added to pipeline, so we need reorder those codec handlers...
+              let handler = try await channel.pipeline.handler(
+                type: NIOHTTPClientUpgradeHandler.self
+              ).get()
+              var frameDecoder = try await channel.pipeline.handler(
+                type: ByteToMessageHandler<WebSocketFrameDecoder>.self
+              ).get()
+              try await channel.pipeline.removeHandler(frameDecoder)
+              frameDecoder = ByteToMessageHandler(WebSocketFrameDecoder(maxFrameSize: 1 << 14))
+              try await channel.pipeline.addHandler(frameDecoder, position: .after(handler))
+
+              var frameEncoder = try await channel.pipeline.handler(
+                type: WebSocketFrameEncoder.self
+              ).get()
+              try await channel.pipeline.removeHandler(frameEncoder)
+              frameEncoder = WebSocketFrameEncoder()
+              try await channel.pipeline.addHandler(frameEncoder, position: .after(handler))
+
+              let errorHandler = WebSocketProtocolErrorHandler()
+              try await channel.pipeline.addHandler(errorHandler, position: .after(frameDecoder))
+
+              // To send websocket frame we need a blendor to write `ByteBuffer` to `WebSocektFrame`
+              // and read `WebSocketFrame`  to `ByteBuffer`.
+              let producer = WebSocketFrameProducer()
+              try await channel.pipeline.addHandler(producer, position: .after(errorHandler))
+
+              try await channel.pipeline.addClientHandlers(
+                position: .after(producer),
+                proxy: proxy,
+                destinationAddress: destinationAddress
+              ).get()
+
+              try await channel.pipeline.removeHandler(requestWriter)
+            }
+          }
+
+          let configuration: NIOHTTPClientUpgradeConfiguration = (
+            upgraders: [webSocketUpgrader],
+            completionHandler: { _ in }
+          )
+
+          return channel.pipeline.addHTTPClientHandlers(withClientUpgrade: configuration).flatMap {
+            channel.pipeline.addHandler(requestWriter)
+          }
+        }
 
       if proxy.overTls {
         bootstrap = bootstrap.enableTLS()
-      }
-
-      switch proxy.protocol {
-      case .http:
-        bootstrap = bootstrap.channelInitializer { channel in
-          channel.pipeline.addHTTPProxyClientHandlers(
-            username: proxy.username,
-            passwordReference: proxy.passwordReference,
-            authenticationRequired: proxy.authenticationRequired,
-            preferHTTPTunneling: proxy.prefererHttpTunneling,
-            destinationAddress: destinationAddress
-          )
-        }
-      case .socks5:
-        bootstrap = bootstrap.channelInitializer { channel in
-          channel.pipeline.addSOCKSClientHandlers(
-            username: proxy.username,
-            passwordReference: proxy.passwordReference,
-            authenticationRequired: proxy.authenticationRequired,
-            destinationAddress: destinationAddress
-          )
-        }
-      case .shadowsocks:
-        bootstrap = bootstrap.channelInitializer { channel in
-          channel.pipeline.addSSClientHandlers(
-            algorithm: proxy.algorithm,
-            passwordReference: proxy.passwordReference,
-            destinationAddress: destinationAddress
-          )
-        }
-      case .vmess:
-        bootstrap = bootstrap.channelInitializer { channel in
-          channel.pipeline.addVMESSClientHandlers(
-            username: UUID(uuidString: proxy.username) ?? UUID(),
-            destinationAddress: destinationAddress
-          )
-        }
       }
 
       #if canImport(Network) && ENABLE_NIO_TRANSPORT_SERVICES
@@ -242,6 +271,48 @@ public struct ProxyPolicy: Policy {
       #endif
     } catch {
       return eventLoop.makeFailedFuture(error)
+    }
+  }
+}
+
+extension ChannelPipeline {
+
+  fileprivate func addClientHandlers(
+    position: Position = .last,
+    proxy: Proxy,
+    destinationAddress: NetAddress
+  ) -> EventLoopFuture<Void> {
+    switch proxy.protocol {
+    case .http:
+      return addHTTPProxyClientHandlers(
+        position: position,
+        username: proxy.username,
+        passwordReference: proxy.passwordReference,
+        authenticationRequired: proxy.authenticationRequired,
+        preferHTTPTunneling: proxy.prefererHttpTunneling,
+        destinationAddress: destinationAddress
+      )
+    case .socks5:
+      return addSOCKSClientHandlers(
+        position: position,
+        username: proxy.username,
+        passwordReference: proxy.passwordReference,
+        authenticationRequired: proxy.authenticationRequired,
+        destinationAddress: destinationAddress
+      )
+    case .shadowsocks:
+      return addSSClientHandlers(
+        position: position,
+        algorithm: proxy.algorithm,
+        passwordReference: proxy.passwordReference,
+        destinationAddress: destinationAddress
+      )
+    case .vmess:
+      return addVMESSClientHandlers(
+        position: position,
+        username: UUID(uuidString: proxy.username) ?? UUID(),
+        destinationAddress: destinationAddress
+      )
     }
   }
 }

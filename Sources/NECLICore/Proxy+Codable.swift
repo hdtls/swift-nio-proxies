@@ -29,6 +29,8 @@ extension Proxy: Codable {
     case certificatePinning
     case algorithm
     case overTls
+    case overWebSocket
+    case webSocketPath
   }
 
   public init(from decoder: Decoder) throws {
@@ -57,6 +59,8 @@ extension Proxy: Codable {
     )
     let algorithm = try container.decodeIfPresent(Algorithm.self, forKey: .algorithm)
     let overTls = try container.decodeIfPresent(Bool.self, forKey: .overTls)
+    let overWebSocket = try container.decodeIfPresent(Bool.self, forKey: .overWebSocket)
+    let webSocketPath = try container.decodeIfPresent(String.self, forKey: .webSocketPath)
 
     self.init(
       serverAddress: serverAddress,
@@ -67,6 +71,8 @@ extension Proxy: Codable {
       authenticationRequired: authenticationRequired ?? false,
       prefererHttpTunneling: prefererHttpTunneling ?? false,
       overTls: overTls ?? false,
+      overWebSocket: overWebSocket ?? false,
+      webSocketPath: webSocketPath ?? "",
       skipCertificateVerification: skipCertificateVerification ?? false,
       sni: sni ?? "",
       certificatePinning: certificatePinning ?? "",
@@ -113,10 +119,18 @@ extension Proxy: Codable {
     if self.overTls {
       try container.encode(self.overTls, forKey: .overTls)
     }
+    if self.overWebSocket {
+      try container.encode(self.overWebSocket, forKey: .overWebSocket)
+    }
+    if !self.webSocketPath.isEmpty {
+      try container.encode(self.webSocketPath, forKey: .webSocketPath)
+    }
   }
 }
 
 extension Algorithm: Codable {}
+
+extension Proxy.`Protocol`: Codable {}
 
 extension Proxy: Equatable, Hashable {
 
