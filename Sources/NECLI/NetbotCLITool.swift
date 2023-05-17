@@ -197,6 +197,8 @@ public struct NetbotCLITool: AsyncParsableCommand {
       try FileManager.default.moveItem(at: url, to: maxminddbURL)
     }
 
+    GeoIPRule.database = try MaxMindDB(file: maxminddbURL.path)
+
     let app = Netbot(profile: profile, logger: logger, outboundMode: outboundMode)
     app.isHTTPCaptureEnabled = enableHTTPCapture
     app.isHTTPMitMEnabled = enableHTTPMitm
