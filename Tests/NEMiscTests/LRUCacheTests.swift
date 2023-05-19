@@ -17,8 +17,10 @@ import XCTest
 
 final class LRUCacheTests: XCTestCase {
 
+  let iterations = 1000
+
   func testRemoveValue() {
-    let cache = LRUCache<Int, Int>(capacity: 5)
+    var cache = LRUCache<Int, Int>(capacity: 5)
     XCTAssertTrue(cache.isEmpty)
     cache.setValue(0, forKey: 0)
     cache.setValue(1, forKey: 1)
@@ -27,6 +29,15 @@ final class LRUCacheTests: XCTestCase {
     XCTAssertFalse(cache.isEmpty)
     XCTAssertNil(cache.removeValue(forKey: 0))
     cache.setValue(nil, forKey: 1)
+    XCTAssertTrue(cache.isEmpty)
+
+    cache = LRUCache(capacity: iterations)
+    for i in 0..<iterations {
+      cache.setValue(i, forKey: i)
+    }
+    DispatchQueue.concurrentPerform(iterations: iterations) { i in
+      cache.removeValue(forKey: i)
+    }
     XCTAssertTrue(cache.isEmpty)
   }
 
@@ -38,6 +49,13 @@ final class LRUCacheTests: XCTestCase {
     XCTAssertTrue(cache.isEmpty)
     cache.setValue(0, forKey: 0)
     XCTAssertEqual(cache.count, 1)
+
+    DispatchQueue.concurrentPerform(iterations: iterations) { _ in
+      cache.setValue(1, forKey: 1)
+      cache.removeAllValues()
+    }
+
+    XCTAssertTrue(cache.isEmpty)
   }
 
   func testGetValue() {
@@ -49,12 +67,34 @@ final class LRUCacheTests: XCTestCase {
     XCTAssertNil(cache.value(forKey: 2))
   }
 
+  func testSetValueForKey() {
+    var cache = LRUCache<Int, Int>(capacity: 2)
+    cache.setValue(0, forKey: 0)
+    cache.setValue(1, forKey: 1)
+    cache.setValue(2, forKey: 2)
+    cache.setValue(2, forKey: 2)
+    cache.setValue(0, forKey: 0)
+    cache.setValue(0, forKey: 0)
+    cache.setValue(1, forKey: 1)
+
+    XCTAssertEqual(cache.count, 2)
+    XCTAssertEqual(cache.value(forKey: 0), 0)
+    XCTAssertEqual(cache.value(forKey: 1), 1)
+    XCTAssertNil(cache.value(forKey: 2))
+
+    cache = LRUCache(capacity: iterations)
+    DispatchQueue.concurrentPerform(iterations: iterations) { i in
+      cache.setValue(i, forKey: i)
+    }
+    XCTAssertEqual(cache.count, iterations)
+  }
+
   func testInsertionPerformance() {
     let iterations = 10_000
     measure {
-      let cache = LRUCache<Int, Int>(capacity: iterations)
+      let cache = LRUCache<Int, Int>(capacity: iterations / 2)
       for i in 0..<iterations {
-        cache.setValue(i, forKey: i)
+        cache.setValue(Int.random(in: 0...iterations), forKey: i)
       }
     }
   }
