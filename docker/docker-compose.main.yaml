@@ -1,0 +1,22 @@
+version: "3"
+
+services:
+
+  runtime-setup:
+    image: swift-netbot-core:nightly-main-jammy
+    build:
+      args:
+        ubuntu_version: "jammy"
+        swift_repo: "swiftlang/swift"
+        swift_version: "nightly-main"
+
+  test:
+    image: swift-netbot-core:nightly-main-jammy
+    environment:
+      - WARN_AS_ERROR_ARG=-Xswiftc -warnings-as-errors
+#      - SANITIZER_ARG=--sanitize=thread
+      - IMPORT_CHECK_ARG=--explicit-target-dependency-import-check error
+
+  shell:
+    image: swift-netbot-core:nightly-main-jammy
+

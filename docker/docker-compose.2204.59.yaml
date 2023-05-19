@@ -1,0 +1,21 @@
+version: "3"
+
+services:
+
+  runtime-setup:
+    image: swift-netbot-core:5.9-jammy
+    build:
+      args:
+        ubuntu_version: "jammy"
+        swift_repo: "swiftlang/swift"
+        swift_version: "nightly-5.9"
+
+  test:
+    image: swift-netbot-core:5.9-jammy
+    environment:
+      - WARN_AS_ERROR_ARG=-Xswiftc -warnings-as-errors
+#      - SANITIZER_ARG=--sanitize=thread
+      - IMPORT_CHECK_ARG=--explicit-target-dependency-import-check error
+
+  shell:
+    image: swift-netbot-core:5.9-jammy
