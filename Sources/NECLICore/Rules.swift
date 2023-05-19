@@ -180,9 +180,7 @@ public struct DomainSetRule: ExternalRuleResources, ParsableRule, CheckedParsabl
   }
 
   public func match(_ expression: String) -> Bool {
-    domains.first {
-      $0 == expression || ".\(expression)".hasSuffix($0)
-    } != nil
+    $domains.first(where: { $0 == expression || ".\(expression)".hasSuffix($0) }) != nil
   }
 
   public mutating func loadAllRules(from file: URL) {
@@ -192,14 +190,16 @@ public struct DomainSetRule: ExternalRuleResources, ParsableRule, CheckedParsabl
       return
     }
 
-    domains = file.split(separator: "\n")
-      .compactMap {
-        let literal = $0.trimmingCharacters(in: .whitespaces)
-        guard !literal.isEmpty, !literal.hasPrefix("#"), !literal.hasPrefix(";") else {
-          return nil
+    $domains.write {
+      $0 = file.split(separator: "\n")
+        .compactMap {
+          let literal = $0.trimmingCharacters(in: .whitespaces)
+          guard !literal.isEmpty, !literal.hasPrefix("#"), !literal.hasPrefix(";") else {
+            return nil
+          }
+          return literal
         }
-        return literal
-      }
+    }
   }
 }
 
@@ -247,14 +247,11 @@ public struct GeoIPRule: ParsableRule, CheckedParsableRule, @unchecked Sendable 
   }
 
   public func match(_ pattern: String) -> Bool {
-    do {
-      let dictionary =
-        try Self.database?.lookup(ipAddress: pattern) as? [String: [String: Any]]
+    Self.$database.read {
+      let dictionary = try? $0?.lookup(ipAddress: pattern) as? [String: [String: Any]]
       let country = dictionary?["country"]
       let countryCode = country?["iso_code"] as? String
       return self.expression == countryCode
-    } catch {
-      return false
     }
   }
 }
@@ -317,7 +314,7 @@ public struct RuleSetRule: ExternalRuleResources, ParsableRule, CheckedParsableR
   }
 
   public func match(_ expression: String) -> Bool {
-    standardRules.first(where: { $0.match(expression) }) != nil
+    $standardRules.first(where: { $0.match(expression) }) != nil
   }
 
   public mutating func loadAllRules(from file: URL) {
@@ -326,19 +323,22 @@ public struct RuleSetRule: ExternalRuleResources, ParsableRule, CheckedParsableR
     else {
       return
     }
-    standardRules = file.split(separator: "\n")
-      .compactMap {
-        let literal = $0.trimmingCharacters(in: .whitespaces)
-        guard !literal.isEmpty, !literal.hasPrefix("#"), !literal.hasPrefix(";") else {
-          return nil
+
+    $standardRules.write {
+      $0 = file.split(separator: "\n")
+        .compactMap {
+          let literal = $0.trimmingCharacters(in: .whitespaces)
+          guard !literal.isEmpty, !literal.hasPrefix("#"), !literal.hasPrefix(";") else {
+            return nil
+          }
+          let label = String(literal.split(separator: ",").first ?? "")
+          let description = literal + ",\(policy)"
+          guard let factory = RuleSystem.factory(for: .init(rawValue: label)) else {
+            return nil
+          }
+          return factory.init(description)
         }
-        let label = String(literal.split(separator: ",").first ?? "")
-        let description = literal + ",\(policy)"
-        guard let factory = RuleSystem.factory(for: .init(rawValue: label)) else {
-          return nil
-        }
-        return factory.init(description)
-      }
+    }
   }
 }
 

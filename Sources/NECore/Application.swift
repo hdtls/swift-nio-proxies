@@ -46,21 +46,48 @@ final public class Netbot: @unchecked Sendable {
   private let eventLoopGroup: EventLoopGroup
 
   /// The outbound mode control how requests will be process.
-  @Protected public var outboundMode: OutboundMode = .direct
+  public var outboundMode: OutboundMode {
+    get { $mutableState.outboundMode }
+    set { $mutableState.outboundMode = newValue }
+  }
 
   /// A boolean value indicate whether HTTP capture should be enabled, default is false.
   ///
   /// Enabling HTTP capture will reduce performance.
-  @Protected public var isHTTPCaptureEnabled: Bool = false
+  public var isHTTPCaptureEnabled: Bool {
+    get { $mutableState.isHTTPCaptureEnabled }
+    set { $mutableState.isHTTPCaptureEnabled = newValue }
+  }
 
   /// A boolean value indicate whether HTTP MitM should be enabled, default is false.
   ///
   /// Enabling HTTP capture will reduce performance.
-  @Protected public var isHTTPMitMEnabled: Bool = false
+  public var isHTTPMitMEnabled: Bool {
+    get { $mutableState.isHTTPMitMEnabled }
+    set { $mutableState.isHTTPMitMEnabled = newValue }
+  }
 
-  @Protected private var services: [(Channel, ServerQuiescingHelper, EventLoopPromise<Void>)] = []
+  private struct MutableState {
 
-  @Protected private var certCache: CertCache?
+    /// The outbound mode control how requests will be process.
+    var outboundMode: OutboundMode = .rule
+
+    /// A boolean value indicate whether HTTP capture should be enabled, default is false.
+    ///
+    /// Enabling HTTP capture will reduce performance.
+    var isHTTPCaptureEnabled: Bool = false
+
+    /// A boolean value indicate whether HTTP MitM should be enabled, default is false.
+    ///
+    /// Enabling HTTP capture will reduce performance.
+    var isHTTPMitMEnabled: Bool = false
+
+    var services: [(Channel, ServerQuiescingHelper, EventLoopPromise<Void>)] = []
+
+    var certCache: CertCache?
+  }
+
+  @Protected private var mutableState: MutableState = MutableState()
 
   /// Initialize an instance of `Netbot` with specified profile logger and outboundMode.
   ///
@@ -77,7 +104,11 @@ final public class Netbot: @unchecked Sendable {
     self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
     #endif
     self.outboundMode = outboundMode
-    self.certCache = try? CertCache(manInTheMiddleSettings: profile.manInTheMiddleSettings)
+    self.mutableState = MutableState(
+      certCache: try? CertCache(
+        manInTheMiddleSettings: profile.manInTheMiddleSettings
+      )
+    )
   }
 
   /// Run VPN servers and wait for shutdown.
@@ -105,7 +136,9 @@ final public class Netbot: @unchecked Sendable {
             bindPort: port
           )
           let promise = channel.eventLoop.makePromise(of: Void.self)
-          self.services.append((channel, quiesce, promise))
+          self.$mutableState.write {
+            $0.services.append((channel, quiesce, promise))
+          }
           try await promise.futureResult.get()
         }
       }
@@ -118,7 +151,9 @@ final public class Netbot: @unchecked Sendable {
             bindPort: port
           )
           let promise = channel.eventLoop.makePromise(of: Void.self)
-          self.services.append((channel, quiesce, promise))
+          self.$mutableState.write {
+            $0.services.append((channel, quiesce, promise))
+          }
           try await promise.futureResult.get()
         }
       }
@@ -356,15 +391,21 @@ final public class Netbot: @unchecked Sendable {
       return
     }
 
-    if certCache == nil {
+    if $mutableState.certCache == nil {
       // Lazy load
-      certCache = try CertCache(manInTheMiddleSettings: profile.manInTheMiddleSettings)
+      $mutableState.certCache = try CertCache(
+        manInTheMiddleSettings: profile.manInTheMiddleSettings
+      )
     }
 
     // Find whether need perform HTTP MitM action for this hostname, if value exists, then prepare
     // HTTP MitM pipeline else just return and HTTP capture should also be ignored because in this
     // situation the connection is HTTPS request, capture http body has no effect.
-    guard let (certificateChain, privateKey) = try certCache?.value(forKey: serverHostname) else {
+    guard
+      let (certificateChain, privateKey) = try $mutableState.certCache?.value(
+        forKey: serverHostname
+      )
+    else {
       return
     }
 
@@ -450,7 +491,7 @@ final public class Netbot: @unchecked Sendable {
   public func shutdownGracefully() async throws {
     // Wait until all server channel closed.
     try await withThrowingTaskGroup(of: Void.self) { g in
-      for (channel, quiesce, promise) in services {
+      for (channel, quiesce, promise) in $mutableState.services {
         g.addTask {
           self.logger.trace("Shutting down channel \(channel).")
           quiesce.initiateShutdown(promise: promise)
