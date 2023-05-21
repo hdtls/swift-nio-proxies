@@ -27,8 +27,9 @@ extension DispatchTime {
     return .nanoseconds(duration >= Int.max ? Int.max : Int(duration))
   }
 }
-
+#if swift(<5.9)
 extension DispatchTimeInterval: Equatable {}
+#endif
 #endif
 
 extension DispatchTimeInterval {
