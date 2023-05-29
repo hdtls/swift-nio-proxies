@@ -12,9 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import NEMisc
-@_exported import NIOCore
-@_exported import NIOHTTP1
+import NEMisc
+import NIOCore
+import NIOHTTP1
 
 /// A channel handler that wraps a channel for HTTP proxy.
 /// This handler can be used in channels that are acting as the server in the HTTP proxy dialog.
@@ -53,16 +53,10 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
 
   /// When a proxy request is received, we will send a new request to the target server.
   /// During the request is established, we need to buffer events.
-  private var eventBuffer: CircularBuffer<EventBuffer> = .init(initialCapacity: 0)
-
-  public typealias ClientInitializer = @Sendable (RequestInfo) -> EventLoopFuture<Channel>
-
-  private var clientInitializer: ClientInitializer
-
-  public typealias Completion = @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
+  private var eventBuffer: CircularBuffer<EventBuffer> = .init(initialCapacity: 2)
 
   /// The completion handler when proxy connection established.
-  private let completion: Completion
+  private let completion: @Sendable (RequestInfo) -> EventLoopFuture<Void>
 
   /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
   ///
@@ -70,24 +64,25 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
   ///   - username: Username for proxy authentication.
   ///   - passwordReference: Password for proxy authentication.
   ///   - authenticationRequired: A boolean value deterinse whether server should evaluate proxy authentication request.
-  ///   - channelInitializer: The outbound channel initializer, returns the initialized outbound channel using the given request info.
-  ///   - completion: The completion handler when proxy connection established, returns `EventLoopFuture<Void>` using given request info, server channel and outbound client channel.
+  ///   - completion: The completion handler when proxy connection established, returns `EventLoopFuture<Void>` using given request info.
   public init(
     username: String,
     passwordReference: String,
     authenticationRequired: Bool,
-    channelInitializer: @escaping ClientInitializer,
-    completion: @escaping Completion
+    completion: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Void>
   ) {
     self.username = username
     self.passwordReference = passwordReference
     self.authenticationRequired = authenticationRequired
-    self.clientInitializer = channelInitializer
     self.completion = completion
   }
 
   public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
     guard progress == .waitingForData else {
+      guard progress == .waitingForComplete else {
+        context.fireChannelRead(data)
+        return
+      }
       // All inbound events will be buffered until handle remove from pipeline.
       eventBuffer.append(.channelRead(data: data))
       return
@@ -161,8 +156,6 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
 
     authorize(message: headPart.headers.proxyBasicAuthorization, context: context)
 
-    let req = RequestInfo(address: .domainPort(host: headPart.host, port: headPart.port))
-
     let promise = context.eventLoop.makePromise(of: Void.self)
 
     if headPart.method == .CONNECT {
@@ -182,9 +175,9 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
 
     promise.futureResult
       .flatMap {
-        self.clientInitializer(req)
+        self.completion(RequestInfo(address: .domainPort(host: headPart.host, port: headPart.port)))
       }
-      .flatMap { clientChannel in
+      .flatMap {
         let promise = context.eventLoop.makePromise(of: Void.self)
         // Only CONNECT tunnel need established response and remove default http server pipelines.
         if headPart.method == .CONNECT {
@@ -202,31 +195,25 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
         }
 
         return promise.futureResult
-          .flatMap {
-            context.pipeline.handler(type: HTTPResponseEncoder.self)
-          }
-          .flatMap {
-            context.pipeline.removeHandler($0)
-          }
-          .flatMapError { _ in
-            context.eventLoop.makeSucceededVoidFuture()
-          }
-          .flatMap {
-            self.completion(req, context.channel, clientChannel)
-          }
-          .flatMapThrowing {
-            let (localGlue, peerGlue) = GlueHandler.matchedPair()
-            try context.pipeline.syncOperations.addHandler(localGlue)
-            try clientChannel.pipeline.syncOperations.addHandler(peerGlue)
-            self.progress = .completed
-            self.flushBuffers(context: context)
-          }
-          .flatMap {
-            context.pipeline.removeHandler(self)
-          }
       }
-      .whenFailure { error in
-        self.channelClose(context: context, reason: error)
+      .flatMap {
+        context.pipeline.handler(type: HTTPResponseEncoder.self)
+      }
+      .flatMap {
+        context.pipeline.removeHandler($0)
+      }
+      .flatMapError { _ in
+        context.eventLoop.makeSucceededVoidFuture()
+      }
+      .whenComplete {
+        switch $0 {
+        case .success:
+          self.progress = .completed
+          self.flushBuffers(context: context)
+          context.pipeline.removeHandler(self, promise: nil)
+        case .failure(let error):
+          self.channelClose(context: context, reason: error)
+        }
       }
   }
 

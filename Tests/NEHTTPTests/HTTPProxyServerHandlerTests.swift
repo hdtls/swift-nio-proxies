@@ -31,22 +31,17 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     eventLoop = EmbeddedEventLoop()
     clientChannel = EmbeddedChannel(loop: eventLoop)
 
-    let channelInitializer: @Sendable (RequestInfo) -> EventLoopFuture<Channel> = { [self] _ in
-      eventLoop.makeSucceededFuture(clientChannel)
-    }
-    let completion: @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void> = {
-      _,
-      _,
-      _ in
-      self.eventLoop.makeSucceededVoidFuture()
-    }
+    let (localGlue, peerGlue) = GlueHandler.matchedPair()
+
     handler = HTTPProxyServerHandler(
       username: "username",
       passwordReference: "passwordReference",
-      authenticationRequired: false,
-      channelInitializer: channelInitializer,
-      completion: completion
-    )
+      authenticationRequired: false
+    ) { _ in
+      self.channel.pipeline.addHandler(localGlue).flatMap {
+        self.clientChannel.pipeline.addHandler(peerGlue)
+      }
+    }
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
   }
 
@@ -68,24 +63,14 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
   }
 
   func testProxyAuthenticationRequire() async throws {
-    let eventLoop = EmbeddedEventLoop()
-    let channelInitializer: @Sendable (RequestInfo) -> EventLoopFuture<Channel> = { _ in
-      eventLoop.makeSucceededFuture(EmbeddedChannel())
-    }
-    let completion: @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void> = {
-      _,
-      _,
-      _ in
-      eventLoop.makeSucceededVoidFuture()
-    }
-    let handler = HTTPProxyServerHandler(
+    handler = HTTPProxyServerHandler(
       username: "username",
       passwordReference: "passwordReference",
-      authenticationRequired: true,
-      channelInitializer: channelInitializer,
-      completion: completion
-    )
-    let channel = EmbeddedChannel(handler: handler, loop: eventLoop)
+      authenticationRequired: true
+    ) { _ in
+      self.eventLoop.makeSucceededVoidFuture()
+    }
+    channel = EmbeddedChannel(handler: handler, loop: eventLoop)
 
     let head = HTTPRequestHead(version: .http1_1, method: .CONNECT, uri: "example.com")
     try channel.writeInbound(HTTPServerRequestPart.head(head))
@@ -100,24 +85,14 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
   }
 
   func testProxyAuthenticationWithInvalidUsernameOrPassword() async throws {
-    let eventLoop = EmbeddedEventLoop()
-    let channelInitializer: @Sendable (RequestInfo) -> EventLoopFuture<Channel> = { _ in
-      eventLoop.makeSucceededFuture(EmbeddedChannel())
-    }
-    let completion: @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void> = {
-      _,
-      _,
-      _ in
-      eventLoop.makeSucceededVoidFuture()
-    }
-    let handler = HTTPProxyServerHandler(
+    handler = HTTPProxyServerHandler(
       username: "username",
       passwordReference: "passwordReference",
-      authenticationRequired: true,
-      channelInitializer: channelInitializer,
-      completion: completion
-    )
-    let channel = EmbeddedChannel(handler: handler, loop: eventLoop)
+      authenticationRequired: true
+    ) { _ in
+      self.eventLoop.makeSucceededVoidFuture()
+    }
+    channel = EmbeddedChannel(handler: handler, loop: eventLoop)
 
     var headers = HTTPHeaders()
     headers.proxyBasicAuthorization = .init(username: "username", password: "wrong password")
@@ -158,7 +133,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     XCTAssertNoThrow(try channel.finish())
   }
 
-  func testHTTPHandlersRemovalAfterProxyPipelineSetupSuccess() async throws {
+  func testHTTPHandlersRemovalWorksAfterPipelineSetupSuccess() async throws {
     let head = HTTPRequestHead.init(version: .http1_1, method: .CONNECT, uri: "example.com")
     try channel.writeInbound(HTTPServerRequestPart.head(head))
     try channel.writeInbound(HTTPServerRequestPart.end(nil))
@@ -184,24 +159,23 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     XCTAssertNoThrow(try channel.finish())
   }
 
-  func testBufferingBeforeProxyPipelineSetupSuccess() async throws {
+  func testBufferingBeforePipelineSetupSuccess() async throws {
     let deferPromise = eventLoop.makePromise(of: Channel.self)
-    let channelInitializer: @Sendable (RequestInfo) -> EventLoopFuture<Channel> = { _ in
-      deferPromise.futureResult
-    }
-    let completion: @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void> = {
-      _,
-      _,
-      _ in
-      self.eventLoop.makeSucceededVoidFuture()
-    }
+
+    let (localGlue, peerGlue) = GlueHandler.matchedPair()
+
     handler = HTTPProxyServerHandler(
       username: "username",
       passwordReference: "passwordReference",
-      authenticationRequired: false,
-      channelInitializer: channelInitializer,
-      completion: completion
-    )
+      authenticationRequired: false
+    ) { _ in
+      deferPromise.futureResult
+        .flatMap { clientChannel in
+          self.channel.pipeline.addHandler(localGlue).flatMap {
+            clientChannel.pipeline.addHandler(peerGlue)
+          }
+        }
+    }
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
 
     let head = HTTPRequestHead.init(version: .http1_1, method: .CONNECT, uri: "example.com")

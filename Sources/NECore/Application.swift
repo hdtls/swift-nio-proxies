@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-@_exported import Logging
+import Logging
 import NEDNS
 import NEHTTP
 import NEHTTPMitM
@@ -185,54 +185,44 @@ final public class Netbot: @unchecked Sendable {
       .serverChannelOption(ChannelOptions.socketOption(.init(rawValue: SO_REUSEPORT)), value: 1)
       .childChannelInitializer { channel in
         let eventLoop = channel.eventLoop.next()
-
-        let channelInitializer: @Sendable (RequestInfo) -> EventLoopFuture<Channel>
-        let completion: @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
-
-        channelInitializer = { req in
-          let promise = eventLoop.makePromise(of: Channel.self)
+        let completion: @Sendable (RequestInfo) -> EventLoopFuture<Void> = { req in
+          let promise = eventLoop.makePromise(of: Void.self)
           promise.completeWithTask {
-            try await self.initializePeer(
-              forTarget: req.address,
-              eventLoop: eventLoop
+            //            guard req.address.host?.contains("baidu.com") ?? false else {
+            //              throw RejectByRuleError()
+            //            }
+            // Create client channel to write data to remote proxy server.
+            let peer = try await self.initializePeer(forTarget: req.address, eventLoop: eventLoop)
+
+            try await channel.pipeline.addHandler(
+              NIOTLSRecognizer { isTLSConnection, channel in
+                let promise = channel.eventLoop.makePromise(of: Void.self)
+                promise.completeWithTask {
+                  try await self.configureHTTPCapabilitiesPipeline(
+                    for: channel,
+                    peer: peer,
+                    serverHostname: req.address.host,
+                    isTLSConnection: isTLSConnection,
+                    enableHTTPMitM: self.isHTTPMitMEnabled,
+                    enableHTTPCapture: self.isHTTPCaptureEnabled
+                  )
+                }
+                return promise.futureResult
+              }
             )
+
+            let (localGlue, peerGlue) = GlueHandler.matchedPair()
+            try await channel.pipeline.addHandler(localGlue)
+            try await peer.pipeline.addHandler(peerGlue)
           }
           return promise.futureResult
         }
 
-        completion = {
-          req,
-          channel,
-          peer in
-          channel.pipeline.addHandler(
-            NIOTLSRecognizer { isTLSConnection, channel in
-              let promise = channel.eventLoop.makePromise(of: Void.self)
-              promise.completeWithTask {
-                try await self.configureHTTPCapabilitiesPipeline(
-                  for: channel,
-                  peer: peer,
-                  serverHostname: req.address.host,
-                  isTLSConnection: isTLSConnection,
-                  enableHTTPMitM: self.isHTTPMitMEnabled,
-                  enableHTTPCapture: self.isHTTPCaptureEnabled
-                )
-              }
-              return promise.futureResult
-            }
-          )
-        }
-
         switch `protocol` {
         case .http:
-          return channel.pipeline.configureHTTPProxyServerPipeline(
-            channelInitializer: channelInitializer,
-            completion: completion
-          )
+          return channel.pipeline.configureHTTPProxyServerPipeline(completion: completion)
         case .socks5:
-          return channel.pipeline.configureSOCKSServerPipeline(
-            channelInitializer: channelInitializer,
-            completion: completion
-          )
+          return channel.pipeline.configureSOCKSServerPipeline(completion: completion)
         default:
           preconditionFailure()
         }

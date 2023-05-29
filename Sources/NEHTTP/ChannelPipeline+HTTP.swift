@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import NEMisc
-@_exported import NIOCore
+import NEMisc
+import NIOCore
 import NIOHTTP1
 
 extension ChannelPipeline {
@@ -67,19 +67,15 @@ extension ChannelPipeline {
   ///   - username: The username to use when authenticate this connection. Defaults to `""`.
   ///   - passwordReference: The passwordReference to use when authenticate this connection. Defaults to `""`.
   ///   - authenticationRequired: A boolean value to determinse whether HTTP proxy server should perform proxy authentication. Defaults to `false`.
-  ///   - channelInitializer: The outbound channel initializer used to initizlie outbound channel when receive proxy request.
-  ///       this initializer pass proxy request info and returns initialized outbound channel.
   ///   - completion: The completion handler to use when handshake completed and outbound channel established.
   ///       this completion pass request info, server channel and outbound client channel and returns `EventLoopFuture<Void>`.
   /// - Returns: An `EventLoopFuture` that will fire when the pipeline is configured.
-  @preconcurrency
   public func configureHTTPProxyServerPipeline(
     position: ChannelPipeline.Position = .last,
     username: String = "",
     passwordReference: String = "",
     authenticationRequired: Bool = false,
-    channelInitializer: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Channel>,
-    completion: @escaping @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
+    completion: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Void>
   ) -> EventLoopFuture<Void> {
 
     guard eventLoop.inEventLoop else {
@@ -89,7 +85,6 @@ extension ChannelPipeline {
           username: username,
           passwordReference: passwordReference,
           authenticationRequired: authenticationRequired,
-          channelInitializer: channelInitializer,
           completion: completion
         )
       }
@@ -101,7 +96,6 @@ extension ChannelPipeline {
         username: username,
         passwordReference: passwordReference,
         authenticationRequired: authenticationRequired,
-        channelInitializer: channelInitializer,
         completion: completion
       )
     }
@@ -147,19 +141,15 @@ extension ChannelPipeline.SynchronousOperations {
   ///   - username: The username to use when authenticate this connection. Defaults to `""`.
   ///   - passwordReference: The passwordReference to use when authenticate this connection. Defaults to `""`.
   ///   - authenticationRequired: A boolean value to determinse whether HTTP proxy server should perform proxy authentication. Defaults to `false`.
-  ///   - channelInitializer: The outbound channel initializer used to initizlie outbound channel when receive proxy request.
-  ///       this initializer pass proxy request info and returns initialized outbound channel.
   ///   - completion: The completion handler to use when handshake completed and outbound channel established.
   ///       this completion pass request info, server channel and outbound client channel and returns `EventLoopFuture<Void>`.
   /// - Throws: If the pipeline could not be configured.
-  @preconcurrency
   public func configureHTTPProxyServerPipeline(
     position: ChannelPipeline.Position = .last,
     username: String = "",
     passwordReference: String = "",
     authenticationRequired: Bool = false,
-    channelInitializer: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Channel>,
-    completion: @escaping @Sendable (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
+    completion: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Void>
   ) throws {
     self.eventLoop.assertInEventLoop()
 
@@ -169,7 +159,6 @@ extension ChannelPipeline.SynchronousOperations {
       username: username,
       passwordReference: passwordReference,
       authenticationRequired: authenticationRequired,
-      channelInitializer: channelInitializer,
       completion: completion
     )
 

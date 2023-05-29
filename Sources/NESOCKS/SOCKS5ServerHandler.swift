@@ -12,28 +12,35 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import NEMisc
-@_exported import NIOCore
+import NEMisc
+import NIOCore
 
 /// Add this handshake handler to the front of your channel, closest to the network.
 /// The handler will receive bytes from the network and parse to enforce SOCKSv5 protocol correctness.
-final public class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHandler {
+final public class SOCKS5ServerHandler: ChannelInboundHandler, RemovableChannelHandler {
 
   public typealias InboundIn = ByteBuffer
+
   public typealias InboundOut = ByteBuffer
-  public typealias OutboundIn = ByteBuffer
+
   public typealias OutboundOut = ByteBuffer
 
-  private var state: HandshakeState
+  private enum Progress: Equatable {
+    case waitingForGreeting(ByteBuffer?)
+    case waitingForAuthorizing(ByteBuffer)
+    case waitingForRequest(ByteBuffer)
+    case completed
+  }
+
+  private var progress: Progress = .waitingForGreeting(nil)
+
+  private enum EventBuffer {
+    case channelRead(data: NIOAny)
+    case channelReadComplete
+  }
 
   /// Buffered channel read buffer.
-  private var readBuffer: ByteBuffer!
-
-  /// Buffered channel writes.
-  private var bufferedWrites: MarkedCircularBuffer<BufferedWrite> = .init(initialCapacity: 8)
-
-  /// The removaltoken for RemovableChannelHandler.
-  private var removalToken: ChannelHandlerContext.RemovalToken?
+  private var eventBuffer: CircularBuffer<EventBuffer> = .init(initialCapacity: 2)
 
   /// The usename used to authenticate this proxy connection.
   private let username: String
@@ -44,11 +51,8 @@ final public class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHa
   /// A boolean value deterinse whether server should evaluate proxy authentication request.
   private let authenticationRequired: Bool
 
-  /// The `EventLoopFuture<Channel>` to used when creating outbound client channel.
-  private var channelInitializer: (RequestInfo) -> EventLoopFuture<Channel>
-
   /// The completion handler when proxy connection established.
-  private let completion: (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
+  private let completion: @Sendable (RequestInfo) -> EventLoopFuture<Void>
 
   /// Initialize an instance of `SOCKS5ServerHandler` with specified parameters.
   ///
@@ -56,128 +60,53 @@ final public class SOCKS5ServerHandler: ChannelDuplexHandler, RemovableChannelHa
   ///   - username: Username for proxy authentication.
   ///   - passwordReference: Password for proxy authentication.
   ///   - authenticationRequired: A boolean value deterinse whether server should evaluate proxy authentication request.
-  ///   - channelInitializer: The outbound channel initializer, returns the initialized outbound channel using the given request info.
   ///   - completion: The completion handler when proxy connection established, returns `EventLoopFuture<Void>` using given request info, server channel and outbound client channel.
   public init(
     username: String,
     passwordReference: String,
     authenticationRequired: Bool,
-    channelInitializer: @escaping (RequestInfo) -> EventLoopFuture<Channel>,
-    completion: @escaping (RequestInfo, Channel, Channel) -> EventLoopFuture<Void>
+    completion: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Void>
   ) {
     self.username = username
     self.passwordReference = passwordReference
     self.authenticationRequired = authenticationRequired
-    self.state = .greeting
-    self.channelInitializer = channelInitializer
     self.completion = completion
   }
 
   public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-    var byteBuffer = unwrapInboundIn(data)
+    var buffer = unwrapInboundIn(data)
 
-    guard state != .established else {
-      context.fireChannelRead(data)
+    switch progress {
+    case .waitingForGreeting(let byteBuffer):
+      var byteBuffer = byteBuffer ?? context.channel.allocator.buffer(capacity: 3)
+      byteBuffer.writeBuffer(&buffer)
+      handleGreeting(context: context, data: byteBuffer)
+    case .waitingForAuthorizing(var byteBuffer):
+      byteBuffer.writeBuffer(&buffer)
+      handleAuthorizing(context: context, data: byteBuffer)
+    case .waitingForRequest(var byteBuffer):
+      byteBuffer.writeBuffer(&buffer)
+      handleRequest(context: context, data: byteBuffer)
+    case .completed:
+      eventBuffer.append(.channelRead(data: data))
+    }
+  }
+
+  public func channelReadComplete(context: ChannelHandlerContext) {
+    guard progress == .completed else {
+      return
+    }
+    eventBuffer.append(.channelReadComplete)
+  }
+
+  private func handleGreeting(context: ChannelHandlerContext, data: ByteBuffer) {
+    var byteBuffer = data
+    guard let message = byteBuffer.readAuthenticationMethodRequest() else {
+      progress = .waitingForGreeting(byteBuffer)
       return
     }
 
-    readBuffer.setOrWriteBuffer(&byteBuffer)
-
-    switch state {
-    case .greeting:
-      receiveAuthenticationMethodRequest(context: context)
-    case .authorizing:
-      receiveAuthenticationRequest(context: context)
-    case .addressing:
-      evaluateClientRequestAndReplies(context: context)
-    default:
-      break
-    }
-  }
-
-  public func write(
-    context: ChannelHandlerContext,
-    data: NIOAny,
-    promise: EventLoopPromise<Void>?
-  ) {
-    bufferWrite(data: unwrapOutboundIn(data), promise: promise)
-  }
-
-  public func flush(context: ChannelHandlerContext) {
-    bufferFlush()
-
-    guard state == .established else {
-      return
-    }
-    unbufferWrites(context: context)
-  }
-
-  public func removeHandler(
-    context: ChannelHandlerContext,
-    removalToken: ChannelHandlerContext.RemovalToken
-  ) {
-    precondition(context.handler === self)
-
-    guard state == .established else {
-      self.removalToken = removalToken
-      return
-    }
-
-    flushBuffers(context: context)
-
-    context.leavePipeline(removalToken: removalToken)
-  }
-}
-
-extension SOCKS5ServerHandler {
-
-  private typealias BufferedWrite = (data: ByteBuffer, promise: EventLoopPromise<Void>?)
-
-  private func bufferWrite(data: ByteBuffer, promise: EventLoopPromise<Void>?) {
-    guard data.readableBytes > 0 else {
-      // We don't care about empty buffer.
-      return
-    }
-    bufferedWrites.append((data: data, promise: promise))
-  }
-
-  private func bufferFlush() {
-    bufferedWrites.mark()
-  }
-
-  private func unbufferWrites(context: ChannelHandlerContext) {
-    while bufferedWrites.hasMark {
-      let bufferedWrite = bufferedWrites.removeFirst()
-      context.write(wrapOutboundOut(bufferedWrite.data), promise: bufferedWrite.promise)
-    }
-    context.flush()
-
-    while !bufferedWrites.isEmpty {
-      let bufferedWrite = bufferedWrites.removeFirst()
-      context.write(wrapOutboundOut(bufferedWrite.data), promise: bufferedWrite.promise)
-    }
-  }
-
-  private func flushBuffers(context: ChannelHandlerContext) {
-    unbufferWrites(context: context)
-
-    if let byteBuffer = readBuffer, byteBuffer.readableBytes > 0 {
-      readBuffer = nil
-      context.fireChannelRead(wrapInboundOut(byteBuffer))
-    }
-  }
-
-}
-
-extension SOCKS5ServerHandler {
-
-  private func receiveAuthenticationMethodRequest(context: ChannelHandlerContext) {
-    guard let req = readBuffer.readAuthenticationMethodRequest() else {
-      return
-    }
-
-    guard req.version == .v5 else {
-      context.fireErrorCaught(SOCKSError.unsupportedProtocolVersion)
+    guard message.version == .v5 else {
       channelClose(context: context, reason: SOCKSError.unsupportedProtocolVersion)
       return
     }
@@ -185,12 +114,12 @@ extension SOCKS5ServerHandler {
     // Choose authentication method
     let response: Authentication.Method.Response
 
-    if authenticationRequired && req.methods.contains(.usernamePassword) {
+    if authenticationRequired && message.methods.contains(.usernamePassword) {
       response = .init(method: .usernamePassword)
-      state = .authorizing
-    } else if req.methods.contains(.noRequired) {
+      progress = .waitingForAuthorizing(byteBuffer)
+    } else if message.methods.contains(.noRequired) {
       response = .init(method: .noRequired)
-      state = .addressing
+      progress = .waitingForRequest(byteBuffer)
     } else {
       response = .init(method: .noAcceptable)
       // TODO: Error handling NO acceptable method.
@@ -202,13 +131,15 @@ extension SOCKS5ServerHandler {
     context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
   }
 
-  private func receiveAuthenticationRequest(context: ChannelHandlerContext) {
-    guard let authMsg = readBuffer.readAuthenticationRequest() else {
+  private func handleAuthorizing(context: ChannelHandlerContext, data: ByteBuffer) {
+    var byteBuffer = data
+    guard let authMsg = byteBuffer.readAuthenticationRequest() else {
       // Need more bytes to parse authentication message.
+      progress = .waitingForAuthorizing(data)
       return
     }
 
-    state = .addressing
+    progress = .waitingForRequest(byteBuffer)
 
     let success = authMsg.username == username && authMsg.password == passwordReference
 
@@ -216,93 +147,71 @@ extension SOCKS5ServerHandler {
     buffer.writeAuthenticationResponse(
       Authentication.UsernameAuthenticationResponse(status: success ? 0 : 1)
     )
-
     context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
-
-    // If authentication failure then channel MUST close.
-    // https://datatracker.ietf.org/doc/html/rfc1929#section-2
-    guard !success else {
-      return
-    }
-    context.close(promise: nil)
   }
 
-  private func evaluateClientRequestAndReplies(context: ChannelHandlerContext) {
-    precondition(state == .addressing)
+  private func handleRequest(context: ChannelHandlerContext, data: ByteBuffer) {
     do {
-      guard let details = try readBuffer.readRequestDetails() else {
+      var byteBuffer = data
+      guard let details = try byteBuffer.readRequestDetails() else {
+        progress = .waitingForRequest(data)
         return
       }
 
       let req = RequestInfo(address: details.address)
 
-      channelInitializer(req).whenComplete {
+      completion(req).whenComplete {
         switch $0 {
-        case .success(let channel):
-          self.glue(req, with: channel, and: context)
+        case .success:
+          // FIXME: SOCKS5 response
+          let response = Response(
+            reply: .succeeded,
+            boundAddress: .socketAddress(context.channel.localAddress!)
+          )
+          var buffer = context.channel.allocator.buffer(capacity: 16)
+          buffer.writeServerResponse(response)
+          context.writeAndFlush(self.wrapOutboundOut(buffer), promise: nil)
+
+          context.fireUserInboundEventTriggered(SOCKSUserEvent.handshakeCompleted)
+
+          self.progress = .completed
+
+          // Prepare data that need forward to next handler.
+          if byteBuffer.readableBytes > 0 {
+            byteBuffer.discardReadBytes()
+            self.eventBuffer.append(.channelRead(data: self.wrapInboundOut(byteBuffer)))
+          }
+          self.flushBuffers(context: context)
+          context.pipeline.removeHandler(self, promise: nil)
         case .failure:
           let response: Response = .init(
             reply: .hostUnreachable,
             boundAddress: req.address
           )
-
           var buffer = context.channel.allocator.buffer(capacity: 16)
           buffer.writeServerResponse(response)
-
           context.writeAndFlush(self.wrapOutboundOut(buffer), promise: nil)
         }
       }
     } catch {
-      context.fireErrorCaught(error)
       channelClose(context: context, reason: error)
       return
     }
   }
 
-  private func glue(_ req: RequestInfo, with channel: Channel, and context: ChannelHandlerContext) {
-    guard let remoteAddress = channel.remoteAddress else {
-      // TODO: Error Handling, channel may inactive.
-      return
+  private func flushBuffers(context: ChannelHandlerContext) {
+    while !eventBuffer.isEmpty {
+      switch eventBuffer.removeFirst() {
+      case .channelRead(let data):
+        context.fireChannelRead(data)
+      case .channelReadComplete:
+        context.fireChannelReadComplete()
+      }
     }
-
-    let response = Response(
-      reply: .succeeded,
-      boundAddress: .socketAddress(remoteAddress)
-    )
-
-    var buffer = context.channel.allocator.buffer(capacity: 16)
-    buffer.writeServerResponse(response)
-
-    context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
-
-    state = .established
-
-    let (localGlue, peerGlue) = GlueHandler.matchedPair()
-
-    // Now we need to glue our channel and the peer channel together.
-    context.channel.pipeline.addHandler(localGlue)
-      .and(channel.pipeline.addHandler(peerGlue))
-      .flatMap { _ in
-        self.completion(req, context.channel, channel)
-      }
-      .whenComplete {
-        switch $0 {
-        case .success:
-          self.flushBuffers(context: context)
-
-          context.fireUserInboundEventTriggered(SOCKSUserEvent.handshakeCompleted)
-
-          if let removalToken = self.removalToken {
-            context.leavePipeline(removalToken: removalToken)
-          }
-        case .failure(let error):
-          context.fireErrorCaught(error)
-          self.channelClose(context: context, reason: error)
-        }
-      }
   }
 
   private func channelClose(context: ChannelHandlerContext, reason: Error) {
+    context.fireErrorCaught(reason)
     context.close(promise: nil)
   }
 }
