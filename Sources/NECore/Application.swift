@@ -70,7 +70,7 @@ final public class Netbot: @unchecked Sendable {
   private struct MutableState {
 
     /// The outbound mode control how requests will be process.
-    var outboundMode: OutboundMode = .rule
+    var outboundMode: OutboundMode = .direct
 
     /// A boolean value indicate whether HTTP capture should be enabled, default is false.
     ///
@@ -217,10 +217,6 @@ final public class Netbot: @unchecked Sendable {
                 return promise.futureResult
               }
             )
-
-            let (localGlue, peerGlue) = GlueHandler.matchedPair()
-            try await channel.pipeline.addHandler(localGlue)
-            try await peer.pipeline.addHandler(peerGlue)
           }
           return promise.futureResult
         }
@@ -352,7 +348,8 @@ final public class Netbot: @unchecked Sendable {
   /// Configure HTTP MitM pipeline and HTTP capture pipeline.
   ///
   /// The HTTP MitM pipeline can only be configured when the `serverHostname` is not nil, the current connection is an https
-  /// request (`tls` is true) and `Netbot` enables the HTTP MitM capability (`Netbot.isHTTPMitMEnabled` is true).
+  /// request and `Netbot` enables the HTTP MitM and HTTP capture capabilities (both `Netbot.isHTTPMitMEnabled` and
+  /// `Netbot.isHTTPCapatureEnabled` is  true).
   ///
   /// Also, if `serverHostname` is not included in the hostname that needs to enable HTTP MiTM, the HTTP MitM pipeline will not
   /// be configured too.
@@ -374,20 +371,35 @@ final public class Netbot: @unchecked Sendable {
     enableHTTPMitM: Bool,
     enableHTTPCapture: Bool
   ) async throws {
-    guard let serverHostname, isTLSConnection, enableHTTPMitM else {
+    guard let serverHostname, isTLSConnection, enableHTTPMitM, enableHTTPCapture else {
+      // Because it is not a TLS connection, there is no need to consider the mitm pipeline setup.
       guard !isTLSConnection, enableHTTPCapture else {
+        let (localGlue, peerGlue) = GlueHandler.matchedPair()
+        try await channel.pipeline.addHandler(localGlue)
+        try await peer.pipeline.addHandler(peerGlue)
         return
       }
-      // This we don't need MitM but need enable HTTP capture.
-      let recognizer = try await channel.pipeline.handler(type: NIOTLSRecognizer.self).get()
-      let glue = try await peer.pipeline.handler(type: GlueHandler.self).get()
-      try await configureHTTPCapturePipeline(
-        for: (channel, .after(recognizer)),
-        peer: (peer, .before(glue))
-      )
+      try await configureHTTPCapturePipeline(for: channel, peer: peer)
       return
     }
 
+    try await configureHTTPMitMPipeline(for: channel, peer: peer, serverHostname: serverHostname)
+    try await configureHTTPCapturePipeline(for: channel, peer: peer)
+  }
+
+  /// Configure HTTP MitM pipeline if needed.
+  ///
+  /// If `Netbot.certCache` does not contains certificates and privateKeys pair, configure will be ignored.
+  ///
+  /// - Parameters:
+  ///   - channel: The server channel that need to configure.
+  ///   - peer: The client channel that need to configure.
+  ///   - serverHostname: The SNI for SSL/TLS.
+  private func configureHTTPMitMPipeline(
+    for channel: Channel,
+    peer: Channel,
+    serverHostname: String
+  ) async throws {
     // Find whether need perform HTTP MitM action for this hostname, if value exists, then prepare
     // HTTP MitM pipeline else just return and HTTP capture should also be ignored because in this
     // situation the connection is HTTPS request, capture http body has no effect.
@@ -405,45 +417,32 @@ final public class Netbot: @unchecked Sendable {
       profile.manInTheMiddleSettings.skipCertificateVerification ? .none : .fullVerification
     var context = try NIOSSLContext(configuration: configuration)
     let ssl0 = NIOSSLServerHandler(context: context)
-    let recognizer = try await channel.pipeline.handler(type: NIOTLSRecognizer.self).get()
-    try await channel.pipeline.addHandler(ssl0, position: .after(recognizer))
+    try await channel.pipeline.addHandler(ssl0)
 
     // Because we have decrypted HTTPS stream, so we need set up client channel to encode decrypted
     // plain HTTP request to HTTPS request.
     configuration = TLSConfiguration.makeClientConfiguration()
     context = try NIOSSLContext(configuration: configuration)
     let ssl1 = try NIOSSLClientHandler(context: context, serverHostname: serverHostname)
-    let glue = try await peer.pipeline.handler(type: GlueHandler.self).get()
-    try await peer.pipeline.addHandler(ssl1, position: .before(glue))
-
-    guard enableHTTPCapture else {
-      return
-    }
-
-    try await configureHTTPCapturePipeline(
-      for: (channel, .after(ssl0)),
-      peer: (peer, .after(ssl1))
-    )
+    try await peer.pipeline.addHandler(ssl1)
   }
 
   /// Configure HTTP capture pipeline at specified position.
-  private func configureHTTPCapturePipeline(
-    for master: (channel: Channel, position: ChannelPipeline.Position),
-    peer: (channel: Channel, position: ChannelPipeline.Position)
-  ) async throws {
+  private func configureHTTPCapturePipeline(for channel: Channel, peer: Channel) async throws {
     // As we know HTTP capture only supported for HTTP protocols so we need a
     // `PlainHTTPRecognizer` to recognize if this is HTTP request.
-    try await master.channel.pipeline.addHandler(
-      PlainHTTPRecognizer { http, channel in
-        guard http else {
-          return channel.eventLoop.makeSucceededVoidFuture()
-        }
-
+    try await channel.pipeline.addHandler(
+      PlainHTTPRecognizer { isHTTPRequest, channel in
         let promise = channel.eventLoop.makePromise(of: Void.self)
         promise.completeWithTask {
-          let recognizer = try await channel.pipeline.handler(
-            type: PlainHTTPRecognizer.self
-          ).get()
+          let (localGlue, peerGlue) = GlueHandler.matchedPair()
+
+          guard isHTTPRequest else {
+            try await channel.pipeline.addHandler(localGlue)
+            try await peer.pipeline.addHandler(peerGlue)
+            return
+          }
+
           var handlers: [ChannelHandler] =
             [
               HTTPResponseEncoder(),
@@ -453,8 +452,9 @@ final public class Netbot: @unchecked Sendable {
                 logger: Logger(label: "io.HTTP.capture")
               ),
               HTTPIOTransformer<HTTPRequestHead>(),
+              localGlue,
             ]
-          try await channel.pipeline.addHandlers(handlers, position: .after(recognizer))
+          try await channel.pipeline.addHandlers(handlers)
 
           handlers =
             [
@@ -465,12 +465,12 @@ final public class Netbot: @unchecked Sendable {
                 logger: Logger(label: "io.HTTP.capture")
               ),
               HTTPIOTransformer<HTTPResponseHead>(),
+              peerGlue,
             ]
-          try await peer.channel.pipeline.addHandlers(handlers, position: peer.position)
+          try await peer.pipeline.addHandlers(handlers)
         }
         return promise.futureResult
-      },
-      position: master.position
+      }
     )
   }
 
