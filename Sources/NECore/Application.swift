@@ -89,6 +89,8 @@ final public class Netbot: @unchecked Sendable {
 
   @Protected private var mutableState: MutableState = MutableState()
 
+  private let ruleCache = LRUCache<String, ParsableRule>(capacity: 100)
+
   private var certificatePool: CertificatePool {
     get throws {
       if $mutableState.certificatePool == nil {
@@ -286,10 +288,14 @@ final public class Netbot: @unchecked Sendable {
       metadata: ["Request": "\(address)"]
     )
 
-    var savedFinalRule: ParsableRule!
     startTime = .now()
 
-    // TODO: Fetch rule from cache.
+    var savedFinalRule: ParsableRule!
+    for pattern in patterns {
+      if let value = ruleCache.value(forKey: pattern) {
+        savedFinalRule = value
+      }
+    }
 
     if savedFinalRule == nil {
       for rule in profile.rules {
@@ -298,19 +304,22 @@ final public class Netbot: @unchecked Sendable {
           break
         }
 
-        // TODO: Store FinalRule unless Profile.rules changed.
         if rule is FinalRule {
           savedFinalRule = rule
         }
       }
-
-      // TODO: Cache rule evaluating result.
     }
 
-    precondition(
-      savedFinalRule != nil,
-      "Rules defined in profile MUST contain one and only one FinalRule."
-    )
+    guard let savedFinalRule else {
+      return try await fallback.makeConnection(logger: logger, on: eventLoop).get()
+    }
+
+    Task {
+      patterns.forEach { pattern in
+        ruleCache.setValue(savedFinalRule, forKey: pattern)
+      }
+    }
+
     logger.info(
       "Rule evaluating - \(savedFinalRule.description)",
       metadata: ["Request": "\(address)"]
