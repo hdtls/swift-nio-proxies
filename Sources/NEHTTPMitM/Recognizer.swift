@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import NIOCore
+import NIOCore
 
 public class Recognizer: ChannelInboundHandler, RemovableChannelHandler {
 
@@ -37,7 +37,6 @@ public class Recognizer: ChannelInboundHandler, RemovableChannelHandler {
 
   private let completion: (Bool, Channel) -> EventLoopFuture<Void>
 
-  @preconcurrency
   public init(
     completion: @escaping @Sendable (Bool, Channel) -> EventLoopFuture<Void>,
     recognition: @escaping @Sendable (ByteBuffer) -> Bool
@@ -93,7 +92,6 @@ final public class NIOTLSRecognizer: Recognizer {
 
   /// Initialize an instance of `NIOTLSRecognizer` with specified completion handler.
   /// - Parameter completion: Then closure that will fire when recognition has completed.
-  @preconcurrency
   public init(completion: @escaping @Sendable (Bool, Channel) -> EventLoopFuture<Void>) {
     super.init(completion: completion) {
       guard $0.readableBytes >= 6 else {
@@ -144,11 +142,22 @@ final public class NIOTLSRecognizer: Recognizer {
 /// This handler can be used in channels that are acting as the server to recognize whether channel is communicating with HTTP protocol.
 final public class PlainHTTPRecognizer: Recognizer {
 
-  @preconcurrency
   /// Initialize an instance of `PlainHTTPRecognizer` with specified completion handler.
   /// - Parameter completion: Then closure that will fire when recognition has completed.
   public init(completion: @escaping @Sendable (Bool, Channel) -> EventLoopFuture<Void>) {
-    super.init(completion: completion) { _ in
+    super.init(completion: completion) {
+      // GET /uri HTTP/1.1\r\n
+      let crlf = "\r\n"
+      let contents = String(buffer: $0)
+      guard contents.contains(crlf), let firstLine = contents.components(separatedBy: crlf).first
+      else {
+        return false
+      }
+
+      let components = firstLine.components(separatedBy: .whitespaces)
+      guard components.count == 3, components[2].hasPrefix("HTTP/") else {
+        return false
+      }
       return true
     }
   }
