@@ -84,10 +84,25 @@ final public class Netbot: @unchecked Sendable {
 
     var services: [(Channel, ServerQuiescingHelper, EventLoopPromise<Void>)] = []
 
-    var certCache: CertCache?
+    var certificatePool: CertificatePool?
   }
 
   @Protected private var mutableState: MutableState = MutableState()
+
+  private var certificatePool: CertificatePool {
+    get throws {
+      if $mutableState.certificatePool == nil {
+        guard let base64String = profile.manInTheMiddleSettings.base64EncodedP12String else {
+          throw NIOSSLError.failedToLoadCertificate
+        }
+        $mutableState.certificatePool = try CertificatePool(
+          base64Encoded: base64String,
+          passphrase: profile.manInTheMiddleSettings.passphrase
+        )
+      }
+      return $mutableState.certificatePool!
+    }
+  }
 
   /// Initialize an instance of `Netbot` with specified profile logger and outboundMode.
   ///
@@ -103,12 +118,7 @@ final public class Netbot: @unchecked Sendable {
     #else
     self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
     #endif
-    self.outboundMode = outboundMode
-    self.mutableState = MutableState(
-      certCache: try? CertCache(
-        manInTheMiddleSettings: profile.manInTheMiddleSettings
-      )
-    )
+    self.mutableState = MutableState(outboundMode: outboundMode)
   }
 
   /// Run VPN servers and wait for shutdown.
@@ -188,9 +198,6 @@ final public class Netbot: @unchecked Sendable {
         let completion: @Sendable (RequestInfo) -> EventLoopFuture<Void> = { req in
           let promise = eventLoop.makePromise(of: Void.self)
           promise.completeWithTask {
-            //            guard req.address.host?.contains("baidu.com") ?? false else {
-            //              throw RejectByRuleError()
-            //            }
             // Create client channel to write data to remote proxy server.
             let peer = try await self.initializePeer(forTarget: req.address, eventLoop: eventLoop)
 
@@ -381,20 +388,10 @@ final public class Netbot: @unchecked Sendable {
       return
     }
 
-    if $mutableState.certCache == nil {
-      // Lazy load
-      $mutableState.certCache = try CertCache(
-        manInTheMiddleSettings: profile.manInTheMiddleSettings
-      )
-    }
-
     // Find whether need perform HTTP MitM action for this hostname, if value exists, then prepare
     // HTTP MitM pipeline else just return and HTTP capture should also be ignored because in this
     // situation the connection is HTTPS request, capture http body has no effect.
-    guard
-      let (certificateChain, privateKey) = try $mutableState.certCache?.value(
-        forKey: serverHostname
-      )
+    guard let (certificateChain, privateKey) = try certificatePool.value(forKey: serverHostname)
     else {
       return
     }
