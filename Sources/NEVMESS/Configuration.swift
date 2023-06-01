@@ -50,7 +50,7 @@ public struct Configuration: Sendable {
     self.algorithm = algorithm == .zero ? .none : algorithm
 
     var options: StreamOptions = .chunked
-    if algorithm == .aes128gcm || algorithm == .chacha20poly1305 || algorithm == .none {
+    if algorithm == .aes128Gcm || algorithm == .chaCha20Poly1305 || algorithm == .none {
       options.insert(.masking)
     }
 

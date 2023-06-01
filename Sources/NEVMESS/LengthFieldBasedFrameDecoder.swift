@@ -48,7 +48,7 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
     -> DecodingState
   {
     switch configuration.algorithm {
-    case .aes128gcm, .chacha20poly1305:
+    case .aes128Gcm, .chaCha20Poly1305:
       guard let size = try parseLengthField(context: context, buffer: &buffer) else {
         return .needMoreData
       }
@@ -122,7 +122,7 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
       Array($0) + Array(self.nonce.prefix(12).suffix(10))
     }
 
-    if configuration.algorithm == .aes128gcm {
+    if configuration.algorithm == .aes128Gcm {
       let sealedBox = try AES.GCM.SealedBox.init(combined: nonce + frameLengthData)
       return try AES.GCM.open(sealedBox, using: symmetricKey).withUnsafeBytes {
         ($0.load(as: UInt16.self).bigEndian + UInt16(overhead), padding)
@@ -169,7 +169,7 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
       nonce + (buffer.readBytes(length: Int(size.frameLength))?.dropLast(size.padding) ?? [])
 
     var frame: Data
-    if configuration.algorithm == .aes128gcm {
+    if configuration.algorithm == .aes128Gcm {
       frame = try AES.GCM.open(.init(combined: combined), using: .init(data: symmetricKey))
     } else {
       let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)

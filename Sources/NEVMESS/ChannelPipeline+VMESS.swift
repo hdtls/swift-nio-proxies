@@ -60,7 +60,7 @@ extension ChannelPipeline.SynchronousOperations {
 
     let configuration: Configuration = .init(
       id: username,
-      algorithm: .aes128gcm,
+      algorithm: .aes128Gcm,
       command: .tcp,
       options: .masking
     )

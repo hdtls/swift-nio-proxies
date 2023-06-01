@@ -40,7 +40,7 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
 
   public func encode(data: ByteBuffer, out: inout ByteBuffer) throws {
     switch configuration.algorithm {
-    case .aes128gcm, .chacha20poly1305:
+    case .aes128Gcm, .chaCha20Poly1305:
       out.writeBytes(try prepareFrame(data: data))
     case .aes128cfb, .none, .zero:
       fatalError(
@@ -88,7 +88,7 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
 
       var frame: Data = .init()
 
-      if configuration.algorithm == .aes128gcm {
+      if configuration.algorithm == .aes128Gcm {
         let sealedBox = try AES.GCM.seal(
           message,
           using: .init(data: symmetricKey),
@@ -148,7 +148,7 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
           info: [Data("auth_len".utf8)]
         )
 
-        if configuration.algorithm == .aes128gcm {
+        if configuration.algorithm == .aes128Gcm {
           let sealedBox = try AES.GCM.seal(
             $0,
             using: symmetricKey,

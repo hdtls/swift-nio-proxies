@@ -32,7 +32,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
   private let forceAEADDecoding: Bool
 
-  private var response: Response?
+  private var response: VMESSResponseHead?
 
   public init(
     authenticationCode: UInt8,
@@ -74,7 +74,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
   /// - Parameter data: The data used to parse response head part.
   /// - Returns: Response object contains parsed response head fields.
   private func parseHeadPart(context: ChannelHandlerContext, data: inout ByteBuffer) throws
-    -> Response?
+    -> VMESSResponseHead?
   {
     // Cursor used to recoverty data.
     // When we had read some bytes but that is not enough to parse as response
@@ -94,7 +94,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
       }
 
       // 2 byte packet length data and 16 overhead
-      let overhead = Algorithm.aes128gcm.overhead
+      let overhead = Algorithm.aes128Gcm.overhead
       var readLength = 2 + overhead
       guard data.readableBytes >= readLength else {
         return nil
@@ -142,12 +142,11 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
       let commandCode = headPartData.removeFirst()
 
-      var response = Response.init(
+      var response = VMESSResponseHead.init(
         authenticationCode: authenticationCode,
         options: options,
         commandCode: commandCode,
-        command: nil,
-        body: nil
+        command: nil
       )
 
       guard commandCode != 0 else {
@@ -189,12 +188,11 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
       let commandCode = headPartData.removeFirst()
 
-      var response = Response.init(
+      var response = VMESSResponseHead.init(
         authenticationCode: authenticationCode,
         options: options,
         commandCode: commandCode,
-        command: nil,
-        body: nil
+        command: nil
       )
 
       guard commandCode != 0 else {
@@ -239,7 +237,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
   ///   - commandCode: The command code.
   ///   - data: The data contains command details.
   /// - Returns: Parsed response command.
-  private func parseCommand(commandCode: UInt8, data: Data) throws -> ResponseCommand? {
+  private func parseCommand(commandCode: UInt8, data: Data) throws -> Optional<any ResponseCommand> {
     var mutableData = data
 
     let commandLength = Int(mutableData.removeFirst())
