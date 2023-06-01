@@ -134,8 +134,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
       assert(headPartData.count >= 4)
 
       guard authenticationCode == headPartData.removeFirst() else {
-        // FIXME: FAILED TO VALIDATE RESPONSE
-        throw CodingError.payloadTooLarge
+        throw VMESSError.authenticationFailure
       }
 
       let options = StreamOptions.init(rawValue: headPartData.removeFirst())
@@ -180,8 +179,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
       assert(headPartData.count == outLength)
 
       guard authenticationCode == headPartData.removeFirst() else {
-        // FIXME: FAILED TO VALIDATE RESPONSE
-        throw CodingError.payloadTooLarge
+        throw VMESSError.authenticationFailure
       }
 
       let options = StreamOptions.init(rawValue: headPartData.removeFirst())
@@ -247,8 +245,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
     }
 
     guard mutableData.count > 4, mutableData.count >= commandLength else {
-      // TODO: Specified Length Error
-      throw CodingError.invalidPacketSize
+      throw CodingError.incorrectDataSize
     }
 
     let actualAuthCode = mutableData.prefix(upTo: 4).withUnsafeBytes {
@@ -258,20 +255,19 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
     let expectedAuthCode = commonFNV1a(mutableData[4...])
 
     if actualAuthCode != expectedAuthCode {
-      // TODO: Specified Verify Error
-      throw CodingError.invalidPacketSize
+      throw VMESSError.authenticationFailure
     }
 
     switch commandCode {
     case 1:
       mutableData = mutableData.dropFirst(4)
       guard !mutableData.isEmpty else {
-        throw CodingError.invalidPacketSize
+        throw CodingError.incorrectDataSize
       }
 
       let addressLength = Int(mutableData.removeFirst())
       guard mutableData.count >= addressLength else {
-        throw CodingError.invalidPacketSize
+        throw CodingError.incorrectDataSize
       }
 
       var address: NetAddress?
@@ -283,7 +279,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
       // Parse port
       guard mutableData.count >= 2 else {
-        throw CodingError.invalidPacketSize
+        throw CodingError.incorrectDataSize
       }
       let port = mutableData.prefix(2).withUnsafeBytes {
         $0.load(as: in_port_t.self)
@@ -302,7 +298,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
       // Parse ID
       guard mutableData.count >= MemoryLayout<UUID>.size else {
-        throw CodingError.invalidPacketSize
+        throw CodingError.incorrectDataSize
       }
       let id = mutableData.prefix(MemoryLayout<UUID>.size).withUnsafeBytes {
         $0.load(as: UUID.self)
@@ -311,7 +307,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
       // Parse countOfAlterIDs
       guard mutableData.count >= 2 else {
-        throw CodingError.invalidPacketSize
+        throw CodingError.incorrectDataSize
       }
       let countOfAlterIDs = mutableData.prefix(2).withUnsafeBytes {
         $0.load(as: UInt16.self).bigEndian
@@ -320,7 +316,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
       // Parse level
       guard mutableData.count >= 2 else {
-        throw CodingError.invalidPacketSize
+        throw CodingError.incorrectDataSize
       }
       let level = mutableData.prefix(2).withUnsafeBytes {
         UInt32($0.load(as: UInt16.self))
@@ -329,7 +325,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
       // Parse valid time
       guard mutableData.count >= 1 else {
-        throw CodingError.invalidPacketSize
+        throw CodingError.incorrectDataSize
       }
 
       return SwitchAccountCommand.init(
@@ -340,8 +336,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
         validMin: mutableData.removeFirst()
       )
     default:
-      // TODO: Specified Unsupported Error
-      throw CodingError.invalidPacketSize
+      throw CodingError.operationUnsupported
     }
   }
 
@@ -350,7 +345,7 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
   /// - Returns: Parsed address object.
   private func parseAddress(data: Data) throws -> NetAddress {
     guard let string = String(data: data, encoding: .utf8), !string.isEmpty else {
-      throw SocketAddressError.unsupported
+      throw SocketAddressError.failedToParseIPString("")
     }
 
     guard string.isIPAddress() else {

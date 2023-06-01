@@ -43,9 +43,7 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
     case .aes128Gcm, .chaCha20Poly1305:
       out.writeBytes(try prepareFrame(data: data))
     case .aes128cfb, .none, .zero:
-      fatalError(
-        "\(self) \(#function) for \(configuration.algorithm) not yet implemented."
-      )
+      throw CodingError.operationUnsupported
     }
   }
 
@@ -58,7 +56,7 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
     // TCP
     let maxAllowedMemorySize = 64 * 1024 * 1024
     guard data.readableBytes + 10 <= maxAllowedMemorySize else {
-      throw CodingError.payloadTooLarge
+      throw CodingError.incorrectDataSize
     }
 
     let overhead = configuration.algorithm.overhead
@@ -106,7 +104,7 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
       }
 
       guard packetLengthSize + frame.count + padding <= 2048 else {
-        throw CodingError.payloadTooLarge
+        throw CodingError.incorrectDataSize
       }
 
       let frameLengthData = try prepareFrameLengthData(

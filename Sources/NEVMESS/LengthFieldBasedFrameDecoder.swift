@@ -62,9 +62,7 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
 
       return .continue
     case .aes128cfb, .none, .zero:
-      fatalError(
-        "\(self) \(#function) for \(configuration.algorithm) not yet implemented."
-      )
+      throw CodingError.operationUnsupported
     }
   }
 

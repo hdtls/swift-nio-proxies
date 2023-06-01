@@ -12,9 +12,18 @@
 //
 //===----------------------------------------------------------------------===//
 
-enum CodingError: Error {
+public enum VMESSError: Error {
 
-  case payloadTooLarge
+  case authenticationFailure
 
-  case invalidPacketSize
+  case operationUnsupported
+}
+
+public enum CodingError: Error {
+
+  case typeMismatch(Any.Type, Any)
+
+  case incorrectDataSize
+
+  case operationUnsupported
 }
