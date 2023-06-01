@@ -12,11 +12,16 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
 import NEMisc
 
-/// `ProtocolVersion` defines VMESS protocol version.
-public struct ProtocolVersion: Hashable, RawRepresentable, Sendable {
+#if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
+import Foundation
+#else
+@preconcurrency import Foundation
+#endif
+
+/// `Version` defines VMESS protocol version.
+public struct Version: Hashable, RawRepresentable, Sendable {
 
   public var rawValue: UInt8
 
@@ -25,36 +30,42 @@ public struct ProtocolVersion: Hashable, RawRepresentable, Sendable {
   }
 }
 
-extension ProtocolVersion {
+extension Version {
 
   /// VMESS protocol version 1.
-  public static let v1 = ProtocolVersion.init(rawValue: 0x01)
+  public static let v1 = Version.init(rawValue: 0x01)
 }
 
 /// `Algorithm` defines current VMESS supported data security algorithm.
-public enum Algorithm: UInt8, Hashable, Sendable {
+public struct ContentSecurity: RawRepresentable, Hashable, Sendable {
+
+  public var rawValue: UInt8
+
+  public init(rawValue: UInt8) {
+    self.rawValue = rawValue
+  }
+
+  public static let unknown = ContentSecurity(rawValue: 0x00)
 
   /// AES-128-CFB
-  case aes128cfb = 1
+  public static let legacy = ContentSecurity(rawValue: 0x01)
+
+  public static let automatically = ContentSecurity(rawValue: 0x02)
 
   /// AES-128-GCM
-  case aes128Gcm = 3
+  public static let encryptByAES128GCM = ContentSecurity(rawValue: 0x03)
 
   /// ChaCha20-Poly1305
-  case chaCha20Poly1305 = 4
+  public static let encryptByChaCha20Poly1305 = ContentSecurity(rawValue: 0x04)
 
-  case none = 5
+  public static let none = ContentSecurity(rawValue: 0x05)
 
-  case zero = 6
-
-  var shouldEnablePadding: Bool {
-    self == .aes128Gcm || self == .chaCha20Poly1305
-  }
+  public static let zero = ContentSecurity(rawValue: 0x06)
 
   // For `AES-GCM` and `ChaChaPoly` overhead is tag byte count.
   var overhead: Int {
     switch self {
-    case .aes128Gcm, .chaCha20Poly1305:
+    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
       return 16
     default:
       return 0
@@ -62,8 +73,8 @@ public enum Algorithm: UInt8, Hashable, Sendable {
   }
 }
 
-/// `Command` object defines VMESS command.
-public struct Command: Hashable, RawRepresentable, Sendable {
+/// `CommandCode` object defines VMESS command.
+public struct CommandCode: Hashable, RawRepresentable, Sendable {
 
   public typealias RawValue = UInt8
 
@@ -74,16 +85,16 @@ public struct Command: Hashable, RawRepresentable, Sendable {
   }
 }
 
-extension Command {
+extension CommandCode {
 
   /// The TCP command.
-  public static let tcp = Command.init(rawValue: 0x01)
+  public static let tcp = CommandCode.init(rawValue: 0x01)
 
   /// The DUP command.
-  public static let udp = Command.init(rawValue: 0x02)
+  public static let udp = CommandCode.init(rawValue: 0x02)
 
   /// The MUX command.
-  public static let mux = Command.init(rawValue: 0x03)
+  public static let mux = CommandCode.init(rawValue: 0x03)
 }
 
 /// A `StreamOptions` that contains VMESS stream setting options.
@@ -142,7 +153,7 @@ public struct SwitchAccountCommand: ResponseCommand, Hashable {
 /// A representation of the response header  frame of a VMESS response.
 public struct VMESSResponseHead: Hashable {
 
-  private final class _Storage {
+  final private class _Storage {
     /// Authentication code.
     var authenticationCode: UInt8
 
@@ -150,7 +161,7 @@ public struct VMESSResponseHead: Hashable {
     var options: StreamOptions
 
     /// Command code.
-    var commandCode: UInt8
+    var commandCode: CommandCode
 
     /// Command.
     var command: ResponseCommand?
@@ -158,7 +169,7 @@ public struct VMESSResponseHead: Hashable {
     init(
       authenticationCode: UInt8,
       options: StreamOptions,
-      commandCode: UInt8,
+      commandCode: CommandCode,
       command: ResponseCommand?
     ) {
       self.authenticationCode = authenticationCode
@@ -202,7 +213,7 @@ public struct VMESSResponseHead: Hashable {
   }
 
   /// Command code.
-  public var commandCode: UInt8 {
+  public var commandCode: CommandCode {
     get {
       return self._storage.commandCode
     }
@@ -226,7 +237,7 @@ public struct VMESSResponseHead: Hashable {
   public init(
     authenticationCode: UInt8,
     options: StreamOptions,
-    commandCode: UInt8,
+    commandCode: CommandCode,
     command: ResponseCommand?
   ) {
     self._storage = .init(

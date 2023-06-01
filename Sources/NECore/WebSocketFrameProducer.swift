@@ -17,6 +17,8 @@ import NIOWebSocket
 
 /// A handler that unmask inbound `WebSocketFrame` to `ByteBuffer` and response to control codes, it also mask all outbound
 /// `IOData` to `WebSocketFrame` with `.binary` opcode.
+///
+/// There still a problem on thread sanitize See https://github.com/apple/swift/issues/66099
 final public class WebSocketFrameProducer: ChannelInboundHandler, ChannelOutboundHandler {
 
   public typealias InboundIn = WebSocketFrame

@@ -22,16 +22,16 @@ import Foundation
 public struct Configuration: Sendable {
 
   /// The VMESS protocol version.
-  public let version: ProtocolVersion = .v1
+  public let version: Version = .v1
 
   /// ID
   public let id: UUID
 
   /// The encryption method.
-  public let algorithm: Algorithm
+  public let contentSecurity: ContentSecurity
 
   /// Request command.
-  public let command: Command
+  public let command: CommandCode
 
   /// Current request stream options.
   ///
@@ -41,24 +41,33 @@ public struct Configuration: Sendable {
   /// Initialize an instance of `Profile` with specified id, algorithm, command, and options.
   /// - Parameters:
   ///   - id: The id identifier current user.
-  ///   - algorithm: The algorithm to encryption data.
+  ///   - contentSecurity: The algorithm to encryption data.
   ///   - command: The VMESS command object.
   ///   - options: The stream options.
-  public init(id: UUID, algorithm: Algorithm, command: Command, options: StreamOptions) {
+  public init(
+    id: UUID,
+    contentSecurity: ContentSecurity,
+    command: CommandCode,
+    options: StreamOptions
+  ) {
     self.id = id
     self.command = command
-    self.algorithm = algorithm == .zero ? .none : algorithm
+    self.contentSecurity = contentSecurity == .zero ? .none : contentSecurity
 
     var options: StreamOptions = .chunked
-    if algorithm == .aes128Gcm || algorithm == .chaCha20Poly1305 || algorithm == .none {
+    if contentSecurity == .encryptByAES128GCM || contentSecurity == .encryptByChaCha20Poly1305
+      || contentSecurity == .none
+    {
       options.insert(.masking)
     }
 
-    if algorithm.shouldEnablePadding && options.contains(.masking) {
+    if (contentSecurity == .encryptByAES128GCM || contentSecurity == .encryptByChaCha20Poly1305)
+      && options.contains(.masking)
+    {
       options.insert(.padding)
     }
 
-    if algorithm == .zero {
+    if contentSecurity == .zero {
       options.remove(.chunked)
       options.remove(.masking)
     }

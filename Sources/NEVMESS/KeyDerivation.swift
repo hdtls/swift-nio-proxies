@@ -116,6 +116,8 @@ struct KDF {
     info: [Info],
     outputByteCount: Int? = nil
   ) -> SymmetricKey where Info: DataProtocol {
+    let kDFSaltConstVMessAEADKDF = Data("VMess AEAD KDF".utf8)
+
     var updatable = __HMAC(H: { SHA256() }, key: .init(data: kDFSaltConstVMessAEADKDF))
 
     for path in info {

@@ -27,3 +27,5 @@ public enum CodingError: Error {
 
   case operationUnsupported
 }
+
+struct VMESSNotImplementedError: Error {}

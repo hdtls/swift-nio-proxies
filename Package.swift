@@ -21,6 +21,7 @@ let swiftArgumentParser: Target.Dependency = .product(
 )
 let swiftNIO: Target.Dependency = .product(name: "NIO", package: "swift-nio")
 let swiftNIOCore: Target.Dependency = .product(name: "NIOCore", package: "swift-nio")
+let swiftNIOEmbedded: Target.Dependency = .product(name: "NIOEmbedded", package: "swift-nio")
 let swiftNIOHTTP1: Target.Dependency = .product(name: "NIOHTTP1", package: "swift-nio")
 let swiftNIOPosix: Target.Dependency = .product(name: "NIOPosix", package: "swift-nio")
 let swiftNIOSSL: Target.Dependency = .product(name: "NIOSSL", package: "swift-nio-ssl")

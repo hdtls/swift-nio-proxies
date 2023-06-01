@@ -13,12 +13,12 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-@_exported import Logging
+import Logging
 import NEHTTP
 import NESOCKS
 import NESS
 import NEVMESS
-@_exported import NIOCore
+import NIOCore
 import NIOPosix
 import NIOSSL
 import NIOWebSocket
@@ -308,9 +308,23 @@ extension ChannelPipeline {
         destinationAddress: destinationAddress
       )
     case .vmess:
+      var symmetricKey = Array(repeating: UInt8.zero, count: 16)
+      symmetricKey.withUnsafeMutableBytes {
+        $0.initializeWithRandomBytes(count: 16)
+      }
+      var nonce = symmetricKey
+      nonce.withUnsafeMutableBytes {
+        $0.initializeWithRandomBytes(count: 16)
+      }
       return addVMESSClientHandlers(
         position: position,
-        username: UUID(uuidString: proxy.username) ?? UUID(),
+        authenticationCode: .random(in: 0 ... .max),
+        contentSecurity: .encryptByAES128GCM,
+        symmetricKey: symmetricKey,
+        nonce: nonce,
+        user: UUID(uuidString: proxy.username) ?? UUID(),
+        commandCode: .tcp,
+        options: .masking,
         destinationAddress: destinationAddress
       )
     }

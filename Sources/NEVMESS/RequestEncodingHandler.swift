@@ -14,10 +14,10 @@
 
 import Crypto
 import Foundation
-@_exported import NEMisc
-@_exported import NEPrettyBytes
+import NEMisc
+import NEPrettyBytes
 import NESHAKE128
-@_exported import NIOCore
+import NIOCore
 
 final public class RequestEncodingHandler: ChannelOutboundHandler {
 
@@ -174,14 +174,14 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
   /// - Returns: Encrypted instruction part data.
   private func prepareInstructionPart(timestamp: UInt64) throws -> Data {
     var buffer = ByteBuffer()
-    buffer.writeInteger(ProtocolVersion.v1.rawValue)
+    buffer.writeInteger(Version.v1.rawValue)
     buffer.writeBytes(nonce)
     buffer.writeBytes(symmetricKey)
     buffer.writeInteger(authenticationCode)
     buffer.writeInteger(configuration.options.rawValue)
 
     let padding = UInt8.random(in: 0...16)
-    buffer.writeInteger((padding << 4) | configuration.algorithm.rawValue)
+    buffer.writeInteger((padding << 4) | configuration.contentSecurity.rawValue)
     // Write zero as keeper.
     buffer.writeInteger(UInt8(0))
     buffer.writeInteger(configuration.command.rawValue)
@@ -225,10 +225,12 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
         let symmetricKey = KDF16.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
 
         info[0] = Array(kDFSaltConstVMessHeaderPayloadLengthAEADIV)
+
         let nonce = try KDF12.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
           .withUnsafeBytes { ptr in
             try AES.GCM.Nonce.init(data: ptr)
           }
+
         return try AES.GCM.seal(
           $0,
           using: symmetricKey,
@@ -242,10 +244,12 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
         let symmetricKey = KDF16.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
 
         info[0] = Array(kDFSaltConstVMessHeaderPayloadAEADIV)
+
         let nonce = try KDF12.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
           .withUnsafeBytes { ptr in
             try AES.GCM.Nonce.init(data: ptr)
           }
+
         return try AES.GCM.seal(
           $0,
           using: symmetricKey,

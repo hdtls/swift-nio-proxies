@@ -39,10 +39,10 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
   }
 
   public func encode(data: ByteBuffer, out: inout ByteBuffer) throws {
-    switch configuration.algorithm {
-    case .aes128Gcm, .chaCha20Poly1305:
+    switch configuration.contentSecurity {
+    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
       out.writeBytes(try prepareFrame(data: data))
-    case .aes128cfb, .none, .zero:
+    default:
       throw CodingError.operationUnsupported
     }
   }
@@ -59,14 +59,12 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
       throw CodingError.incorrectDataSize
     }
 
-    let overhead = configuration.algorithm.overhead
-
     let packetLengthSize =
-      configuration.options.contains(.authenticatedLength) ? 2 + overhead : 2
+      configuration.options.contains(.authenticatedLength) ? 18 : 2
 
     let maxPadding = configuration.options.shouldPadding ? 64 : 0
 
-    let maxLength = 2048 - overhead - packetLengthSize - maxPadding
+    let maxLength = 2048 - 16 - packetLengthSize - maxPadding
 
     var frameBuffer: Data = .init()
 
@@ -86,7 +84,7 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
 
       var frame: Data = .init()
 
-      if configuration.algorithm == .aes128Gcm {
+      if configuration.contentSecurity == .encryptByAES128GCM {
         let sealedBox = try AES.GCM.seal(
           message,
           using: .init(data: symmetricKey),
@@ -139,14 +137,14 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
   private func prepareFrameLengthData(frameLength: Int, nonce: [UInt8]) throws -> Data {
     if configuration.options.contains(.authenticatedLength) {
       return try withUnsafeBytes(
-        of: UInt16(frameLength - configuration.algorithm.overhead).bigEndian
+        of: UInt16(frameLength - 16).bigEndian
       ) {
         var symmetricKey = KDF16.deriveKey(
           inputKeyMaterial: .init(data: symmetricKey),
           info: [Data("auth_len".utf8)]
         )
 
-        if configuration.algorithm == .aes128Gcm {
+        if configuration.contentSecurity == .encryptByAES128GCM {
           let sealedBox = try AES.GCM.seal(
             $0,
             using: symmetricKey,

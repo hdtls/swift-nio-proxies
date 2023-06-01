@@ -12,16 +12,34 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Crypto
 import Foundation
-@_exported import NEMisc
+import NEMisc
 import NEPrettyBytes
-@_exported import NIOCore
+import NIOCore
 
 extension ChannelPipeline {
 
+  /// Configure a `ChannelPipeline` for use as a VMESS proxy client.
+  /// - Parameters:
+  ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy client handlers. Defaults to `.last`.
+  ///   - authenticationCode: VMESS head authentication code. Defaults to `UInt8.random(in: 0 ... .max)`.
+  ///   - contentSecurity: VMESS data stream security settings..
+  ///   - symmetricKey: Symmetric key for encryption/decryption.
+  ///   - nonce: Nonce for encryption/decryption.
+  ///   - user: VMESS client ID.
+  ///   - commandCode: Command code for VMESS request/response. Defaults to `.tcp`.
+  ///   - options: VMESS stream options. Defaults to `.masking`.
+  ///   - destinationAddress: The destination for proxy connection.
   public func addVMESSClientHandlers(
     position: Position = .last,
-    username: UUID,
+    authenticationCode: UInt8 = .random(in: 0 ... .max),
+    contentSecurity: ContentSecurity,
+    symmetricKey: [UInt8],
+    nonce: [UInt8],
+    user: UUID,
+    commandCode: CommandCode = .tcp,
+    options: StreamOptions = .masking,
     destinationAddress: NetAddress
   ) -> EventLoopFuture<Void> {
     let eventLoopFuture: EventLoopFuture<Void>
@@ -30,50 +48,75 @@ extension ChannelPipeline {
       let result = Result<Void, Error> {
         try syncOperations.addVMESSClientHandlers(
           position: position,
-          username: username,
+          authenticationCode: authenticationCode,
+          contentSecurity: contentSecurity,
+          symmetricKey: symmetricKey,
+          nonce: nonce,
+          user: user,
+          commandCode: commandCode,
+          options: options,
           destinationAddress: destinationAddress
         )
       }
       eventLoopFuture = eventLoop.makeCompletedFuture(result)
     } else {
-      eventLoopFuture = eventLoop.submit({
+      eventLoopFuture = eventLoop.submit {
         try self.syncOperations.addVMESSClientHandlers(
           position: position,
-          username: username,
+          authenticationCode: authenticationCode,
+          contentSecurity: contentSecurity,
+          symmetricKey: symmetricKey,
+          nonce: nonce,
+          user: user,
+          commandCode: commandCode,
+          options: options,
           destinationAddress: destinationAddress
         )
-      })
+      }
     }
-
     return eventLoopFuture
   }
 }
 
 extension ChannelPipeline.SynchronousOperations {
 
+  /// Configure a `ChannelPipeline` for use as a VMESS proxy client.
+  /// - Parameters:
+  ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy client handlers. Defaults to `.last`.
+  ///   - authenticationCode: VMESS head authentication code. Defaults to `UInt8.random(in: 0 ... .max)`.
+  ///   - contentSecurity: VMESS data stream security settings..
+  ///   - symmetricKey: Symmetric key for encryption/decryption.
+  ///   - nonce: Nonce for encryption/decryption.
+  ///   - user: VMESS client ID.
+  ///   - commandCode: Command code for VMESS request/response. Defaults to `.tcp`.
+  ///   - options: VMESS stream options. Defaults to `.masking`.
+  ///   - destinationAddress: The destination for proxy connection.
   public func addVMESSClientHandlers(
     position: ChannelPipeline.Position = .last,
-    username: UUID,
+    authenticationCode: UInt8 = .random(in: 0 ... .max),
+    contentSecurity: ContentSecurity,
+    symmetricKey: [UInt8],
+    nonce: [UInt8],
+    user: UUID,
+    commandCode: CommandCode = .tcp,
+    options: StreamOptions = .masking,
     destinationAddress: NetAddress
   ) throws {
     eventLoop.assertInEventLoop()
 
-    let configuration: Configuration = .init(
-      id: username,
-      algorithm: .aes128Gcm,
-      command: .tcp,
-      options: .masking
-    )
+    guard symmetricKey.count == 16 else {
+      throw CryptoKitError.incorrectKeySize
+    }
+    guard nonce.count == 16 else {
+      throw CryptoKitError.incorrectParameterSize
+    }
 
-    var symmetricKey = Array(repeating: UInt8.zero, count: 16)
-    symmetricKey.withUnsafeMutableBytes {
-      $0.initializeWithRandomBytes(count: 16)
-    }
-    var nonce = Array(repeating: UInt8.zero, count: 16)
-    nonce.withUnsafeMutableBytes {
-      $0.initializeWithRandomBytes(count: 16)
-    }
-    let authenticationCode = UInt8.random(in: 0...UInt8.max)
+    let configuration = Configuration(
+      id: user,
+      contentSecurity: contentSecurity,
+      command: commandCode,
+      options: options
+    )
 
     let outboundHandler = RequestEncodingHandler(
       authenticationCode: authenticationCode,
@@ -83,22 +126,17 @@ extension ChannelPipeline.SynchronousOperations {
       taskAddress: destinationAddress
     )
 
-    let responseDecoder = ResponseHeaderDecoder(
+    let messageDecoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
       authenticationCode: authenticationCode,
+      contentSecurity: contentSecurity,
       symmetricKey: symmetricKey,
       nonce: nonce,
-      configuration: configuration
-    )
-
-    let frameDecoder = LengthFieldBasedFrameDecoder(
-      symmetricKey: symmetricKey,
-      nonce: nonce,
-      configuration: configuration
+      options: options
     )
 
     let handlers: [ChannelHandler] = [
-      ByteToMessageHandler(responseDecoder),
-      ByteToMessageHandler(frameDecoder),
+      ByteToMessageHandler(messageDecoder),
+      VMESSClientHandler(),
       outboundHandler,
     ]
 
