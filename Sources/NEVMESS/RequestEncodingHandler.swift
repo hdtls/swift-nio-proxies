@@ -27,9 +27,9 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
 
   private let authenticationCode: UInt8
 
-  private let symmetricKey: SecureBytes
+  private let symmetricKey: [UInt8]
 
-  private let nonce: SecureBytes
+  private let nonce: [UInt8]
 
   /// Request encoder configuration object.
   private let configuration: Configuration
@@ -71,8 +71,8 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
   ///   - destinationAddress: The requet address.
   public init(
     authenticationCode: UInt8,
-    symmetricKey: SecureBytes,
-    nonce: SecureBytes,
+    symmetricKey: [UInt8],
+    nonce: [UInt8],
     configuration: Configuration,
     forceAEADEncoding: Bool = true,
     taskAddress: NetAddress
@@ -191,7 +191,11 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
     }
 
     if padding > 0 {
-      buffer.writeBytes(SecureBytes(count: Int(padding)))
+      var paddingData = Array(repeating: UInt8.zero, count: Int(padding))
+      paddingData.withUnsafeMutableBytes {
+        $0.initializeWithRandomBytes(count: Int(padding))
+      }
+      buffer.writeBytes(paddingData)
     }
 
     buffer.writeInteger(
@@ -203,7 +207,10 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
     let inputKeyMaterial = generateCmdKey(configuration.id)
     if forceAEADEncoding {
       let authenticatedData = try generateAuthenticatedData(inputKeyMaterial)
-      let randomPath = Array(SecureBytes(count: 8))
+      var randomPath = Array(repeating: UInt8.zero, count: 8)
+      randomPath.withUnsafeMutableBytes {
+        $0.initializeWithRandomBytes(count: 8)
+      }
 
       var info = [
         [],
@@ -287,7 +294,11 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
       of: UInt64(Date().timeIntervalSince1970).bigEndian,
       Array.init
     )
-    byteBuffer += Array(SecureBytes(count: 4))
+    var randomBytes = Array(repeating: UInt8.zero, count: 4)
+    randomBytes.withUnsafeMutableBytes {
+      $0.initializeWithRandomBytes(count: 4)
+    }
+    byteBuffer += randomBytes
     byteBuffer += withUnsafeBytes(of: CRC32.checksum(byteBuffer).bigEndian, Array.init)
 
     let inputKeyMaterial = KDF16.deriveKey(

@@ -32,7 +32,10 @@ final class ResponseDecoderTests: XCTestCase {
     )
     let channel = EmbeddedChannel(handler: handler)
     var nonce = [UInt8](repeating: 0, count: 12)
-    let salt = SecureBytes(count: 16)
+    var salt = Array(repeating: UInt8.zero, count: 16)
+    salt.withUnsafeMutableBytes {
+      $0.initializeWithRandomBytes(count: 16)
+    }
     let symmetricKey = hkdfDerivedSymmetricKey(
       secretKey: passwordReference,
       salt: salt,
@@ -87,7 +90,10 @@ final class ResponseDecoderTests: XCTestCase {
     )
     let channel = EmbeddedChannel(handler: handler)
     var nonce = [UInt8](repeating: 0, count: 12)
-    let salt = SecureBytes(count: 32)
+    var salt = Array(repeating: UInt8.zero, count: 32)
+    salt.withUnsafeMutableBytes {
+      $0.initializeWithRandomBytes(count: 32)
+    }
     let symmetricKey = hkdfDerivedSymmetricKey(
       secretKey: passwordReference,
       salt: salt,
@@ -142,7 +148,10 @@ final class ResponseDecoderTests: XCTestCase {
     )
     let channel = EmbeddedChannel(handler: handler)
     var nonce = [UInt8](repeating: 0, count: 12)
-    let salt = SecureBytes(count: 32)
+    var salt = Array(repeating: UInt8.zero, count: 32)
+    salt.withUnsafeMutableBytes {
+      $0.initializeWithRandomBytes(count: 32)
+    }
     let symmetricKey = hkdfDerivedSymmetricKey(
       secretKey: passwordReference,
       salt: salt,

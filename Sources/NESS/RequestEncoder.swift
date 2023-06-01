@@ -51,7 +51,10 @@ final public class RequestEncoder: ChannelOutboundHandler {
     do {
       if symmetricKey == nil {
         let byteCount = algorithm == .aes128Gcm ? 16 : 32
-        let saltBytes = SecureBytes(count: byteCount)
+        var saltBytes = Array(repeating: UInt8.zero, count: byteCount)
+        saltBytes.withUnsafeMutableBytes {
+          $0.initializeWithRandomBytes(count: byteCount)
+        }
         nonce = .init(repeating: 0, count: 12)
         symmetricKey = hkdfDerivedSymmetricKey(
           secretKey: passwordReference,

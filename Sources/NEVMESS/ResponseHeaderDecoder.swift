@@ -24,9 +24,9 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
   private let authenticationCode: UInt8
 
-  private let symmetricKey: SecureBytes
+  private let symmetricKey: [UInt8]
 
-  private let nonce: SecureBytes
+  private let nonce: [UInt8]
 
   private let configuration: Configuration!
 
@@ -36,20 +36,14 @@ final public class ResponseHeaderDecoder: ByteToMessageDecoder {
 
   public init(
     authenticationCode: UInt8,
-    symmetricKey: SecureBytes,
-    nonce: SecureBytes,
+    symmetricKey: [UInt8],
+    nonce: [UInt8],
     configuration: Configuration,
     forceAEADDecoding: Bool = true
   ) {
-    let hash: (SecureBytes) -> SecureBytes = {
-      var hasher = SHA256()
-      hasher.update(data: $0)
-      return SecureBytes(hasher.finalize().prefix(16))
-    }
-
     self.authenticationCode = authenticationCode
-    self.symmetricKey = hash(symmetricKey)
-    self.nonce = hash(nonce)
+    self.symmetricKey = Array(SHA256.hash(data: symmetricKey).prefix(16))
+    self.nonce = Array(SHA256.hash(data: nonce).prefix(16))
     self.configuration = configuration
     self.forceAEADDecoding = forceAEADDecoding
   }

@@ -22,8 +22,8 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
 
   public typealias OutboundIn = ByteBuffer
 
-  private let symmetricKey: SecureBytes
-  private let nonce: SecureBytes
+  private let symmetricKey: [UInt8]
+  private let nonce: [UInt8]
   private let configuration: Configuration
   private var frameOffset: UInt16 = 0
   private lazy var shake128: SHAKE128 = {
@@ -32,7 +32,7 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
     return shake128
   }()
 
-  public init(symmetricKey: SecureBytes, nonce: SecureBytes, configuration: Configuration) {
+  public init(symmetricKey: [UInt8], nonce: [UInt8], configuration: Configuration) {
     self.configuration = configuration
     self.symmetricKey = symmetricKey
     self.nonce = nonce
@@ -116,7 +116,12 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
 
       frameBuffer.append(frameLengthData)
       frameBuffer.append(frame)
-      frameBuffer.append(contentsOf: SecureBytes(count: padding))
+
+      var paddingData = Array(repeating: UInt8.zero, count: padding)
+      paddingData.withUnsafeMutableBytes {
+        $0.initializeWithRandomBytes(count: padding)
+      }
+      frameBuffer.append(contentsOf: paddingData)
 
       frameOffset &+= 1
     }

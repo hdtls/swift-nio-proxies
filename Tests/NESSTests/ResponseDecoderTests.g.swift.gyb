@@ -58,7 +58,10 @@ final class ResponseDecoderTests: XCTestCase {
     )
     let channel = EmbeddedChannel(handler: handler)
     var nonce = [UInt8](repeating: 0, count: 12)
-    let salt = SecureBytes(count: ${cipher['salt_size']})
+    var salt = Array(repeating: UInt8.zero, count: ${cipher['salt_size']})
+    salt.withUnsafeMutableBytes {
+      $0.initializeWithRandomBytes(count: ${cipher['salt_size']})
+    }
     let symmetricKey = hkdfDerivedSymmetricKey(
       secretKey: passwordReference,
       salt: salt,

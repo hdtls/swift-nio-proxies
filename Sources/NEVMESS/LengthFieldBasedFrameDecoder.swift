@@ -24,8 +24,8 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
 
   public typealias InboundOut = ByteBuffer
 
-  private let symmetricKey: SecureBytes
-  private let nonce: SecureBytes
+  private let symmetricKey: [UInt8]
+  private let nonce: [UInt8]
   private let configuration: Configuration
   private var frameOffset: UInt16 = 0
 
@@ -38,15 +38,9 @@ final public class LengthFieldBasedFrameDecoder: ByteToMessageDecoder {
     return shake128
   }()
 
-  public init(symmetricKey: SecureBytes, nonce: SecureBytes, configuration: Configuration) {
-    let hash: (SecureBytes) -> SecureBytes = {
-      var hasher = SHA256()
-      hasher.update(data: $0)
-      return SecureBytes(hasher.finalize().prefix(16))
-    }
-
-    self.symmetricKey = hash(symmetricKey)
-    self.nonce = hash(nonce)
+  public init(symmetricKey: [UInt8], nonce: [UInt8], configuration: Configuration) {
+    self.symmetricKey = Array(SHA256.hash(data: symmetricKey).prefix(16))
+    self.nonce = Array(SHA256.hash(data: nonce).prefix(16))
     self.configuration = configuration
   }
 

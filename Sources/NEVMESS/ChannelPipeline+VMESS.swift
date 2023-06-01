@@ -65,10 +65,14 @@ extension ChannelPipeline.SynchronousOperations {
       options: .masking
     )
 
-    let symmetricKey = SecureBytes(count: 16)
-
-    let nonce = SecureBytes(count: 16)
-
+    var symmetricKey = Array(repeating: UInt8.zero, count: 16)
+    symmetricKey.withUnsafeMutableBytes {
+      $0.initializeWithRandomBytes(count: 16)
+    }
+    var nonce = Array(repeating: UInt8.zero, count: 16)
+    nonce.withUnsafeMutableBytes {
+      $0.initializeWithRandomBytes(count: 16)
+    }
     let authenticationCode = UInt8.random(in: 0...UInt8.max)
 
     let outboundHandler = RequestEncodingHandler(
