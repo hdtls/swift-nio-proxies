@@ -29,7 +29,8 @@ class KDFTests: XCTestCase {
         Array("Demo Path for KDF Value Test".utf8),
         Array("Demo Path for KDF Value Test2".utf8),
         Array("Demo Path for KDF Value Test3".utf8),
-      ]
+      ],
+      outputByteCount: 32
     )
     result.withUnsafeBytes {
       XCTAssertEqual($0.hexString, expectedKey)

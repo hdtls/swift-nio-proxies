@@ -160,16 +160,15 @@ private class BetterVMESSParser {
   private func parseHeadFromAEADMessage(_ message: inout ByteBuffer) throws -> VMESSResponseHead? {
     let kDFSaltConstAEADRespHeaderLenKey = Data("AEAD Resp Header Len Key".utf8)
     let kDFSaltConstAEADRespHeaderLenIV = Data("AEAD Resp Header Len IV".utf8)
-    let kDFSaltConstAEADRespHeaderPayloadKey = Data("AEAD Resp Header Key".utf8)
-    let kDFSaltConstAEADRespHeaderPayloadIV = Data("AEAD Resp Header IV".utf8)
 
-    var symmetricKey = KDF16.deriveKey(
+    var symmetricKey = KDF.deriveKey(
       inputKeyMaterial: .init(data: self.symmetricKey),
-      info: [kDFSaltConstAEADRespHeaderLenKey]
+      info: kDFSaltConstAEADRespHeaderLenKey
     )
-    var nonce = KDF12.deriveKey(
+    var nonce = KDF.deriveKey(
       inputKeyMaterial: .init(data: self.nonce),
-      info: [kDFSaltConstAEADRespHeaderLenIV]
+      info: kDFSaltConstAEADRespHeaderLenIV,
+      outputByteCount: 12
     ).withUnsafeBytes {
       Array($0)
     }
@@ -193,13 +192,17 @@ private class BetterVMESSParser {
       return nil
     }
 
-    symmetricKey = KDF16.deriveKey(
+    let kDFSaltConstAEADRespHeaderPayloadKey = Data("AEAD Resp Header Key".utf8)
+    let kDFSaltConstAEADRespHeaderPayloadIV = Data("AEAD Resp Header IV".utf8)
+
+    symmetricKey = KDF.deriveKey(
       inputKeyMaterial: .init(data: self.symmetricKey),
-      info: [kDFSaltConstAEADRespHeaderPayloadKey]
+      info: kDFSaltConstAEADRespHeaderPayloadKey
     )
-    nonce = KDF12.deriveKey(
+    nonce = KDF.deriveKey(
       inputKeyMaterial: .init(data: self.nonce),
-      info: [kDFSaltConstAEADRespHeaderPayloadIV]
+      info: kDFSaltConstAEADRespHeaderPayloadIV,
+      outputByteCount: 12
     ).withUnsafeBytes {
       Array($0)
     }
@@ -415,9 +418,9 @@ private class BetterVMESSParser {
       return (Int(frameLength), padding)
     }
 
-    var symmetricKey = KDF16.deriveKey(
+    var symmetricKey = KDF.deriveKey(
       inputKeyMaterial: .init(data: symmetricKey),
-      info: [Data("auth_len".utf8)]
+      info: Data("auth_len".utf8)
     )
 
     let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {

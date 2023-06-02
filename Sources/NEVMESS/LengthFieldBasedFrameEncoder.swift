@@ -139,7 +139,7 @@ final public class LengthFieldBasedFrameEncoder: MessageToByteEncoder {
       return try withUnsafeBytes(
         of: UInt16(frameLength - 16).bigEndian
       ) {
-        var symmetricKey = KDF16.deriveKey(
+        var symmetricKey = KDF.deriveKey(
           inputKeyMaterial: .init(data: symmetricKey),
           info: [Data("auth_len".utf8)]
         )

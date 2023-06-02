@@ -222,11 +222,11 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
         of: UInt16(buffer.readableBytes).bigEndian
       ) {
         info[0] = Array(kDFSaltConstVMessHeaderPayloadLengthAEADKey)
-        let symmetricKey = KDF16.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
+        let symmetricKey = KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
 
         info[0] = Array(kDFSaltConstVMessHeaderPayloadLengthAEADIV)
 
-        let nonce = try KDF12.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
+        let nonce = try KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info, outputByteCount: 12)
           .withUnsafeBytes { ptr in
             try AES.GCM.Nonce.init(data: ptr)
           }
@@ -241,11 +241,10 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
 
       let sealedPayloadBox: AES.GCM.SealedBox = try buffer.withUnsafeReadableBytes {
         info[0] = Array(kDFSaltConstVMessHeaderPayloadAEADKey)
-        let symmetricKey = KDF16.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
+        let symmetricKey = KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
 
         info[0] = Array(kDFSaltConstVMessHeaderPayloadAEADIV)
-
-        let nonce = try KDF12.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
+        let nonce = try KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info, outputByteCount: 12)
           .withUnsafeBytes { ptr in
             try AES.GCM.Nonce.init(data: ptr)
           }
@@ -305,7 +304,7 @@ final public class RequestEncodingHandler: ChannelOutboundHandler {
     byteBuffer += randomBytes
     byteBuffer += withUnsafeBytes(of: CRC32.checksum(byteBuffer).bigEndian, Array.init)
 
-    let inputKeyMaterial = KDF16.deriveKey(
+    let inputKeyMaterial = KDF.deriveKey(
       inputKeyMaterial: key,
       info: [Array(kDFSaltConstAuthIDEncryptionKey)]
     )

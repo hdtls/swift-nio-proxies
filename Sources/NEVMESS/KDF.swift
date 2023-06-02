@@ -15,7 +15,7 @@
 import Crypto
 import Foundation
 
-private protocol Updatable {
+private protocol HashFunction {
 
   static var blockSize: Int { get }
 
@@ -23,27 +23,23 @@ private protocol Updatable {
 
   mutating func update<D: DataProtocol>(data: D)
 
-  func get() -> [UInt8]
+  func _finalize() -> [UInt8]
 }
 
-extension SHA256: Updatable {
+extension SHA256: HashFunction {
 
-  static var blockSize: Int {
-    64
-  }
+  fileprivate static let blockSize: Int = 64
 
-  func get() -> [UInt8] {
-    finalize().withUnsafeBytes { ptr in
-      Array(ptr)
-    }
+  fileprivate func _finalize() -> [UInt8] {
+    Array(finalize())
   }
 }
 
 struct KDF {
 
-  private struct __HMAC: Updatable {
+  private struct HMAC: HashFunction {
 
-    static var blockSize: Int { 64 }
+    static var blockSize: Int { SHA256.blockSize }
 
     mutating func update(bufferPointer: UnsafeRawBufferPointer) {
       innerHasher.update(bufferPointer: bufferPointer)
@@ -57,19 +53,19 @@ struct KDF {
       }
     }
 
-    func get() -> [UInt8] {
-      let buffer = innerHasher.get()
+    func _finalize() -> [UInt8] {
+      let buffer = innerHasher._finalize()
       var outerHashForFinalization = outerHasher
       buffer.withUnsafeBytes {
         outerHashForFinalization.update(bufferPointer: $0)
       }
-      return outerHashForFinalization.get()
+      return outerHashForFinalization._finalize()
     }
 
-    var outerHasher: Updatable
-    var innerHasher: Updatable
+    var outerHasher: HashFunction
+    var innerHasher: HashFunction
 
-    init<U: Updatable>(H: () -> U, key: SymmetricKey) {
+    init<U: HashFunction>(_ H: @autoclosure () -> U, key: SymmetricKey) {
       var k: ContiguousBytes
 
       if key.withUnsafeBytes({ $0.count }) == U.blockSize {
@@ -78,7 +74,7 @@ struct KDF {
         k = key.withUnsafeBytes { (keyBytes) in
           var hash = H()
           hash.update(bufferPointer: keyBytes)
-          return hash.get()
+          return hash._finalize()
         }
       } else {
         var keyArray = Array(repeating: UInt8(0), count: U.blockSize)
@@ -109,58 +105,33 @@ struct KDF {
   /// - Parameters:
   ///   - inputKeyMaterial: Input key material.
   ///   - paths: path list.
-  ///   - outputByteCount: The desired number of output bytes, if nill output all bytes, default is nil.
+  ///   - outputByteCount: The desired number of output bit count, defaults to 16 bytes.
   /// - Returns: The derived key
   static func deriveKey<Info>(
     inputKeyMaterial: SymmetricKey,
     info: [Info],
-    outputByteCount: Int? = nil
+    outputByteCount: Int = 16
   ) -> SymmetricKey where Info: DataProtocol {
     let kDFSaltConstVMessAEADKDF = Data("VMess AEAD KDF".utf8)
 
-    var updatable = __HMAC(H: { SHA256() }, key: .init(data: kDFSaltConstVMessAEADKDF))
+    var hasher = HMAC(SHA256(), key: .init(data: kDFSaltConstVMessAEADKDF))
 
     for path in info {
-      updatable = __HMAC(H: { updatable }, key: .init(data: Array(path)))
+      hasher = HMAC(hasher, key: .init(data: Array(path)))
     }
-
     inputKeyMaterial.withUnsafeBytes {
-      updatable.update(bufferPointer: $0)
+      hasher.update(bufferPointer: $0)
     }
 
-    guard let maxLength = outputByteCount else {
-      return .init(data: updatable.get())
-    }
-    return .init(data: updatable.get().prefix(maxLength))
+    return .init(data: hasher._finalize().prefix(outputByteCount))
   }
-}
 
-struct KDF12 {
-
-  /// Derives a 12 byte symmetric key using the KDF algorithm.
-  ///
-  /// - Parameters:
-  ///   - inputKeyMaterial: Input key material.
-  ///   - paths: path list.
-  ///   - outputByteCount: The desired number of output bytes, if nill output all bytes, default is nil.
-  /// - Returns: The derived key
-  static func deriveKey<Info>(inputKeyMaterial: SymmetricKey, info: [Info]) -> SymmetricKey
-  where Info: DataProtocol {
-    KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info, outputByteCount: 12)
-  }
-}
-
-struct KDF16 {
-  /// Derives a 16 byte symmetric key using the KDF algorithm.
-  ///
-  /// - Parameters:
-  ///   - inputKeyMaterial: Input key material.
-  ///   - paths: path list.
-  ///   - outputByteCount: The desired number of output bytes, if nill output all bytes, default is nil.
-  /// - Returns: The derived key
-  static func deriveKey<Info>(inputKeyMaterial: SymmetricKey, info: [Info]) -> SymmetricKey
-  where Info: DataProtocol {
-    KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info, outputByteCount: 16)
+  static func deriveKey<Info>(
+    inputKeyMaterial: SymmetricKey,
+    info: Info,
+    outputByteCount: Int = 16
+  ) -> SymmetricKey where Info: DataProtocol {
+    deriveKey(inputKeyMaterial: inputKeyMaterial, info: [info], outputByteCount: outputByteCount)
   }
 }
 
