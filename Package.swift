@@ -19,7 +19,6 @@ let swiftArgumentParser: Target.Dependency = .product(
   name: "ArgumentParser",
   package: "swift-argument-parser"
 )
-let swiftNIO: Target.Dependency = .product(name: "NIO", package: "swift-nio")
 let swiftNIOCore: Target.Dependency = .product(name: "NIOCore", package: "swift-nio")
 let swiftNIOEmbedded: Target.Dependency = .product(name: "NIOEmbedded", package: "swift-nio")
 let swiftNIOHTTP1: Target.Dependency = .product(name: "NIOHTTP1", package: "swift-nio")
@@ -115,7 +114,8 @@ let package = Package(
       name: "NECLICoreTests",
       dependencies: [
         "NECLICore",
-        swiftNIO,
+        swiftNIOCore,
+        swiftNIOEmbedded,
       ],
       exclude: ["ParsableRuleTests.g.swift.gyb"]
     ),
@@ -128,30 +128,37 @@ let package = Package(
         "NESOCKS",
         "NESS",
         "NEVMESS",
-        swiftNIO,
+        swiftNIOCore,
+        swiftNIOEmbedded,
         swiftNIOSSL,
         swiftNIOHTTP1,
         swiftNIOTransportServices,
         .product(name: "NIOWebSocket", package: "swift-nio"),
       ]
     ),
-    .testTarget(name: "NEHTTPMitMTests", dependencies: ["NEHTTPMitM", swiftNIO]),
+    .testTarget(
+      name: "NEHTTPMitMTests",
+      dependencies: ["NEHTTPMitM", swiftNIOCore, swiftNIOEmbedded]
+    ),
     .testTarget(
       name: "NEHTTPTests",
-      dependencies: ["NEHTTP", swiftNIO, swiftNIOHTTP1, swiftNIOSSL]
+      dependencies: ["NEHTTP", swiftNIOCore, swiftNIOEmbedded, swiftNIOHTTP1, swiftNIOSSL]
     ),
-    .testTarget(name: "NEMiscTests", dependencies: ["NEMisc", swiftNIO]),
+    .testTarget(name: "NEMiscTests", dependencies: ["NEMisc", swiftNIOCore, swiftNIOEmbedded]),
     .testTarget(name: "NESHAKE128Tests", dependencies: ["NESHAKE128"]),
-    .testTarget(name: "NESOCKSTests", dependencies: ["NESOCKS", swiftNIO]),
+    .testTarget(name: "NESOCKSTests", dependencies: ["NESOCKS", swiftNIOCore, swiftNIOEmbedded]),
     .testTarget(
       name: "NESSTests",
-      dependencies: ["NEPrettyBytes", "NESS", swiftNIO],
+      dependencies: ["NEPrettyBytes", "NESS", swiftNIOCore, swiftNIOEmbedded],
       exclude: [
         "RequestEncoderTests.g.swift.gyb",
         "ResponseDecoderTests.g.swift.gyb",
       ]
     ),
-    .testTarget(name: "NEVMESSTests", dependencies: ["NEPrettyBytes", "NEVMESS", swiftNIO]),
+    .testTarget(
+      name: "NEVMESSTests",
+      dependencies: ["NEPrettyBytes", "NEVMESS", "NEMisc", swiftNIOCore, swiftNIOEmbedded]
+    ),
   ],
   swiftLanguageVersions: [.v5]
 )
