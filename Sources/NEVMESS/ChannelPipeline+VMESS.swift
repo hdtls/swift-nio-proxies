@@ -111,19 +111,12 @@ extension ChannelPipeline.SynchronousOperations {
       throw CryptoKitError.incorrectParameterSize
     }
 
-    let configuration = Configuration(
-      id: user,
-      contentSecurity: contentSecurity,
-      command: commandCode,
-      options: options
-    )
-
-    let outboundHandler = RequestEncodingHandler(
+    let messageEncoder = VMESSEncoder<VMESSPart<VMESSRequestHead, ByteBuffer>>(
       authenticationCode: authenticationCode,
+      contentSecurity: contentSecurity,
       symmetricKey: symmetricKey,
       nonce: nonce,
-      configuration: configuration,
-      taskAddress: destinationAddress
+      options: options
     )
 
     let messageDecoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
@@ -136,8 +129,15 @@ extension ChannelPipeline.SynchronousOperations {
 
     let handlers: [ChannelHandler] = [
       ByteToMessageHandler(messageDecoder),
-      VMESSClientHandler(),
-      outboundHandler,
+      messageEncoder,
+      VMESSClientHandler(
+        user: user,
+        authenticationCode: authenticationCode,
+        contentSecurity: contentSecurity,
+        options: options,
+        commandCode: commandCode,
+        destinationAddress: destinationAddress
+      ),
     ]
 
     try addHandlers(handlers, position: position)

@@ -268,6 +268,42 @@ public struct VMESSResponseHead: Hashable {
 
 extension VMESSResponseHead: @unchecked Sendable {}
 
+/// A representation of the request header  frame of a VMESS request.
+public struct VMESSRequestHead: Hashable, Sendable {
+
+  public var version: Version
+
+  public var user: UUID
+
+  public var authenticationCode: UInt8
+
+  public var contentSecurity: ContentSecurity
+
+  public var options: StreamOptions
+
+  public var commandCode: CommandCode
+
+  public var address: NetAddress
+
+  public init(
+    version: Version = .v1,
+    user: UUID,
+    authenticationCode: UInt8,
+    algorithm: ContentSecurity,
+    options: StreamOptions,
+    commandCode: CommandCode,
+    address: NetAddress
+  ) {
+    self.version = version
+    self.user = user
+    self.authenticationCode = authenticationCode
+    self.contentSecurity = algorithm
+    self.options = options
+    self.commandCode = commandCode
+    self.address = address
+  }
+}
+
 /// The parts of a complete VMESS message, either request or response.
 public enum VMESSPart<HeadT: Equatable, BodyT: Equatable> {
   case head(HeadT)
