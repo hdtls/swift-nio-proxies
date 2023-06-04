@@ -19,7 +19,7 @@ import NEPrettyBytes
 import NESHAKE128
 import NIOCore
 
-public enum VMESSDecoderKind: Sendable {
+private enum VMESSDecoderKind: Sendable {
   case request
   case response
 }
@@ -45,30 +45,36 @@ private class BetterVMESSParser {
   private var kind: VMESSDecoderKind
   private let authenticationCode: UInt8
   private let contentSecurity: ContentSecurity
-  private let symmetricKey: [UInt8]
-  private let nonce: [UInt8]
+  private let symmetricKey: SymmetricKey
+  private let nonce: Nonce
   private let options: StreamOptions
   private let AEADFlag = true
   private var nonceLeading = UInt16.zero
   private lazy var hasher: SHAKE128 = {
     var shake128 = SHAKE128()
-    shake128.update(data: nonce)
+    nonce.withUnsafeBytes { buffPtr in
+      shake128.update(data: buffPtr)
+    }
     return shake128
   }()
 
-  init<Bytes>(
+  init(
     kind: VMESSDecoderKind,
     authenticationCode: UInt8,
     contentSecurity: ContentSecurity,
-    symmetricKey: Bytes,
-    nonce: Bytes,
+    symmetricKey: SymmetricKey,
+    nonce: Nonce,
     options: StreamOptions
-  ) where Bytes: DataProtocol {
+  ) {
     self.kind = kind
     self.contentSecurity = contentSecurity == .zero ? .none : contentSecurity
     self.authenticationCode = authenticationCode
-    self.symmetricKey = Array(SHA256.hash(data: symmetricKey).prefix(16))
-    self.nonce = Array(SHA256.hash(data: nonce).prefix(16))
+    self.symmetricKey = symmetricKey.withUnsafeBytes {
+      SymmetricKey(data: Array(SHA256.hash(data: $0).prefix(16)))
+    }
+    self.nonce = nonce.withUnsafeBytes {
+      try! Nonce(data: Array(SHA256.hash(data: $0).prefix(16)))
+    }
     var options = options
     switch contentSecurity {
     case .legacy:
@@ -104,7 +110,9 @@ private class BetterVMESSParser {
     decodingState = .headBegin
     if options.contains(.masking) {
       hasher = .init()
-      hasher.update(data: nonce)
+      nonce.withUnsafeBytes { buffPtr in
+        hasher.update(data: buffPtr)
+      }
     }
     decodingState = .complete
     delegate.didFinishMessage()
@@ -435,9 +443,7 @@ private class BetterVMESSParser {
       }
       return (Int(frameLength), padding)
     case .encryptByChaCha20Poly1305:
-      symmetricKey = symmetricKey.withUnsafeBytes {
-        generateChaChaPolySymmetricKey(inputKeyMaterial: $0)
-      }
+      symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
       let sealedBox = try ChaChaPoly.SealedBox.init(combined: nonce + frameLengthData)
       let frameLength = try ChaChaPoly.open(sealedBox, using: symmetricKey).withUnsafeBytes {
         $0.load(as: UInt16.self).bigEndian + 16
@@ -481,6 +487,9 @@ private class BetterVMESSParser {
   }
 }
 
+@available(*, unavailable)
+extension BetterVMESSParser: Sendable {}
+
 final public class VMESSDecoder<Out>: ByteToMessageDecoder, VMESSDecoderDelegate {
 
   public typealias InboundOut = Out
@@ -494,14 +503,14 @@ final public class VMESSDecoder<Out>: ByteToMessageDecoder, VMESSDecoderDelegate
   public init(
     authenticationCode: UInt8,
     contentSecurity: ContentSecurity,
-    symmetricKey: [UInt8],
-    nonce: [UInt8],
+    symmetricKey: SymmetricKey,
+    nonce: Nonce,
     options: StreamOptions
   ) {
     if Out.self == VMESSPart<VMESSResponseHead, ByteBuffer>.self {
       self.kind = .response
     } else {
-      preconditionFailure("unknown VMESS message type \(Out.self)")
+      preconditionFailure("unsupported VMESS message type \(Out.self)")
     }
     self.parser = BetterVMESSParser(
       kind: kind,

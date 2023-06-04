@@ -401,6 +401,39 @@ struct KDF {
   }
 }
 
+public struct Nonce: ContiguousBytes, Sequence {
+
+  private let bytes: Data
+
+  private static let defaualtNonceByteCount = 16
+
+  public init() {
+    var data = Data(repeating: 0, count: Nonce.defaualtNonceByteCount)
+    data.withUnsafeMutableBytes { buffPtr in
+      assert(buffPtr.count == Nonce.defaualtNonceByteCount)
+      buffPtr.initializeWithRandomBytes(count: Nonce.defaualtNonceByteCount)
+    }
+    self.bytes = data
+  }
+
+  public init<D>(data: D) throws where D: DataProtocol {
+    guard data.count >= Nonce.defaualtNonceByteCount else {
+      throw CryptoKitError.incorrectParameterSize
+    }
+    self.bytes = Data(data)
+  }
+
+  public func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {
+    try bytes.withUnsafeBytes(body)
+  }
+
+  public func makeIterator() -> Array<UInt8>.Iterator {
+    withUnsafeBytes { buffPtr in
+      Array(buffPtr).makeIterator()
+    }
+  }
+}
+
 func generateCmdKey(_ id: UUID) -> SymmetricKey {
   withUnsafeBytes(of: id) {
     var hasher = Insecure.MD5.init()
@@ -410,15 +443,10 @@ func generateCmdKey(_ id: UUID) -> SymmetricKey {
   }
 }
 
-func generateChaChaPolySymmetricKey<Key>(inputKeyMaterial: Key) -> SymmetricKey
-where Key: DataProtocol {
-  var md5 = Insecure.MD5()
-  md5.update(data: inputKeyMaterial)
-  return md5.finalize().withUnsafeBytes { ptr in
-    var hasher = Insecure.MD5()
-    hasher.update(bufferPointer: ptr)
-    return hasher.finalize().withUnsafeBytes {
-      return .init(data: Array(ptr) + Array($0))
+func generateChaChaPolySymmetricKey(inputKeyMaterial: SymmetricKey) -> SymmetricKey {
+  inputKeyMaterial.withUnsafeBytes {
+    Insecure.MD5.hash(data: $0).withUnsafeBytes { pointer in
+      SymmetricKey(data: Array(pointer) + Insecure.MD5.hash(data: pointer))
     }
   }
 }

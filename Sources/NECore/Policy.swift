@@ -308,20 +308,12 @@ extension ChannelPipeline {
         destinationAddress: destinationAddress
       )
     case .vmess:
-      var symmetricKey = Array(repeating: UInt8.zero, count: 16)
-      symmetricKey.withUnsafeMutableBytes {
-        $0.initializeWithRandomBytes(count: 16)
-      }
-      var nonce = symmetricKey
-      nonce.withUnsafeMutableBytes {
-        $0.initializeWithRandomBytes(count: 16)
-      }
       return addVMESSClientHandlers(
         position: position,
         authenticationCode: .random(in: 0 ... .max),
         contentSecurity: .encryptByAES128GCM,
-        symmetricKey: symmetricKey,
-        nonce: nonce,
+        symmetricKey: .init(size: .bits128),
+        nonce: .init(),
         user: UUID(uuidString: proxy.username) ?? UUID(),
         commandCode: .tcp,
         options: .masking,

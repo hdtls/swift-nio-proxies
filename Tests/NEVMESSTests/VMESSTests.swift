@@ -27,7 +27,7 @@ class VMESSTests: XCTestCase {
 
   func testGenerateChaChaPolySymmetricKey() throws {
     let result = try generateChaChaPolySymmetricKey(
-      inputKeyMaterial: Data(hexString: "96b727f438a60a07ca1f554ec689862e")
+      inputKeyMaterial: .init(data: Data(hexString: "96b727f438a60a07ca1f554ec689862e"))
     )
     result.withUnsafeBytes {
       XCTAssertEqual(

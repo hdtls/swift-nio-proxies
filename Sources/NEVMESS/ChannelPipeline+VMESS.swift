@@ -35,8 +35,8 @@ extension ChannelPipeline {
     position: Position = .last,
     authenticationCode: UInt8 = .random(in: 0 ... .max),
     contentSecurity: ContentSecurity,
-    symmetricKey: [UInt8],
-    nonce: [UInt8],
+    symmetricKey: SymmetricKey,
+    nonce: Nonce,
     user: UUID,
     commandCode: CommandCode = .tcp,
     options: StreamOptions = .masking,
@@ -95,8 +95,8 @@ extension ChannelPipeline.SynchronousOperations {
     position: ChannelPipeline.Position = .last,
     authenticationCode: UInt8 = .random(in: 0 ... .max),
     contentSecurity: ContentSecurity,
-    symmetricKey: [UInt8],
-    nonce: [UInt8],
+    symmetricKey: SymmetricKey,
+    nonce: Nonce,
     user: UUID,
     commandCode: CommandCode = .tcp,
     options: StreamOptions = .masking,
@@ -104,11 +104,8 @@ extension ChannelPipeline.SynchronousOperations {
   ) throws {
     eventLoop.assertInEventLoop()
 
-    guard symmetricKey.count == 16 else {
+    guard symmetricKey.bitCount == SymmetricKeySize.bits128.bitCount else {
       throw CryptoKitError.incorrectKeySize
-    }
-    guard nonce.count == 16 else {
-      throw CryptoKitError.incorrectParameterSize
     }
 
     let messageEncoder = VMESSEncoder<VMESSPart<VMESSRequestHead, ByteBuffer>>(

@@ -17,34 +17,34 @@ import Foundation
 import NESHAKE128
 import NIOCore
 
-public enum VMESSEncodeKind: Sendable {
+private enum VMESSEncodeKind: Sendable {
   case request
   case response
 }
 
-final public class VMESSEncoder<In>: ChannelOutboundHandler {
-
-  public typealias OutboundIn = In
+private class BetterVMESSWriter<In> where In: Equatable {
 
   private let kind: VMESSEncodeKind
   private let authenticationCode: UInt8
   private let contentSecurity: ContentSecurity
-  private let symmetricKey: [UInt8]
-  private let nonce: [UInt8]
+  private let symmetricKey: SymmetricKey
+  private let nonce: Nonce
   private var options: StreamOptions
   private let AEADFlag: Bool = true
   private lazy var hasher: SHAKE128 = {
     var shake128 = SHAKE128()
-    shake128.update(data: nonce)
+    nonce.withUnsafeBytes { buffPtr in
+      shake128.update(data: buffPtr)
+    }
     return shake128
   }()
   private var nonceLeading = UInt16.zero
 
-  public init(
+  init(
     authenticationCode: UInt8,
     contentSecurity: ContentSecurity,
-    symmetricKey: [UInt8],
-    nonce: [UInt8],
+    symmetricKey: SymmetricKey,
+    nonce: Nonce,
     options: StreamOptions
   ) {
     if In.self == VMESSPart<VMESSRequestHead, ByteBuffer>.self {
@@ -79,28 +79,22 @@ final public class VMESSEncoder<In>: ChannelOutboundHandler {
     self.options = options
   }
 
-  public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?)
-  {
-    do {
-      switch kind {
-      case .request:
-        let part = unwrapOutboundIn(data) as! VMESSPart<VMESSRequestHead, ByteBuffer>
-        let bytes: Data
-        switch part {
-        case .head(let headT):
-          bytes = try prepareHeadPart(request: headT)
-        case .body(let bodyT):
-          bytes = try prepareFrame(data: bodyT)
-        case .end:
-          bytes = try prepareLastFrame()
-        }
-        let byteBuffer = context.channel.allocator.buffer(bytes: bytes)
-        context.write(NIOAny(byteBuffer), promise: promise)
-      case .response:
-        promise?.fail(CodingError.operationUnsupported)
+  func write(_ part: In) throws -> Data {
+    switch kind {
+    case .request:
+      let part = part as! VMESSPart<VMESSRequestHead, ByteBuffer>
+      let bytes: Data
+      switch part {
+      case .head(let headT):
+        bytes = try prepareHeadPart(request: headT)
+      case .body(let bodyT):
+        bytes = try prepareFrame(data: bodyT)
+      case .end:
+        bytes = try prepareLastFrame()
       }
-    } catch {
-      promise?.fail(error)
+      return bytes
+    case .response:
+      throw CodingError.operationUnsupported
     }
   }
 
@@ -146,7 +140,9 @@ final public class VMESSEncoder<In>: ChannelOutboundHandler {
     var buffer = ByteBuffer()
     buffer.writeInteger(request.version.rawValue)
     buffer.writeBytes(nonce)
-    buffer.writeBytes(symmetricKey)
+    symmetricKey.withUnsafeBytes {
+      _ = buffer.writeBytes($0)
+    }
     buffer.writeInteger(authenticationCode)
     buffer.writeInteger(options.rawValue)
 
@@ -373,7 +369,7 @@ final public class VMESSEncoder<In>: ChannelOutboundHandler {
         )
         frame = sealedBox.ciphertext + sealedBox.tag
       } else {
-        let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
+        let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: self.symmetricKey)
         let sealedBox = try ChaChaPoly.seal(
           message,
           using: symmetricKey,
@@ -433,9 +429,7 @@ final public class VMESSEncoder<In>: ChannelOutboundHandler {
           )
           return sealedBox.ciphertext + sealedBox.tag
         } else {
-          symmetricKey = symmetricKey.withUnsafeBytes {
-            generateChaChaPolySymmetricKey(inputKeyMaterial: $0)
-          }
+          symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
           let sealedBox = try ChaChaPoly.seal(
             $0,
             using: symmetricKey,
@@ -468,6 +462,48 @@ final public class VMESSEncoder<In>: ChannelOutboundHandler {
     }
 
     return try prepareFrame(data: .init())
+  }
+}
+
+@available(*, unavailable)
+extension BetterVMESSWriter: Sendable {}
+
+final public class VMESSEncoder<In: Equatable>: ChannelOutboundHandler {
+
+  public typealias OutboundIn = In
+
+  public typealias OutboundOut = ByteBuffer
+
+  private let writer: BetterVMESSWriter<In>
+
+  public init(
+    authenticationCode: UInt8,
+    contentSecurity: ContentSecurity,
+    symmetricKey: SymmetricKey,
+    nonce: Nonce,
+    options: StreamOptions
+  ) {
+    guard In.self == VMESSPart<VMESSRequestHead, ByteBuffer>.self else {
+      preconditionFailure("unsupported VMESS message type \(In.self)")
+    }
+    self.writer = BetterVMESSWriter(
+      authenticationCode: authenticationCode,
+      contentSecurity: contentSecurity,
+      symmetricKey: symmetricKey,
+      nonce: nonce,
+      options: options
+    )
+  }
+
+  public func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?)
+  {
+    do {
+      let bytes = try writer.write(unwrapOutboundIn(data))
+      let outboundOut = context.channel.allocator.buffer(bytes: bytes)
+      context.write(wrapOutboundOut(outboundOut), promise: promise)
+    } catch {
+      promise?.fail(error)
+    }
   }
 }
 

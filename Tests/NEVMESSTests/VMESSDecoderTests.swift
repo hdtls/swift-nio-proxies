@@ -33,8 +33,8 @@ final class VMESSDecoderTests: XCTestCase {
     let decoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
       authenticationCode: authenticationCode,
       contentSecurity: .encryptByAES128GCM,
-      symmetricKey: symmetricKey,
-      nonce: nonce,
+      symmetricKey: .init(data: symmetricKey),
+      nonce: try .init(data: nonce),
       options: .masking
     )
     eventLoop = EmbeddedEventLoop()
