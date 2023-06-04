@@ -133,6 +133,7 @@ final public class Netbot: @unchecked Sendable {
     let source = DispatchSource.makeSignalSource(signal: SIGINT, queue: queue)
     source.setEventHandler {
       Task.detached {
+        print()
         try await self.shutdownGracefully()
       }
     }
