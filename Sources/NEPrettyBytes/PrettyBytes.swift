@@ -84,7 +84,7 @@ extension MutableDataProtocol {
 
 extension Data {
 
-  public init(hexString: String) throws {
+  public init<S>(hexString: S) throws where S: StringProtocol {
     self.init()
 
     if hexString.count % 2 != 0 || hexString.count == 0 {
@@ -104,7 +104,7 @@ extension Data {
 
 extension Array where Element == UInt8 {
 
-  public init(hexString: String) throws {
+  public init<S>(hexString: S) throws where S: StringProtocol {
     self.init()
 
     guard hexString.count.isMultiple(of: 2), !hexString.isEmpty else {
