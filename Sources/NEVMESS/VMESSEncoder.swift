@@ -86,7 +86,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
       let bytes: Data
       switch part {
       case .head(let headT):
-        bytes = try prepareHeadPart(request: headT)
+        bytes = try prepareInstruction(request: headT)
       case .body(let bodyT):
         bytes = try prepareFrame(data: bodyT)
       case .end:
@@ -97,45 +97,13 @@ private class BetterVMESSWriter<In> where In: Equatable {
       throw CodingError.operationUnsupported
     }
   }
+}
 
-  /// Prepare HEAD part data for request.
-  ///
-  /// If use AEAD to encrypt request then the HEAD part only contains instruction else HEAD part contains
-  /// authentication info and instruction two parts.
-  /// - Returns: Encrypted HEAD part data.
-  private func prepareHeadPart(request: VMESSRequestHead) throws -> Data {
-    let date = Date() + TimeInterval.random(in: -30...30)
-    let timestamp = UInt64(date.timeIntervalSince1970)
+// VMESS request writer helpers.
+extension BetterVMESSWriter {
 
-    var result = Data()
-    result += try prepareAuthenticationInfoPart(request: request, timestamp: timestamp)
-    result += try prepareInstructionPart(request: request, timestamp: timestamp)
-    return result
-  }
-
-  /// Prepare HEAD authentication info part data with specified request and timestamp.
-  ///
-  /// If use AEAD to encrypt request just return empty data instead.
-  private func prepareAuthenticationInfoPart(request: VMESSRequestHead, timestamp: UInt64) throws
-    -> Data
-  {
-    guard !AEADFlag else {
-      return .init()
-    }
-
-    return withUnsafeBytes(of: request.user) {
-      var hasher = HMAC<Insecure.MD5>(key: .init(data: $0))
-      return withUnsafeBytes(of: timestamp.bigEndian) {
-        hasher.update(data: $0)
-        return Data(hasher.finalize())
-      }
-    }
-  }
-
-  /// Prepare HEAD instruction part data with specified timestamp.
-  /// - Parameter timestamp: UTC UInt64 timestamp.
-  /// - Returns: Encrypted instruction part data.
-  private func prepareInstructionPart(request: VMESSRequestHead, timestamp: UInt64) throws -> Data {
+  /// Prepare plain instruction for request.
+  private func prepareInstruction0(request: VMESSRequestHead) -> ByteBuffer {
     // Should enable padding
     var buffer = ByteBuffer()
     buffer.writeInteger(request.version.rawValue)
@@ -190,10 +158,19 @@ private class BetterVMESSWriter<In> where In: Equatable {
         commonFNV1a($0)
       }
     )
+    return buffer
+  }
+
+  /// Prepare instruction part data with specified request.
+  /// - Parameter request: The request object used to build instruction.
+  /// - Returns: Encrypted instruction part data.
+  private func prepareInstruction(request: VMESSRequestHead) throws -> Data {
+    let instructionData = prepareInstruction0(request: request)
 
     let inputKeyMaterial = generateCmdKey(request.user)
+
     if AEADFlag {
-      let authenticatedData = try generateAuthenticatedData(inputKeyMaterial)
+      let authenticatedData = try prepareAuthenticationData(inputKeyMaterial)
       var randomPath = Data(repeating: UInt8.zero, count: 8)
       randomPath.withUnsafeMutableBytes {
         $0.initializeWithRandomBytes(count: 8)
@@ -206,7 +183,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
       ]
 
       let sealedLengthBox: AES.GCM.SealedBox = try withUnsafeBytes(
-        of: UInt16(buffer.readableBytes).bigEndian
+        of: UInt16(instructionData.readableBytes).bigEndian
       ) {
         let kDFSaltConstVMessHeaderPayloadLengthAEADKey = Data("VMess Header AEAD Key_Length".utf8)
         let kDFSaltConstVMessHeaderPayloadLengthAEADIV = Data("VMess Header AEAD Nonce_Length".utf8)
@@ -231,7 +208,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
         )
       }
 
-      let sealedPayloadBox: AES.GCM.SealedBox = try buffer.withUnsafeReadableBytes {
+      let sealedPayloadBox: AES.GCM.SealedBox = try instructionData.withUnsafeReadableBytes {
 
         let kDFSaltConstVMessHeaderPayloadAEADKey = Data("VMess Header AEAD Key".utf8)
         let kDFSaltConstVMessHeaderPayloadAEADIV = Data("VMess Header AEAD Nonce".utf8)
@@ -263,6 +240,17 @@ private class BetterVMESSWriter<In> where In: Equatable {
         + sealedPayloadBox.ciphertext
         + sealedPayloadBox.tag
     } else {
+      let date = Date() + TimeInterval.random(in: -30...30)
+      let timestamp = UInt64(date.timeIntervalSince1970)
+
+      var authenticatedData = withUnsafeBytes(of: request.user) {
+        var hasher = HMAC<Insecure.MD5>(key: .init(data: $0))
+        return withUnsafeBytes(of: timestamp.bigEndian) {
+          hasher.update(data: $0)
+          return Data(hasher.finalize())
+        }
+      }
+
       // Hash timestamp original impl of go see `client.go hashTimestamp` in v2flay.
       var hasher = Insecure.MD5()
       withUnsafeBytes(of: timestamp.bigEndian) {
@@ -270,28 +258,27 @@ private class BetterVMESSWriter<In> where In: Equatable {
           hasher.update(bufferPointer: $0)
         }
       }
-
-      var result = Data(repeating: 0, count: buffer.readableBytes)
-      try buffer.withUnsafeReadableBytes { inPtr in
+      var result = Data(repeating: 0, count: instructionData.readableBytes)
+      try instructionData.withUnsafeReadableBytes { inPtr in
         try result.withUnsafeMutableBytes { dataOut in
           try commonAESCFB128Encrypt(
             nonce: Array(hasher.finalize()),
             key: inputKeyMaterial,
             dataIn: inPtr,
             dataOut: dataOut,
-            dataOutAvailable: buffer.readableBytes
+            dataOutAvailable: instructionData.readableBytes
           )
         }
       }
-
-      return result
+      authenticatedData += result
+      return authenticatedData
     }
   }
 
   /// Generate authenticated data with specified key.
   /// - Parameter key: Input key material.
   /// - Returns: Encrypted authenticated data bytes.
-  private func generateAuthenticatedData(_ key: SymmetricKey) throws -> Data {
+  private func prepareAuthenticationData(_ key: SymmetricKey) throws -> Data {
     var byteBuffer = withUnsafeBytes(
       of: UInt64(Date().timeIntervalSince1970).bigEndian,
       Array.init
@@ -468,6 +455,10 @@ private class BetterVMESSWriter<In> where In: Equatable {
 @available(*, unavailable)
 extension BetterVMESSWriter: Sendable {}
 
+/// A `ChannelOutboundHandler` that can serialize VMESS messages.
+///
+/// This channel handler is used to translate messages from a series of
+/// VMESS message into the VMESS wire format.
 final public class VMESSEncoder<In: Equatable>: ChannelOutboundHandler {
 
   public typealias OutboundIn = In
@@ -476,6 +467,13 @@ final public class VMESSEncoder<In: Equatable>: ChannelOutboundHandler {
 
   private let writer: BetterVMESSWriter<In>
 
+  /// Creates a new instance of `VMESSEncoder`.
+  /// - Parameters:
+  ///   - authenticationCode: The authentication code to use to verify authenticated head message.
+  ///   - contentSecurity: The security type use to control message encoding method.
+  ///   - symmetricKey: SymmetricKey for encryptor.
+  ///   - nonce: Nonce for encryptor.
+  ///   - options: The stream options use to control data padding and mask.
   public init(
     authenticationCode: UInt8,
     contentSecurity: ContentSecurity,

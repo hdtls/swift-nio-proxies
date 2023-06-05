@@ -157,7 +157,9 @@ let package = Package(
     ),
     .testTarget(
       name: "NEVMESSTests",
-      dependencies: ["NEPrettyBytes", "NEVMESS", "NEMisc", swiftNIOCore, swiftNIOEmbedded]
+      dependencies: [
+        "NEPrettyBytes", "NEVMESS", "NEMisc", swiftCrypto, swiftNIOCore, swiftNIOEmbedded,
+      ]
     ),
   ],
   swiftLanguageVersions: [.v5]

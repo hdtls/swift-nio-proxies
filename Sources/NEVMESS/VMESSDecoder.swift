@@ -482,7 +482,6 @@ private class BetterVMESSParser {
     }
 
     nonceLeading &+= 1
-
     return frame
   }
 }
@@ -490,6 +489,15 @@ private class BetterVMESSParser {
 @available(*, unavailable)
 extension BetterVMESSParser: Sendable {}
 
+public typealias VMESSClientResponsePart = VMESSPart<VMESSResponseHead, ByteBuffer>
+
+/// A `ChannelInboundHandler` that parses VMESS style messages, converting them from
+/// unstructured bytes to a sequence of VMESS messages.
+///
+/// The `VMESSDecoder` is a generic channel handler which can produce messages in
+/// the form of `VMESSClientResponsePart`,
+/// it produces messages that correspond to the semantic units of VMESS produced by
+/// the remote peer.
 final public class VMESSDecoder<Out>: ByteToMessageDecoder, VMESSDecoderDelegate {
 
   public typealias InboundOut = Out
@@ -500,6 +508,13 @@ final public class VMESSDecoder<Out>: ByteToMessageDecoder, VMESSDecoderDelegate
   private let kind: VMESSDecoderKind
   private var stopParsing = false
 
+  /// Creates a new instance of `VMESSDecoder`.
+  /// - Parameters:
+  ///   - authenticationCode: The authentication code to use to verify authenticated head message.
+  ///   - contentSecurity: The security type use to control message decoding method.
+  ///   - symmetricKey: SymmetricKey for decriptor.
+  ///   - nonce: Nonce for decryptor.
+  ///   - options: The stream options use to control data padding and mask.
   public init(
     authenticationCode: UInt8,
     contentSecurity: ContentSecurity,

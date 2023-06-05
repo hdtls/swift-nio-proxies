@@ -200,56 +200,74 @@ public struct ProxyPolicy: ConnectionPolicy {
             port: proxy.port,
             uri: proxy.webSocketPath
           )
-
-          let webSocketUpgrader = NIOWebSocketClientUpgrader(
+          let requestEncoder = HTTPRequestEncoder()
+          let responseDecoder = HTTPResponseDecoder(leftOverBytesStrategy: .dropBytes)
+          var handlers: [RemovableChannelHandler] = [
+            requestEncoder, ByteToMessageHandler(responseDecoder),
+          ]
+          let upgrader = NIOWebSocketClientUpgrader(
             automaticErrorHandling: false
           ) { channel, res in
-            return channel.eventLoop.makeFutureWithTask {
-              // As upgrader handler always added in last position and upgrader may complete after
-              // `GlueHandler` added to pipeline, so we need reorder those codec handlers...
-              let handler = try await channel.pipeline.handler(
+            do {
+              let handler = try channel.pipeline.syncOperations.handler(
                 type: NIOHTTPClientUpgradeHandler.self
-              ).get()
-              var frameDecoder = try await channel.pipeline.handler(
+              )
+              // Although frame decoder, encoder, and error handler have been added to the pipeline
+              // but the order is not what we need. so, we need to reorder them.
+              var frameDecoder = try channel.pipeline.syncOperations.handler(
                 type: ByteToMessageHandler<WebSocketFrameDecoder>.self
-              ).get()
-              try await channel.pipeline.removeHandler(frameDecoder)
+              )
+              channel.pipeline.removeHandler(frameDecoder, promise: nil)
               frameDecoder = ByteToMessageHandler(WebSocketFrameDecoder(maxFrameSize: 1 << 14))
-              try await channel.pipeline.addHandler(frameDecoder, position: .after(handler))
+              try channel.pipeline.syncOperations.addHandler(
+                frameDecoder,
+                position: .after(handler)
+              )
 
-              var frameEncoder = try await channel.pipeline.handler(
+              var frameEncoder = try channel.pipeline.syncOperations.handler(
                 type: WebSocketFrameEncoder.self
-              ).get()
-              try await channel.pipeline.removeHandler(frameEncoder)
+              )
+              channel.pipeline.removeHandler(frameEncoder, promise: nil)
               frameEncoder = WebSocketFrameEncoder()
-              try await channel.pipeline.addHandler(frameEncoder, position: .after(handler))
+              try channel.pipeline.syncOperations.addHandler(
+                frameEncoder,
+                position: .after(handler)
+              )
 
               let errorHandler = WebSocketProtocolErrorHandler()
-              try await channel.pipeline.addHandler(errorHandler, position: .after(frameDecoder))
+              try channel.pipeline.syncOperations.addHandler(
+                errorHandler,
+                position: .after(frameDecoder)
+              )
 
               // To send websocket frame we need a blendor to write `ByteBuffer` to `WebSocektFrame`
               // and read `WebSocketFrame`  to `ByteBuffer`.
               let producer = WebSocketFrameProducer()
-              try await channel.pipeline.addHandler(producer, position: .after(errorHandler))
+              try channel.pipeline.syncOperations.addHandler(
+                producer,
+                position: .after(errorHandler)
+              )
 
-              try await channel.pipeline.addClientHandlers(
+              try channel.pipeline.syncOperations.addClientHandlers(
                 position: .after(producer),
                 proxy: proxy,
                 destinationAddress: destinationAddress
-              ).get()
+              )
 
-              try await channel.pipeline.removeHandler(requestWriter)
+              return channel.pipeline.removeHandler(requestWriter)
+            } catch {
+              return channel.eventLoop.makeFailedFuture(error)
             }
           }
-
-          let configuration: NIOHTTPClientUpgradeConfiguration = (
-            upgraders: [webSocketUpgrader],
-            completionHandler: { _ in }
+          let upgradeHandler = NIOHTTPClientUpgradeHandler(
+            upgraders: [upgrader],
+            httpHandlers: handlers,
+            upgradeCompletionHandler: { _ in }
           )
+          handlers.append(upgradeHandler)
+          handlers.append(requestWriter)
 
-          return channel.pipeline.addHTTPClientHandlers(withClientUpgrade: configuration).flatMap {
-            channel.pipeline.addHandler(requestWriter)
-          }
+          return channel.pipeline.addHandlers(handlers)
         }
 
       if proxy.overTls {
@@ -282,9 +300,36 @@ extension ChannelPipeline {
     proxy: Proxy,
     destinationAddress: NetAddress
   ) -> EventLoopFuture<Void> {
+    if eventLoop.inEventLoop {
+      return eventLoop.makeCompletedFuture {
+        try syncOperations.addClientHandlers(
+          position: position,
+          proxy: proxy,
+          destinationAddress: destinationAddress
+        )
+      }
+    } else {
+      return eventLoop.submit {
+        try self.syncOperations.addClientHandlers(
+          position: position,
+          proxy: proxy,
+          destinationAddress: destinationAddress
+        )
+      }
+    }
+  }
+}
+
+extension ChannelPipeline.SynchronousOperations {
+
+  fileprivate func addClientHandlers(
+    position: ChannelPipeline.Position = .last,
+    proxy: Proxy,
+    destinationAddress: NetAddress
+  ) throws {
     switch proxy.protocol {
     case .http:
-      return addHTTPProxyClientHandlers(
+      return try addHTTPProxyClientHandlers(
         position: position,
         username: proxy.username,
         passwordReference: proxy.passwordReference,
@@ -293,7 +338,7 @@ extension ChannelPipeline {
         destinationAddress: destinationAddress
       )
     case .socks5:
-      return addSOCKSClientHandlers(
+      return try addSOCKSClientHandlers(
         position: position,
         username: proxy.username,
         passwordReference: proxy.passwordReference,
@@ -301,14 +346,14 @@ extension ChannelPipeline {
         destinationAddress: destinationAddress
       )
     case .shadowsocks:
-      return addSSClientHandlers(
+      return try addSSClientHandlers(
         position: position,
         algorithm: proxy.algorithm,
         passwordReference: proxy.passwordReference,
         destinationAddress: destinationAddress
       )
     case .vmess:
-      return addVMESSClientHandlers(
+      return try addVMESSClientHandlers(
         position: position,
         authenticationCode: .random(in: 0 ... .max),
         contentSecurity: .encryptByAES128GCM,
