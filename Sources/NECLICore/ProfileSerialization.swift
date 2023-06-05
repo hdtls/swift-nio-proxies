@@ -334,9 +334,9 @@ final public class ProfileSerialization {
         components.append(
           contentsOf: try policies.map {
             // Only proxy policy requires proxy configurations
-            let proxy = $0[AnyPolicy.CodingKeys.proxy.rawValue] as? [String: Any]
-            guard let name = $0[AnyPolicy.CodingKeys.name.rawValue],
-              let type = $0[AnyPolicy.CodingKeys.type.rawValue]
+            let proxy = $0[AnyConnectionPolicy.CodingKeys.proxy.rawValue] as? [String: Any]
+            guard let name = $0[AnyConnectionPolicy.CodingKeys.name.rawValue],
+              let type = $0[AnyConnectionPolicy.CodingKeys.type.rawValue]
             else {
               throw ProfileSerializationError.dataCorrupted
             }
@@ -387,8 +387,8 @@ extension ProfileSerialization {
     // direct reject and reject-tinygif does not requires extra configurations
     if ["direct", "reject", "reject-tinygif"].contains(o.1) {
       return .object([
-        AnyPolicy.CodingKeys.name.rawValue: .string(o.0),
-        AnyPolicy.CodingKeys.type.rawValue: .string(o.1),
+        AnyConnectionPolicy.CodingKeys.name.rawValue: .string(o.0),
+        AnyConnectionPolicy.CodingKeys.type.rawValue: .string(o.1),
       ])
     } else {
       // Rebuild proxy configuration as json array.
@@ -418,9 +418,9 @@ extension ProfileSerialization {
       configuration["protocol"] = `protocol`
 
       return .object([
-        AnyPolicy.CodingKeys.name.rawValue: .string(o.0),
-        AnyPolicy.CodingKeys.type.rawValue: `protocol`,
-        AnyPolicy.CodingKeys.proxy.rawValue: .object(configuration),
+        AnyConnectionPolicy.CodingKeys.name.rawValue: .string(o.0),
+        AnyConnectionPolicy.CodingKeys.type.rawValue: `protocol`,
+        AnyConnectionPolicy.CodingKeys.proxy.rawValue: .object(configuration),
       ])
     }
   }

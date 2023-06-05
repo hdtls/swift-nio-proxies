@@ -35,8 +35,8 @@ public protocol ConnectionPoolSource {
   func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel>
 }
 
-/// Policy protocol representation a policy object.
-public protocol Policy: ConnectionPoolSource, Sendable {
+/// ConnectionPolicy protocol representation a policy object.
+public protocol ConnectionPolicy: ConnectionPoolSource, Sendable {
 
   /// The name of the policy.
   var name: String { get set }
@@ -69,7 +69,7 @@ func makeUniversalClientTCPBootstrap(group: EventLoopGroup, serverHostname: Stri
 }
 
 /// DirectPolicy will tunnel connection derectly.
-public struct DirectPolicy: Policy {
+public struct DirectPolicy: ConnectionPolicy {
 
   public var name: String = "DIRECT"
 
@@ -115,7 +115,7 @@ public struct DirectPolicy: Policy {
 struct RejectByRuleError: Error {}
 
 /// RejectPolicy will reject connection to the destination.
-public struct RejectPolicy: Policy {
+public struct RejectPolicy: ConnectionPolicy {
 
   public var name: String = "REJECT"
 
@@ -138,7 +138,7 @@ public struct RejectPolicy: Policy {
 }
 
 /// RejectTinyGifPolicy will reject connection and response a tiny gif.
-public struct RejectTinyGifPolicy: Policy {
+public struct RejectTinyGifPolicy: ConnectionPolicy {
 
   public var name: String = "REJECT-TINYGIF"
 
@@ -160,7 +160,7 @@ public struct RejectTinyGifPolicy: Policy {
   }
 }
 
-public struct ProxyPolicy: Policy {
+public struct ProxyPolicy: ConnectionPolicy {
 
   public var name: String
 

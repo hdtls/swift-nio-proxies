@@ -14,19 +14,19 @@
 
 import NECore
 
-/// Policy coding wrapper.
-struct AnyPolicy {
+/// ConnectionPolicy coding wrapper.
+struct AnyConnectionPolicy {
 
   /// The actual policy value.
-  var base: Policy
+  var base: ConnectionPolicy
 
-  /// Initialize an instance of `AnyPolicy` with specified base value.
-  init(_ base: Policy) {
+  /// Initialize an instance of `AnyConnectionPolicy` with specified base value.
+  init(_ base: ConnectionPolicy) {
     self.base = base
   }
 }
 
-extension AnyPolicy: Codable {
+extension AnyConnectionPolicy: Codable {
 
   enum CodingKeys: String, CodingKey {
     case name

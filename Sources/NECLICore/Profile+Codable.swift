@@ -47,7 +47,7 @@ extension Profile: Codable {
       forKey: .basicSettings
     )
     var policies =
-      try container.decodeIfPresent([AnyPolicy].self, forKey: .policies)?.map {
+      try container.decodeIfPresent([AnyConnectionPolicy].self, forKey: .policies)?.map {
         $0.base
       } ?? []
     // If the built-in policies do not exist, insert them at the beginning of the array
@@ -76,7 +76,7 @@ extension Profile: Codable {
     try container.encode(rules.map { $0.description }, forKey: .rules)
     try container.encode(manInTheMiddleSettings, forKey: .manInTheMiddleSettings)
     try container.encode(basicSettings, forKey: .basicSettings)
-    try container.encode(policies.map(AnyPolicy.init), forKey: .policies)
+    try container.encode(policies.map(AnyConnectionPolicy.init), forKey: .policies)
     try container.encode(
       policyGroups.map {
         AnyPolicyGroup(name: $0.name, policies: $0.policies)

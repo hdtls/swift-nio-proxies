@@ -255,7 +255,7 @@ final public class Netbot: @unchecked Sendable {
     forTarget address: NetAddress,
     eventLoop: EventLoop
   ) async throws -> Channel {
-    var fallback: Policy = DirectPolicy(destinationAddress: address)
+    var fallback: ConnectionPolicy = DirectPolicy(destinationAddress: address)
 
     guard outboundMode != .direct else {
       return try await fallback.makeConnection(logger: logger, on: eventLoop).get()

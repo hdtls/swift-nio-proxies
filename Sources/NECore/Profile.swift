@@ -27,7 +27,7 @@ public struct Profile: Sendable {
   public var basicSettings: BasicSettings = .init()
 
   /// All proxy policy object contains in this configuration object.
-  public var policies: [Policy] = [DirectPolicy(), RejectPolicy(), RejectTinyGifPolicy()]
+  public var policies: [ConnectionPolicy] = [DirectPolicy(), RejectPolicy(), RejectTinyGifPolicy()]
 
   /// All selectable policy groups contains in this configuration object.
   public var policyGroups: [PolicyGroup] = []
@@ -38,7 +38,7 @@ public struct Profile: Sendable {
     basicSettings: BasicSettings,
     rules: [ParsableRule],
     manInTheMiddleSettings: ManInTheMiddleSettings,
-    policies: [Policy],
+    policies: [ConnectionPolicy],
     policyGroups: [PolicyGroup]
   ) {
     self.basicSettings = basicSettings
