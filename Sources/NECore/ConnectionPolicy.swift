@@ -361,7 +361,6 @@ extension ChannelPipeline.SynchronousOperations {
         nonce: .init(),
         user: UUID(uuidString: proxy.username) ?? UUID(),
         commandCode: .tcp,
-        options: .masking,
         destinationAddress: destinationAddress
       )
     }

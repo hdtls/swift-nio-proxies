@@ -26,6 +26,10 @@ public enum CodingError: Error {
   case incorrectDataSize
 
   case operationUnsupported
+
+  case failedToParseDataSize
+
+  case payloadTooLarge
 }
 
 struct VMESSNotImplementedError: Error {}

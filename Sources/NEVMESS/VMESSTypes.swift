@@ -61,16 +61,6 @@ public struct ContentSecurity: RawRepresentable, Hashable, Sendable {
   public static let none = ContentSecurity(rawValue: 0x05)
 
   public static let zero = ContentSecurity(rawValue: 0x06)
-
-  // For `AES-GCM` and `ChaChaPoly` overhead is tag byte count.
-  var overhead: Int {
-    switch self {
-    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
-      return 16
-    default:
-      return 0
-    }
-  }
 }
 
 /// `CommandCode` object defines VMESS command.
@@ -104,10 +94,6 @@ public struct StreamOptions: Hashable, OptionSet, Sendable {
 
   public var rawValue: UInt8
 
-  var shouldPadding: Bool {
-    contains(.masking) && contains(.padding)
-  }
-
   public init(rawValue: RawValue) {
     self.rawValue = rawValue
   }
@@ -116,20 +102,16 @@ public struct StreamOptions: Hashable, OptionSet, Sendable {
 extension StreamOptions {
 
   /// Standard data stream option
-  public static let chunked = StreamOptions.init(rawValue: 1 << 0)
+  public static let chunkStream = StreamOptions.init(rawValue: 1 << 0)
 
   @available(*, deprecated, message: "This options is deprecated from V2Ray 2.23+.")
   public static let connectionReuse = StreamOptions.init(rawValue: 1 << 1)
 
   /// Turn on stream masking.
-  ///
-  /// This options is valid only when `.chunked` is turned on.
-  public static let masking = StreamOptions.init(rawValue: 1 << 2)
+  public static let chunkMasking = StreamOptions.init(rawValue: 1 << 2)
 
   /// Turn on stream padding.
-  ///
-  /// This options is valid only when `.chunked` is turned on.
-  public static let padding = StreamOptions.init(rawValue: 0x08)
+  public static let globalPadding = StreamOptions.init(rawValue: 0x08)
 
   /// Turn on packet length authentication.
   public static let authenticatedLength = StreamOptions.init(rawValue: 0x10)
@@ -271,7 +253,7 @@ extension VMESSResponseHead: @unchecked Sendable {}
 /// A representation of the request header  frame of a VMESS request.
 public struct VMESSRequestHead: Hashable, Sendable {
 
-  public var version: Version
+  public var version: Version = .v1
 
   public var user: UUID
 

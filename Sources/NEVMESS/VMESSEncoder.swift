@@ -29,7 +29,8 @@ private class BetterVMESSWriter<In> where In: Equatable {
   private let contentSecurity: ContentSecurity
   private let symmetricKey: SymmetricKey
   private let nonce: Nonce
-  private var options: StreamOptions
+  private let options: StreamOptions
+  private let commandCode: CommandCode
   private let AEADFlag: Bool = true
   private lazy var hasher: SHAKE128 = {
     var shake128 = SHAKE128()
@@ -45,7 +46,9 @@ private class BetterVMESSWriter<In> where In: Equatable {
     contentSecurity: ContentSecurity,
     symmetricKey: SymmetricKey,
     nonce: Nonce,
-    options: StreamOptions
+    options: StreamOptions,
+    commandCode: CommandCode,
+    enablePadding: Bool = false
   ) {
     if In.self == VMESSPart<VMESSRequestHead, ByteBuffer>.self {
       self.kind = .request
@@ -53,30 +56,40 @@ private class BetterVMESSWriter<In> where In: Equatable {
       preconditionFailure("unknown VMESS message type \(In.self)")
     }
     self.authenticationCode = authenticationCode
-    switch contentSecurity {
-    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
-      self.contentSecurity = contentSecurity
-    default:
-      preconditionFailure("unsupported VMESS message encryption algorithm")
-    }
     self.symmetricKey = symmetricKey
     self.nonce = nonce
     var options = options
     switch contentSecurity {
-    case .legacy:
-      break
     case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
-      options.insert(.masking)
-      options.insert(.padding)
+      options.insert(.chunkMasking)
+      options.insert(.globalPadding)
+      self.contentSecurity = contentSecurity
     case .none:
-      options.insert(.masking)
+      options.insert(.chunkMasking)
+      if enablePadding {
+        options.insert(.globalPadding)
+      }
+      self.contentSecurity = contentSecurity
+    case .legacy:
+      if options.contains(.chunkMasking) && enablePadding {
+        options.insert(.globalPadding)
+      }
+      self.contentSecurity = contentSecurity
+    case .automatically:
+      options.insert(.globalPadding)
+      self.contentSecurity = contentSecurity
     case .zero:
-      options.remove(.chunked)
-      options.remove(.masking)
+      self.contentSecurity = .none
+      if options.contains(.chunkMasking) && enablePadding {
+        options.insert(.globalPadding)
+      }
+      options.remove(.chunkStream)
+      options.remove(.chunkMasking)
     default:
-      break
+      preconditionFailure("unsupported VMESS message content security")
     }
     self.options = options
+    self.commandCode = commandCode
   }
 
   func write(_ part: In) throws -> Data {
@@ -106,6 +119,9 @@ extension BetterVMESSWriter {
   private func prepareInstruction0(request: VMESSRequestHead) -> ByteBuffer {
     // Should enable padding
     var buffer = ByteBuffer()
+    if !AEADFlag {
+      // TODO: head
+    }
     buffer.writeInteger(request.version.rawValue)
     buffer.writeBytes(nonce)
     symmetricKey.withUnsafeBytes {
@@ -117,7 +133,7 @@ extension BetterVMESSWriter {
     let padding = UInt8.random(in: 0...16)
     buffer.writeInteger((padding << 4) | contentSecurity.rawValue)
     // Write zero as keeper.
-    buffer.writeInteger(UInt8(0))
+    buffer.writeInteger(UInt8.zero)
     buffer.writeInteger(request.commandCode.rawValue)
 
     if request.commandCode != .mux {
@@ -146,6 +162,7 @@ extension BetterVMESSWriter {
     }
 
     if padding > 0 {
+      // Write random padding
       var paddingData = Array(repeating: UInt8.zero, count: Int(padding))
       paddingData.withUnsafeMutableBytes {
         $0.initializeWithRandomBytes(count: Int(padding))
@@ -316,77 +333,124 @@ extension BetterVMESSWriter {
   private func prepareFrame(data: ByteBuffer) throws -> Data {
     var mutableData = data
 
-    // TCP
-    let maxAllowedMemorySize = 64 * 1024 * 1024
-    guard data.readableBytes + 10 <= maxAllowedMemorySize else {
-      throw CodingError.incorrectDataSize
-    }
+    let maxLength: Int
 
-    let overhead = contentSecurity.overhead
-
-    let packetLengthSize = options.contains(.authenticatedLength) ? 2 + overhead : 2
-
-    let maxPadding = options.shouldPadding ? 64 : 0
-
-    let maxLength = 2048 - overhead - packetLengthSize - maxPadding
-
-    var frameBuffer: Data = .init()
-
-    while mutableData.readableBytes > 0 {
-      let message = mutableData.readBytes(length: min(maxLength, mutableData.readableBytes)) ?? []
-
-      var padding = 0
-      if options.shouldPadding {
-        hasher.read(digestSize: 2).withUnsafeBytes {
-          padding = Int($0.load(as: UInt16.self).bigEndian % 64)
-        }
-      }
-
-      let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
-        Array($0) + Array(self.nonce.prefix(12).suffix(10))
-      }
-
-      var frame: Data = .init()
-
-      if contentSecurity == .encryptByAES128GCM {
-        let sealedBox = try AES.GCM.seal(
-          message,
-          using: .init(data: symmetricKey),
-          nonce: .init(data: nonce)
-        )
-        frame = sealedBox.ciphertext + sealedBox.tag
-      } else {
-        let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: self.symmetricKey)
-        let sealedBox = try ChaChaPoly.seal(
-          message,
-          using: symmetricKey,
-          nonce: .init(data: nonce)
-        )
-        frame = sealedBox.ciphertext + sealedBox.tag
-      }
-
-      guard packetLengthSize + frame.count + padding <= 2048 else {
+    switch contentSecurity {
+    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
+      var frameBuffer = Data()
+      // TCP
+      let maxAllowedMemorySize = 64 * 1024 * 1024
+      guard mutableData.readableBytes + 10 <= maxAllowedMemorySize else {
         throw CodingError.incorrectDataSize
       }
 
-      let frameLengthData = try prepareFrameLengthData(
-        frameLength: frame.count + padding,
-        nonce: nonce
-      )
+      let overhead = 16
 
-      frameBuffer.append(frameLengthData)
-      frameBuffer.append(frame)
+      let packetLengthSize = options.contains(.authenticatedLength) ? 2 + overhead : 2
 
-      var paddingData = Array(repeating: UInt8.zero, count: padding)
-      paddingData.withUnsafeMutableBytes {
-        $0.initializeWithRandomBytes(count: padding)
+      let maxPadding = options.contains(.chunkMasking) && options.contains(.globalPadding) ? 64 : 0
+
+      maxLength = 2048 - overhead - packetLengthSize - maxPadding
+
+      while mutableData.readableBytes > 0 {
+        let message = mutableData.readBytes(length: min(maxLength, mutableData.readableBytes)) ?? []
+
+        let padding = nextPadding()
+
+        let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
+          Array($0) + Array(self.nonce.prefix(12).suffix(10))
+        }
+
+        let frame: Data
+        if contentSecurity == .encryptByAES128GCM {
+          let sealedBox = try AES.GCM.seal(
+            message,
+            using: .init(data: symmetricKey),
+            nonce: .init(data: nonce)
+          )
+          frame = sealedBox.ciphertext + sealedBox.tag
+        } else {
+          let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: self.symmetricKey)
+          let sealedBox = try ChaChaPoly.seal(
+            message,
+            using: .init(data: symmetricKey),
+            nonce: .init(data: nonce)
+          )
+          frame = sealedBox.ciphertext + sealedBox.tag
+        }
+
+        guard packetLengthSize + frame.count + padding <= 2048 else {
+          throw CodingError.payloadTooLarge
+        }
+
+        let frameLengthData = try prepareFrameLengthData(
+          frameLength: frame.count + padding,
+          nonce: nonce
+        )
+
+        var paddingData = Data(repeating: .zero, count: padding)
+        paddingData.withUnsafeMutableBytes {
+          $0.initializeWithRandomBytes(count: padding)
+        }
+
+        frameBuffer += frameLengthData
+        frameBuffer += frame
+        frameBuffer += paddingData
+
+        nonceLeading &+= 1
       }
-      frameBuffer.append(contentsOf: paddingData)
 
-      nonceLeading &+= 1
+      return frameBuffer
+    case .none:
+      guard options.contains(.chunkStream) else {
+        return Data(Array(buffer: mutableData))
+      }
+
+      guard commandCode == .udp else {
+        // Transfer type stream...
+        var frameBuffer = Data()
+        maxLength = 8192
+        while mutableData.readableBytes > 0 {
+          let sliceLength = min(maxLength, mutableData.readableBytes)
+          let slice = mutableData.readBytes(length: sliceLength)!
+          let frameLengthData = try prepareFrameLengthData(frameLength: sliceLength, nonce: [])
+          frameBuffer += frameLengthData
+          frameBuffer += slice
+        }
+        return frameBuffer
+      }
+
+      var frameBuffer = Data()
+      maxLength = 64 * 1024 * 1024
+      guard mutableData.readableBytes <= maxLength else {
+        throw CodingError.incorrectDataSize
+      }
+      let encryptedSize = mutableData.readableBytes
+
+      let padding = nextPadding()
+
+      guard 2 + encryptedSize + padding <= 2048 else {
+        throw CodingError.incorrectDataSize
+      }
+      frameBuffer.append(
+        try prepareFrameLengthData(frameLength: encryptedSize + padding, nonce: [])
+      )
+      frameBuffer.append(contentsOf: Array(buffer: mutableData))
+      if padding > 0 {
+        var paddingData = Data(repeating: .zero, count: padding)
+        paddingData.withUnsafeMutableBytes { buffPtr in
+          buffPtr.initializeWithRandomBytes(count: padding)
+        }
+        frameBuffer.append(paddingData)
+      }
+      return frameBuffer
+    case .legacy:
+      // TODO: AGS-CFB-128
+      assertionFailure()
+      return Data()
+    default:
+      preconditionFailure("unsupported VMESS message content security")
     }
-
-    return frameBuffer
   }
 
   /// Prepare frame length field data with specified frameLength and nonce.
@@ -401,7 +465,7 @@ extension BetterVMESSWriter {
   private func prepareFrameLengthData(frameLength: Int, nonce: [UInt8]) throws -> Data {
     if options.contains(.authenticatedLength) {
       return try withUnsafeBytes(
-        of: UInt16(frameLength - contentSecurity.overhead).bigEndian
+        of: UInt16(frameLength - 16).bigEndian
       ) {
         var symmetricKey = KDF.deriveKey(
           inputKeyMaterial: .init(data: symmetricKey),
@@ -425,7 +489,7 @@ extension BetterVMESSWriter {
           return sealedBox.ciphertext + sealedBox.tag
         }
       }
-    } else if options.contains(.masking) {
+    } else if options.contains(.chunkMasking) {
       return hasher.read(digestSize: 2).withUnsafeBytes {
         let mask = $0.load(as: UInt16.self).bigEndian
         return withUnsafeBytes(of: (mask ^ UInt16(frameLength)).bigEndian) {
@@ -444,11 +508,20 @@ extension BetterVMESSWriter {
   /// If request should trunk stream then return encrypted empty buffer as END part data else just return empty data.
   /// - Returns: Encrypted last frame data.
   private func prepareLastFrame() throws -> Data {
-    guard options.contains(.chunked) else {
+    guard options.contains(.chunkStream) else {
       return .init()
     }
 
     return try prepareFrame(data: .init())
+  }
+
+  private func nextPadding() -> Int {
+    guard options.contains(.chunkMasking) && options.contains(.globalPadding) else {
+      return 0
+    }
+    return hasher.read(digestSize: 2).withUnsafeBytes {
+      Int($0.load(as: UInt16.self).bigEndian % 64)
+    }
   }
 }
 
@@ -479,7 +552,8 @@ final public class VMESSEncoder<In: Equatable>: ChannelOutboundHandler {
     contentSecurity: ContentSecurity,
     symmetricKey: SymmetricKey,
     nonce: Nonce,
-    options: StreamOptions
+    options: StreamOptions,
+    commandCode: CommandCode
   ) {
     guard In.self == VMESSPart<VMESSRequestHead, ByteBuffer>.self else {
       preconditionFailure("unsupported VMESS message type \(In.self)")
@@ -489,7 +563,8 @@ final public class VMESSEncoder<In: Equatable>: ChannelOutboundHandler {
       contentSecurity: contentSecurity,
       symmetricKey: symmetricKey,
       nonce: nonce,
-      options: options
+      options: options,
+      commandCode: commandCode
     )
   }
 

@@ -39,7 +39,7 @@ extension ChannelPipeline {
     nonce: Nonce,
     user: UUID,
     commandCode: CommandCode = .tcp,
-    options: StreamOptions = .masking,
+    options: StreamOptions = .chunkStream,
     destinationAddress: NetAddress
   ) -> EventLoopFuture<Void> {
     let eventLoopFuture: EventLoopFuture<Void>
@@ -99,7 +99,7 @@ extension ChannelPipeline.SynchronousOperations {
     nonce: Nonce,
     user: UUID,
     commandCode: CommandCode = .tcp,
-    options: StreamOptions = .masking,
+    options: StreamOptions = .chunkStream,
     destinationAddress: NetAddress
   ) throws {
     eventLoop.assertInEventLoop()
@@ -113,7 +113,8 @@ extension ChannelPipeline.SynchronousOperations {
       contentSecurity: contentSecurity,
       symmetricKey: symmetricKey,
       nonce: nonce,
-      options: options
+      options: options,
+      commandCode: commandCode
     )
 
     let messageDecoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
@@ -121,7 +122,8 @@ extension ChannelPipeline.SynchronousOperations {
       contentSecurity: contentSecurity,
       symmetricKey: symmetricKey,
       nonce: nonce,
-      options: options
+      options: options,
+      commandCode: commandCode
     )
 
     let handlers: [ChannelHandler] = [

@@ -44,9 +44,9 @@ final public class VMESSClientHandler: ChannelInboundHandler, ChannelOutboundHan
   public init(
     version: Version = .v1,
     user: UUID,
-    authenticationCode: UInt8,
+    authenticationCode: UInt8 = .random(in: 0 ... .max),
     contentSecurity: ContentSecurity,
-    options: StreamOptions,
+    options: StreamOptions = .chunkStream,
     commandCode: CommandCode,
     destinationAddress: NetAddress
   ) {
@@ -78,6 +78,7 @@ final public class VMESSClientHandler: ChannelInboundHandler, ChannelOutboundHan
         wrapOutboundOut(
           .head(
             .init(
+              version: version,
               user: user,
               authenticationCode: authenticationCode,
               algorithm: contentSecurity,
