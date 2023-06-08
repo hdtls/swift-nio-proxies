@@ -279,8 +279,8 @@ extension BetterVMESSWriter {
       try instructionData.withUnsafeReadableBytes { inPtr in
         try result.withUnsafeMutableBytes { dataOut in
           try commonAESCFB128Encrypt(
-            nonce: Array(hasher.finalize()),
             key: inputKeyMaterial,
+            nonce: hasher.finalize(),
             dataIn: inPtr,
             dataOut: dataOut,
             dataOutAvailable: instructionData.readableBytes

@@ -209,9 +209,9 @@ final class VMESSDecoderTests: XCTestCase {
         hexString: "f9b53af2a0b7d87ca97fb9f089ba97ed114815ab943557c441cfc86700c4ddd21db3c6c49e7e"
       )
     )
-    XCTAssertThrowsError(try channel.writeInbound(data)) {
-      guard case .authenticationFailure = $0 as? CryptoKitError else {
-        XCTFail("error should be CryptoKitError.authenticationFailure")
+    XCTAssertThrowsError(try channel.writeInbound(data)) { error in
+      guard case .authenticationFailure = error as? CryptoKitError else {
+        XCTFail("error should be CryptoKitError.authenticationFailure, but receive: \(error)")
         return
       }
     }

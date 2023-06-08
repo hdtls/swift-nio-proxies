@@ -39,18 +39,18 @@ func commonFNV1a(_ ptr: UnsafeRawBufferPointer) -> UInt32 {
   commonFNV1a(Array(ptr))
 }
 
-func commonAESCFB128Encrypt<Key>(
-  nonce: [UInt8],
+func commonAESCFB128Encrypt<Key, Nonce>(
   key: Key,
+  nonce: Nonce,
   dataIn: UnsafeRawBufferPointer,
   dataOut: UnsafeMutableRawBufferPointer,
   dataOutAvailable: Int,
   dataOutMoved: UnsafeMutablePointer<Int>? = nil
-) throws where Key: ContiguousBytes {
+) throws where Key: ContiguousBytes, Nonce: ContiguousBytes {
   try commonAESCFB128Crypt(
     enc: true,
-    nonce: nonce,
     key: key,
+    nonce: nonce,
     dataIn: dataIn,
     dataOut: dataOut,
     dataOutAvailable: dataOutAvailable,
@@ -58,18 +58,18 @@ func commonAESCFB128Encrypt<Key>(
   )
 }
 
-func commonAESCFB128Decrypt<Key>(
-  nonce: [UInt8],
+func commonAESCFB128Decrypt<Key, Nonce>(
   key: Key,
+  nonce: Nonce,
   dataIn: UnsafeRawBufferPointer,
   dataOut: UnsafeMutableRawBufferPointer,
   dataOutAvailable: Int,
   dataOutMoved: UnsafeMutablePointer<Int>? = nil
-) throws where Key: ContiguousBytes {
+) throws where Key: ContiguousBytes, Nonce: ContiguousBytes {
   try commonAESCFB128Crypt(
     enc: false,
-    nonce: nonce,
     key: key,
+    nonce: nonce,
     dataIn: dataIn,
     dataOut: dataOut,
     dataOutAvailable: dataOutAvailable,
@@ -111,15 +111,15 @@ func commonAESDecrypt<Key>(
   )
 }
 
-private func commonAESCFB128Crypt<Key>(
+private func commonAESCFB128Crypt<Key, Nonce>(
   enc: Bool,
-  nonce: [UInt8],
   key: Key,
+  nonce: Nonce,
   dataIn: UnsafeRawBufferPointer,
   dataOut: UnsafeMutableRawBufferPointer,
   dataOutAvailable: Int,
   dataOutMoved: UnsafeMutablePointer<Int>?
-) throws where Key: ContiguousBytes {
+) throws where Key: ContiguousBytes, Nonce: ContiguousBytes {
   #if canImport(CommonCrypto)
   var dataOutAvailable = dataOutAvailable
   var cryptor: CCCryptorRef?
@@ -202,14 +202,14 @@ private func commonAESCFB128Crypt<Key>(
   }
 
   var num: Int32 = 0
-  var nonce = nonce
-  nonce.withUnsafeMutableBytes { iv in
+
+  nonce.withUnsafeBytes {
     CCryptoBoringSSL_AES_cfb128_encrypt(
       dataIn.bindMemory(to: UInt8.self).baseAddress,
       dataOut.bindMemory(to: UInt8.self).baseAddress,
       dataOutAvailable,
       symmetricKey,
-      iv.bindMemory(to: UInt8.self).baseAddress,
+      UnsafeMutableRawPointer(mutating: $0.baseAddress),
       &num,
       enc ? AES_ENCRYPT : AES_DECRYPT
     )

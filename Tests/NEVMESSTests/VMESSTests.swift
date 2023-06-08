@@ -47,8 +47,8 @@ class VMESSTests: XCTestCase {
     try data.withUnsafeBytes { inPtr in
       try result.withUnsafeMutableBytes { dataOut in
         try commonAESCFB128Encrypt(
-          nonce: Array(i),
           key: k,
+          nonce: i,
           dataIn: inPtr,
           dataOut: dataOut,
           dataOutAvailable: data.count
