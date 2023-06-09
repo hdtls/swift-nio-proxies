@@ -29,7 +29,7 @@ public enum CodingError: Error {
 
   case failedToParseDataSize
 
+  case failedToParseData([UInt8])
+
   case payloadTooLarge
 }
-
-struct VMESSNotImplementedError: Error {}

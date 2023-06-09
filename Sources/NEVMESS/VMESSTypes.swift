@@ -47,10 +47,10 @@ public struct ContentSecurity: RawRepresentable, Hashable, Sendable {
 
   public static let unknown = ContentSecurity(rawValue: 0x00)
 
-  /// AES-128-CFB
-  public static let legacy = ContentSecurity(rawValue: 0x01)
+  /// AES-CFB-128
+  public static let encryptByAESCFB128 = ContentSecurity(rawValue: 0x01)
 
-  public static let automatically = ContentSecurity(rawValue: 0x02)
+  public static let auto = ContentSecurity(rawValue: 0x02)
 
   /// AES-128-GCM
   public static let encryptByAES128GCM = ContentSecurity(rawValue: 0x03)

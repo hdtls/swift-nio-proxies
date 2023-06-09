@@ -70,12 +70,12 @@ private class BetterVMESSWriter<In> where In: Equatable {
         options.insert(.globalPadding)
       }
       self.contentSecurity = contentSecurity
-    case .legacy:
+    case .encryptByAESCFB128:
       if options.contains(.chunkMasking) && enablePadding {
         options.insert(.globalPadding)
       }
       self.contentSecurity = contentSecurity
-    case .automatically:
+    case .auto:
       options.insert(.globalPadding)
       self.contentSecurity = contentSecurity
     case .zero:
@@ -108,6 +108,287 @@ private class BetterVMESSWriter<In> where In: Equatable {
       return bytes
     case .response:
       throw CodingError.operationUnsupported
+    }
+  }
+
+  /// Prepare frame data with specified data.
+  /// - Parameter data: Original data.
+  /// - Returns: Encrypted frame data.
+  private func prepareFrame(data: ByteBuffer) throws -> Data {
+    var mutableData = data
+
+    let maxLength: Int
+    var finalize = Data()
+
+    switch contentSecurity {
+    case .none:
+      guard options.contains(.chunkStream) else {
+        finalize = Data(Array(buffer: mutableData))
+        return finalize
+      }
+
+      guard commandCode == .udp else {
+        // Transfer type stream...
+        maxLength = 8192
+        while mutableData.readableBytes > 0 {
+          let sliceLength = min(maxLength, mutableData.readableBytes)
+          let slice = mutableData.readBytes(length: sliceLength)!
+          let frameLengthData = try prepareFrameLengthData(frameLength: sliceLength, nonce: [])
+          finalize += frameLengthData
+          finalize += slice
+        }
+        return finalize
+      }
+
+      maxLength = 64 * 1024 * 1024
+      guard mutableData.readableBytes <= maxLength else {
+        throw CodingError.payloadTooLarge
+      }
+      let encryptedSize = mutableData.readableBytes
+
+      let padding = nextPadding()
+
+      guard 2 + encryptedSize + padding <= 2048 else {
+        throw CodingError.payloadTooLarge
+      }
+
+      let frameLengthData = try prepareFrameLengthData(
+        frameLength: encryptedSize + padding,
+        nonce: []
+      )
+      finalize += frameLengthData
+      finalize += Array(buffer: mutableData)
+      if padding > 0 {
+        var paddingData = Data(repeating: .zero, count: padding)
+        paddingData.withUnsafeMutableBytes { buffPtr in
+          buffPtr.initializeWithRandomBytes(count: padding)
+        }
+        finalize += paddingData
+      }
+      return finalize
+    case .encryptByAESCFB128:
+      guard options.contains(.chunkStream) else {
+        var dataOutMoved = 0
+        finalize = Data(repeating: .zero, count: data.readableBytes)
+        try finalize.withUnsafeMutableBytes { dataOut in
+          try data.withUnsafeReadableBytes { dataIn in
+            try commonAESCFB128Encrypt(
+              key: symmetricKey,
+              nonce: nonce,
+              dataIn: dataIn,
+              dataOut: dataOut,
+              dataOutAvailable: dataIn.count,
+              dataOutMoved: &dataOutMoved
+            )
+          }
+        }
+        return finalize.prefix(dataOutMoved)
+      }
+
+      guard commandCode == .udp else {
+        // Transfer type stream...
+        let maxAllowedMemorySize = 64 * 1024 * 1024
+        guard mutableData.readableBytes + 10 <= maxAllowedMemorySize else {
+          throw CodingError.payloadTooLarge
+        }
+
+        let maxPadding =
+          options.contains(.chunkMasking) && options.contains(.globalPadding) ? 64 : 0
+
+        let packetLengthDataSize = 2
+
+        maxLength = 2048 - MemoryLayout<UInt32>.size - packetLengthDataSize - maxPadding
+
+        while mutableData.readableBytes > 0 {
+          let message =
+            mutableData.readBytes(length: min(maxLength, mutableData.readableBytes)) ?? []
+
+          let padding = nextPadding()
+
+          var frame = Data()
+
+          withUnsafeBytes(of: commonFNV1a(message).bigEndian) { buffPtr in
+            frame.append(contentsOf: buffPtr)
+          }
+
+          frame += message
+
+          guard packetLengthDataSize + frame.count + padding <= 2048 else {
+            throw CodingError.payloadTooLarge
+          }
+
+          let frameLengthData = try prepareFrameLengthData(
+            frameLength: message.count + MemoryLayout<UInt32>.size + padding,
+            nonce: []
+          )
+
+          finalize += frameLengthData
+          finalize += frame
+
+          if padding > 0 {
+            var paddingData = Data(repeating: .zero, count: padding)
+            paddingData.withUnsafeMutableBytes {
+              $0.initializeWithRandomBytes(count: padding)
+            }
+            finalize += paddingData
+          }
+        }
+
+        var dataOutMoved = 0
+        let copy = finalize
+        try finalize.withUnsafeMutableBytes { dataOut in
+          try copy.withUnsafeBytes { dataIn in
+            try commonAESCFB128Encrypt(
+              key: symmetricKey,
+              nonce: nonce,
+              dataIn: dataIn,
+              dataOut: dataOut,
+              dataOutAvailable: copy.count,
+              dataOutMoved: &dataOutMoved
+            )
+          }
+        }
+        return finalize.prefix(dataOutMoved)
+      }
+
+      // TODO: AES-CFB-128 UDP Frame Encoding
+      return finalize
+    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
+      let maxAllowedMemorySize = 64 * 1024 * 1024
+      guard mutableData.readableBytes + 10 <= maxAllowedMemorySize else {
+        throw CodingError.payloadTooLarge
+      }
+
+      let packetLengthSize = options.contains(.authenticatedLength) ? 18 : 2
+
+      let maxPadding = options.contains(.chunkMasking) && options.contains(.globalPadding) ? 64 : 0
+
+      maxLength = 2048 - 16 - packetLengthSize - maxPadding
+
+      while mutableData.readableBytes > 0 {
+        let message = mutableData.readBytes(length: min(maxLength, mutableData.readableBytes)) ?? []
+
+        let padding = nextPadding()
+
+        let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
+          Array($0) + Array(self.nonce.prefix(12).suffix(10))
+        }
+
+        let frame: Data
+        if contentSecurity == .encryptByAES128GCM {
+          let sealedBox = try AES.GCM.seal(
+            message,
+            using: .init(data: symmetricKey),
+            nonce: .init(data: nonce)
+          )
+          frame = sealedBox.ciphertext + sealedBox.tag
+        } else {
+          let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: self.symmetricKey)
+          let sealedBox = try ChaChaPoly.seal(
+            message,
+            using: .init(data: symmetricKey),
+            nonce: .init(data: nonce)
+          )
+          frame = sealedBox.ciphertext + sealedBox.tag
+        }
+
+        guard packetLengthSize + frame.count + padding <= 2048 else {
+          throw CodingError.payloadTooLarge
+        }
+
+        let frameLengthData = try prepareFrameLengthData(
+          frameLength: frame.count + padding,
+          nonce: nonce
+        )
+
+        finalize += frameLengthData
+        finalize += frame
+
+        if padding > 0 {
+          var paddingData = Data(repeating: .zero, count: padding)
+          paddingData.withUnsafeMutableBytes {
+            $0.initializeWithRandomBytes(count: padding)
+          }
+          finalize += paddingData
+        }
+
+        nonceLeading &+= 1
+      }
+
+      return finalize
+    default:
+      throw CodingError.operationUnsupported
+    }
+  }
+
+  /// Prepare frame length field data with specified frameLength and nonce.
+  ///
+  /// If request options contains `.authenticatedLength` then packet length data encrypt using AEAD,
+  /// else if request options contains `.chunkMasking` then packet length data encrypt using SHAKE128,
+  /// otherwise just return plain size data.
+  /// - Parameters:
+  ///   - frameLength: Frame data length.
+  ///   - nonce: Nonce used to create AEAD nonce.
+  /// - Returns: The encrypted frame length field data.
+  private func prepareFrameLengthData(frameLength: Int, nonce: [UInt8]) throws -> Data {
+    if options.contains(.authenticatedLength) {
+      return try withUnsafeBytes(
+        of: UInt16(frameLength - 16).bigEndian
+      ) {
+        var symmetricKey = KDF.deriveKey(
+          inputKeyMaterial: .init(data: symmetricKey),
+          info: Data("auth_len".utf8)
+        )
+
+        if contentSecurity == .encryptByAES128GCM {
+          let sealedBox = try AES.GCM.seal(
+            $0,
+            using: symmetricKey,
+            nonce: .init(data: nonce)
+          )
+          return sealedBox.ciphertext + sealedBox.tag
+        } else {
+          symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
+          let sealedBox = try ChaChaPoly.seal(
+            $0,
+            using: symmetricKey,
+            nonce: .init(data: nonce)
+          )
+          return sealedBox.ciphertext + sealedBox.tag
+        }
+      }
+    } else if options.contains(.chunkMasking) {
+      return hasher.read(digestSize: 2).withUnsafeBytes {
+        let mask = $0.load(as: UInt16.self).bigEndian
+        return withUnsafeBytes(of: (mask ^ UInt16(frameLength)).bigEndian) {
+          Data($0)
+        }
+      }
+    } else {
+      return withUnsafeBytes(of: UInt16(frameLength).bigEndian) {
+        Data($0)
+      }
+    }
+  }
+
+  /// Prepare last frame data.
+  ///
+  /// If request should trunk stream then return encrypted empty buffer as END part data else just return empty data.
+  /// - Returns: Encrypted last frame data.
+  private func prepareLastFrame() throws -> Data {
+    guard options.contains(.chunkStream) else {
+      return .init()
+    }
+
+    return try prepareFrame(data: .init())
+  }
+
+  private func nextPadding() -> Int {
+    guard options.contains(.chunkMasking) && options.contains(.globalPadding) else {
+      return 0
+    }
+    return hasher.read(digestSize: 2).withUnsafeBytes {
+      Int($0.load(as: UInt16.self).bigEndian % 64)
     }
   }
 }
@@ -325,203 +606,6 @@ extension BetterVMESSWriter {
     }
 
     return result.prefix(16)
-  }
-
-  /// Prepare frame data with specified data.
-  /// - Parameter data: Original data.
-  /// - Returns: Encrypted frame data.
-  private func prepareFrame(data: ByteBuffer) throws -> Data {
-    var mutableData = data
-
-    let maxLength: Int
-
-    switch contentSecurity {
-    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
-      var frameBuffer = Data()
-      // TCP
-      let maxAllowedMemorySize = 64 * 1024 * 1024
-      guard mutableData.readableBytes + 10 <= maxAllowedMemorySize else {
-        throw CodingError.incorrectDataSize
-      }
-
-      let overhead = 16
-
-      let packetLengthSize = options.contains(.authenticatedLength) ? 2 + overhead : 2
-
-      let maxPadding = options.contains(.chunkMasking) && options.contains(.globalPadding) ? 64 : 0
-
-      maxLength = 2048 - overhead - packetLengthSize - maxPadding
-
-      while mutableData.readableBytes > 0 {
-        let message = mutableData.readBytes(length: min(maxLength, mutableData.readableBytes)) ?? []
-
-        let padding = nextPadding()
-
-        let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
-          Array($0) + Array(self.nonce.prefix(12).suffix(10))
-        }
-
-        let frame: Data
-        if contentSecurity == .encryptByAES128GCM {
-          let sealedBox = try AES.GCM.seal(
-            message,
-            using: .init(data: symmetricKey),
-            nonce: .init(data: nonce)
-          )
-          frame = sealedBox.ciphertext + sealedBox.tag
-        } else {
-          let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: self.symmetricKey)
-          let sealedBox = try ChaChaPoly.seal(
-            message,
-            using: .init(data: symmetricKey),
-            nonce: .init(data: nonce)
-          )
-          frame = sealedBox.ciphertext + sealedBox.tag
-        }
-
-        guard packetLengthSize + frame.count + padding <= 2048 else {
-          throw CodingError.payloadTooLarge
-        }
-
-        let frameLengthData = try prepareFrameLengthData(
-          frameLength: frame.count + padding,
-          nonce: nonce
-        )
-
-        var paddingData = Data(repeating: .zero, count: padding)
-        paddingData.withUnsafeMutableBytes {
-          $0.initializeWithRandomBytes(count: padding)
-        }
-
-        frameBuffer += frameLengthData
-        frameBuffer += frame
-        frameBuffer += paddingData
-
-        nonceLeading &+= 1
-      }
-
-      return frameBuffer
-    case .none:
-      guard options.contains(.chunkStream) else {
-        return Data(Array(buffer: mutableData))
-      }
-
-      guard commandCode == .udp else {
-        // Transfer type stream...
-        var frameBuffer = Data()
-        maxLength = 8192
-        while mutableData.readableBytes > 0 {
-          let sliceLength = min(maxLength, mutableData.readableBytes)
-          let slice = mutableData.readBytes(length: sliceLength)!
-          let frameLengthData = try prepareFrameLengthData(frameLength: sliceLength, nonce: [])
-          frameBuffer += frameLengthData
-          frameBuffer += slice
-        }
-        return frameBuffer
-      }
-
-      var frameBuffer = Data()
-      maxLength = 64 * 1024 * 1024
-      guard mutableData.readableBytes <= maxLength else {
-        throw CodingError.incorrectDataSize
-      }
-      let encryptedSize = mutableData.readableBytes
-
-      let padding = nextPadding()
-
-      guard 2 + encryptedSize + padding <= 2048 else {
-        throw CodingError.incorrectDataSize
-      }
-      frameBuffer.append(
-        try prepareFrameLengthData(frameLength: encryptedSize + padding, nonce: [])
-      )
-      frameBuffer.append(contentsOf: Array(buffer: mutableData))
-      if padding > 0 {
-        var paddingData = Data(repeating: .zero, count: padding)
-        paddingData.withUnsafeMutableBytes { buffPtr in
-          buffPtr.initializeWithRandomBytes(count: padding)
-        }
-        frameBuffer.append(paddingData)
-      }
-      return frameBuffer
-    case .legacy:
-      // TODO: AGS-CFB-128
-      assertionFailure()
-      return Data()
-    default:
-      preconditionFailure("unsupported VMESS message content security")
-    }
-  }
-
-  /// Prepare frame length field data with specified frameLength and nonce.
-  ///
-  /// If request options contains `.authenticatedLength` then packet length data encrypt using AEAD,
-  /// else if request options contains `.chunkMasking` then packet length data encrypt using SHAKE128,
-  /// otherwise just return plain size data.
-  /// - Parameters:
-  ///   - frameLength: Frame data length.
-  ///   - nonce: Nonce used to create AEAD nonce.
-  /// - Returns: The encrypted frame length field data.
-  private func prepareFrameLengthData(frameLength: Int, nonce: [UInt8]) throws -> Data {
-    if options.contains(.authenticatedLength) {
-      return try withUnsafeBytes(
-        of: UInt16(frameLength - 16).bigEndian
-      ) {
-        var symmetricKey = KDF.deriveKey(
-          inputKeyMaterial: .init(data: symmetricKey),
-          info: Data("auth_len".utf8)
-        )
-
-        if contentSecurity == .encryptByAES128GCM {
-          let sealedBox = try AES.GCM.seal(
-            $0,
-            using: symmetricKey,
-            nonce: .init(data: nonce)
-          )
-          return sealedBox.ciphertext + sealedBox.tag
-        } else {
-          symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
-          let sealedBox = try ChaChaPoly.seal(
-            $0,
-            using: symmetricKey,
-            nonce: .init(data: nonce)
-          )
-          return sealedBox.ciphertext + sealedBox.tag
-        }
-      }
-    } else if options.contains(.chunkMasking) {
-      return hasher.read(digestSize: 2).withUnsafeBytes {
-        let mask = $0.load(as: UInt16.self).bigEndian
-        return withUnsafeBytes(of: (mask ^ UInt16(frameLength)).bigEndian) {
-          Data($0)
-        }
-      }
-    } else {
-      return withUnsafeBytes(of: UInt16(frameLength).bigEndian) {
-        Data($0)
-      }
-    }
-  }
-
-  /// Prepare last frame data.
-  ///
-  /// If request should trunk stream then return encrypted empty buffer as END part data else just return empty data.
-  /// - Returns: Encrypted last frame data.
-  private func prepareLastFrame() throws -> Data {
-    guard options.contains(.chunkStream) else {
-      return .init()
-    }
-
-    return try prepareFrame(data: .init())
-  }
-
-  private func nextPadding() -> Int {
-    guard options.contains(.chunkMasking) && options.contains(.globalPadding) else {
-      return 0
-    }
-    return hasher.read(digestSize: 2).withUnsafeBytes {
-      Int($0.load(as: UInt16.self).bigEndian % 64)
-    }
   }
 }
 

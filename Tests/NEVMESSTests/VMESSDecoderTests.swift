@@ -211,7 +211,7 @@ final class VMESSDecoderTests: XCTestCase {
     )
     XCTAssertThrowsError(try channel.writeInbound(data)) { error in
       guard case .authenticationFailure = error as? CryptoKitError else {
-        XCTFail("error should be CryptoKitError.authenticationFailure, but receive: \(error)")
+        XCTFail("error should be CryptoKitError.authenticationFailure but got \(error)")
         return
       }
     }

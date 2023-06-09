@@ -89,12 +89,12 @@ private class BetterVMESSParser {
         options.insert(.globalPadding)
       }
       self.contentSecurity = contentSecurity
-    case .legacy:
+    case .encryptByAESCFB128:
       if options.contains(.chunkMasking) && enablePadding {
         options.insert(.globalPadding)
       }
       self.contentSecurity = contentSecurity
-    case .automatically:
+    case .auto:
       options.insert(.globalPadding)
       self.contentSecurity = contentSecurity
     case .zero:
@@ -174,6 +174,240 @@ private class BetterVMESSParser {
 
     return byteBuffer.readerIndex - bytes!.readerIndex
   }
+
+  /// Parse frame length and padding from buffer.
+  ///
+  /// Return nil if need more data else return parsed length and padding.
+  private func parseLengthAndPadding(from buffer: inout ByteBuffer) throws -> (Int, Int)? {
+    var padding = 0
+
+    switch contentSecurity {
+    case .none:
+      guard options.contains(.chunkStream) else {
+        return (buffer.readableBytes, padding)
+      }
+      if commandCode == .udp {
+        padding = nextPadding()
+      }
+      guard let frameLength = try parseLength(from: &buffer) else {
+        return nil
+      }
+      return (frameLength, padding)
+    case .encryptByAESCFB128:
+      guard options.contains(.chunkStream) else {
+        return (buffer.readableBytes, padding)
+      }
+
+      guard let dataIn = buffer.getSlice(at: buffer.readerIndex, length: MemoryLayout<UInt16>.size)
+      else {
+        return nil
+      }
+      var dataOut = dataIn
+      var dataOutMoved = 0
+      try dataOut.withUnsafeMutableReadableBytes { dataOutPtr in
+        try dataIn.withUnsafeReadableBytes { dataInPtr in
+          try commonAESCFB128Decrypt(
+            key: symmetricKey,
+            nonce: nonce,
+            dataIn: dataInPtr,
+            dataOut: dataOutPtr,
+            dataOutAvailable: dataIn.readableBytes,
+            dataOutMoved: &dataOutMoved
+          )
+        }
+      }
+
+      guard var message = dataOut.readSlice(length: dataOutMoved),
+        message.readableBytes == dataIn.readableBytes
+      else {
+        throw CodingError.failedToParseDataSize
+      }
+
+      padding = nextPadding()
+
+      guard let frameLength = try parseLength(from: &message) else {
+        // There, we have already got enough bytes to parse frame length but still failed, so we
+        // need throw error.
+        throw CodingError.failedToParseDataSize
+      }
+      return (frameLength + 2, padding)
+    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
+      // Both `AES.GCM.tagSize` and `ChaChaPoly.tagSize` are 16.
+      let tagDataLength = 16
+      var frameLengthDataLength = MemoryLayout<UInt16>.size
+
+      if options.contains(.authenticatedLength) {
+        frameLengthDataLength += tagDataLength
+      }
+
+      // Buffer is not enough to decode frame length, return nil to waiting for more data.
+      guard var frameLengthData = buffer.readSlice(length: frameLengthDataLength) else {
+        return nil
+      }
+
+      padding = nextPadding()
+
+      guard options.contains(.authenticatedLength) else {
+        guard let frameLength = try parseLength(from: &frameLengthData) else {
+          // We have already checked that data is enough to read frame length,
+          // so there we should throw error instead of return nil.
+          throw CodingError.failedToParseDataSize
+        }
+        return (frameLength, padding)
+      }
+
+      var symmetricKey = KDF.deriveKey(
+        inputKeyMaterial: .init(data: symmetricKey),
+        info: Data("auth_len".utf8)
+      )
+      let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
+        Array($0) + Array(self.nonce.prefix(12).suffix(10))
+      }
+
+      if contentSecurity == .encryptByAES128GCM {
+        let sealedBox = try AES.GCM.SealedBox(combined: nonce + Array(buffer: frameLengthData))
+        let frameLength = try AES.GCM.open(sealedBox, using: symmetricKey).withUnsafeBytes {
+          $0.load(as: UInt16.self).bigEndian + UInt16(tagDataLength)
+        }
+        return (Int(frameLength), padding)
+      } else {
+        symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
+        let sealedBox = try ChaChaPoly.SealedBox(combined: nonce + Array(buffer: frameLengthData))
+        let frameLength = try ChaChaPoly.open(sealedBox, using: symmetricKey).withUnsafeBytes {
+          $0.load(as: UInt16.self).bigEndian + UInt16(tagDataLength)
+        }
+        return (Int(frameLength), padding)
+      }
+    default:
+      throw CodingError.operationUnsupported
+    }
+  }
+
+  private func parseLength(from buffer: inout ByteBuffer) throws -> Int? {
+    guard let l = buffer.readInteger(as: UInt16.self) else {
+      return nil
+    }
+
+    guard options.contains(.chunkMasking) else {
+      return Int(l)
+    }
+    let frameLength = hasher.read(digestSize: 2).withUnsafeBytes {
+      let mask = $0.load(as: UInt16.self).bigEndian
+      return mask ^ l
+    }
+    return Int(frameLength)
+  }
+
+  /// Parse frame from buffer with specified frameLength and padding..
+  private func parseFrame(from buffer: inout ByteBuffer, frameLength: Int, padding: Int) throws
+    -> Data?
+  {
+    switch contentSecurity {
+    case .none:
+      guard options.contains(.chunkStream) else {
+        guard let message = buffer.readBytes(length: frameLength) else {
+          return nil
+        }
+        return Data(message)
+      }
+
+      guard commandCode == .udp else {
+        // Transfer type stream...
+        guard let message = buffer.readBytes(length: frameLength) else {
+          return nil
+        }
+        return Data(message)
+      }
+      // TODO: Parse UDP Frame
+      return nil
+    case .encryptByAESCFB128:
+      guard options.contains(.chunkStream) else {
+        guard let message = buffer.readBytes(length: frameLength) else {
+          return nil
+        }
+        return Data(message)
+      }
+
+      guard let dataIn = buffer.readSlice(length: frameLength) else {
+        return nil
+      }
+
+      // AES-CFB-128 decrypt...
+      var dataOut = dataIn
+      var dataOutMoved = 0
+      try dataOut.withUnsafeMutableReadableBytes { dataOutPtr in
+        try dataIn.withUnsafeReadableBytes { dataInPtr in
+          try commonAESCFB128Decrypt(
+            key: symmetricKey,
+            nonce: nonce,
+            dataIn: dataInPtr,
+            dataOut: dataOutPtr,
+            dataOutAvailable: dataIn.readableBytes,
+            dataOutMoved: &dataOutMoved
+          )
+        }
+      }
+      guard var message = dataOut.readSlice(length: dataOutMoved),
+        message.readableBytes == dataIn.readableBytes
+      else {
+        throw CodingError.failedToParseData([])
+      }
+
+      message.moveReaderIndex(forwardBy: MemoryLayout<UInt16>.size)
+      guard let code = message.readInteger(as: UInt32.self) else {
+        throw CodingError.failedToParseData(Array(buffer: message))
+      }
+
+      let authenticationFailure = message.withUnsafeReadableBytes { buffPtr in
+        commonFNV1a(buffPtr) != code
+      }
+      guard !authenticationFailure else {
+        throw CryptoKitError.authenticationFailure
+      }
+      return Data(Array(buffer: message))
+    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
+      // Tag for AES-GCM or ChaCha20-Poly1305 are both 16.
+      guard frameLength != 16 + padding else {
+        throw CryptoKitError.authenticationFailure
+      }
+
+      guard let message = buffer.readBytes(length: frameLength) else {
+        return nil
+      }
+
+      let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
+        Array($0) + Array(self.nonce.prefix(12).suffix(10))
+      }
+
+      // Remove random padding bytes.
+      let combined = nonce + (message.dropLast(padding))
+
+      var frame: Data
+      if contentSecurity == .encryptByAES128GCM {
+        frame = try AES.GCM.open(.init(combined: combined), using: .init(data: symmetricKey))
+      } else {
+        let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
+        frame = try ChaChaPoly.open(.init(combined: combined), using: symmetricKey)
+      }
+
+      nonceLeading &+= 1
+      return frame
+    default:
+      throw CodingError.operationUnsupported
+    }
+  }
+
+  private func nextPadding() -> Int {
+    guard options.contains(.chunkMasking) && options.contains(.globalPadding) else {
+      return 0
+    }
+    return hasher.read(digestSize: 2).withUnsafeBytes {
+      Int($0.load(as: UInt16.self).bigEndian % 64)
+    }
+  }
+}
+
+extension BetterVMESSParser {
 
   private func parseResponseHead(data: inout ByteBuffer) throws -> VMESSResponseHead? {
     guard AEADFlag else {
@@ -405,165 +639,6 @@ private class BetterVMESSParser {
     }
 
     return .socketAddress(try .init(ipAddress: string, port: 0))
-  }
-
-  /// Parse frame length and padding from buffer.
-  ///
-  /// Return nil if need more data else return parsed length and padding.
-  private func parseLengthAndPadding(from buffer: inout ByteBuffer) throws -> (Int, Int)? {
-    var padding = 0
-
-    switch contentSecurity {
-    case .none:
-      guard options.contains(.chunkStream) else {
-        return (buffer.readableBytes, padding)
-      }
-      if commandCode == .udp {
-        padding = nextPadding()
-
-        guard let frameLength = try parseLength0(from: &buffer) else {
-          return nil
-        }
-        return (frameLength, padding)
-      } else {
-        guard let frameLength = try parseLength0(from: &buffer) else {
-          return nil
-        }
-        return (frameLength, padding)
-      }
-    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
-      // Both `AES.GCM.tagSize` and `ChaChaPoly.tagSize` are 16.
-      let tagDataLength = 16
-      var frameLengthDataLength = MemoryLayout<UInt16>.size
-
-      if options.contains(.authenticatedLength) {
-        frameLengthDataLength += tagDataLength
-      }
-
-      // Buffer is not enough to decode frame length, return nil to waiting for more data.
-      guard var frameLengthData = buffer.readSlice(length: frameLengthDataLength) else {
-        return nil
-      }
-
-      padding = nextPadding()
-
-      guard options.contains(.authenticatedLength) else {
-        guard let frameLength = try parseLength0(from: &frameLengthData) else {
-          // We have already checked that data is enough to read frame length,
-          // so there we should throw error instead of return nil.
-          throw CodingError.failedToParseDataSize
-        }
-        return (frameLength, padding)
-      }
-
-      var symmetricKey = KDF.deriveKey(
-        inputKeyMaterial: .init(data: symmetricKey),
-        info: Data("auth_len".utf8)
-      )
-
-      let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
-        Array($0) + Array(self.nonce.prefix(12).suffix(10))
-      }
-
-      if contentSecurity == .encryptByAES128GCM {
-        let sealedBox = try AES.GCM.SealedBox(combined: nonce + Array(buffer: frameLengthData))
-        let frameLength = try AES.GCM.open(sealedBox, using: symmetricKey).withUnsafeBytes {
-          $0.load(as: UInt16.self).bigEndian + UInt16(tagDataLength)
-        }
-        return (Int(frameLength), padding)
-      } else {
-        symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
-        let sealedBox = try ChaChaPoly.SealedBox(combined: nonce + Array(buffer: frameLengthData))
-        let frameLength = try ChaChaPoly.open(sealedBox, using: symmetricKey).withUnsafeBytes {
-          $0.load(as: UInt16.self).bigEndian + UInt16(tagDataLength)
-        }
-        return (Int(frameLength), padding)
-      }
-    default:
-      throw CodingError.operationUnsupported
-    }
-  }
-
-  private func parseLength0(from buffer: inout ByteBuffer) throws -> Int? {
-    guard options.contains(.chunkMasking) else {
-      guard let frameLength = buffer.readInteger(as: UInt16.self) else {
-        return nil
-      }
-      return Int(frameLength)
-    }
-
-    guard let l = buffer.readInteger(as: UInt16.self) else {
-      return nil
-    }
-
-    let frameLength = hasher.read(digestSize: 2).withUnsafeBytes {
-      let mask = $0.load(as: UInt16.self).bigEndian
-      return mask ^ l
-    }
-    return Int(frameLength)
-  }
-
-  /// Parse frame from buffer with specified frameLength and padding..
-  private func parseFrame(from buffer: inout ByteBuffer, frameLength: Int, padding: Int) throws
-    -> Data?
-  {
-    switch contentSecurity {
-    case .none:
-      guard options.contains(.chunkStream) else {
-        guard let message = buffer.readBytes(length: frameLength) else {
-          return nil
-        }
-        return Data(message)
-      }
-
-      guard commandCode == .udp else {
-        // Transfer type stream...
-        guard let message = buffer.readBytes(length: frameLength) else {
-          return nil
-        }
-        return Data(message)
-      }
-      // TODO: Parse UDP Frame
-      return nil
-    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
-      // Tag for AES-GCM or ChaCha20-Poly1305 are both 16.
-      guard frameLength != 16 + padding else {
-        throw CryptoKitError.authenticationFailure
-      }
-
-      guard let message = buffer.readBytes(length: frameLength) else {
-        return nil
-      }
-
-      let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
-        Array($0) + Array(self.nonce.prefix(12).suffix(10))
-      }
-
-      // Remove random padding bytes.
-      let combined = nonce + (message.dropLast(padding))
-
-      var frame: Data
-      if contentSecurity == .encryptByAES128GCM {
-        frame = try AES.GCM.open(.init(combined: combined), using: .init(data: symmetricKey))
-      } else {
-        let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
-        frame = try ChaChaPoly.open(.init(combined: combined), using: symmetricKey)
-      }
-
-      nonceLeading &+= 1
-      return frame
-    default:
-      throw CodingError.operationUnsupported
-    }
-  }
-
-  private func nextPadding() -> Int {
-    guard options.contains(.chunkMasking) && options.contains(.globalPadding) else {
-      return 0
-    }
-    return hasher.read(digestSize: 2).withUnsafeBytes {
-      Int($0.load(as: UInt16.self).bigEndian % 64)
-    }
   }
 }
 
