@@ -169,11 +169,15 @@ final class VMESSDecoderTests: XCTestCase {
     XCTAssertNoThrow(try channel.pipeline.addHandler(ByteToMessageHandler(decoder)).wait())
 
     let data = ByteBuffer(hexEncoded: "f9b53af2a0b7d87ca97fb9f089ba97ed1149")!
-    XCTAssertThrowsError(try channel.writeInbound(data)) {
-      guard case .authenticationFailure = $0 as? CryptoKitError else {
-        XCTFail("error should be CryptoKitError.authenticationFailure")
+    XCTAssertThrowsError(try channel.writeInbound(data)) { error in
+      #if canImport(CryptoKit)
+      guard case .authenticationFailure = error as? CryptoKitError else {
+        XCTFail("error should be CryptoKitError.authenticationFailure but got \(error)")
         return
       }
+      #else
+      XCTAssertTrue(error is CryptoKitError, "error should be CryptoKitError")
+      #endif
     }
   }
 
@@ -192,10 +196,14 @@ final class VMESSDecoderTests: XCTestCase {
       hexEncoded: "f9b53af2a0b7d87ca97fb9f089ba97ed114815ab943557c441cfc86700c4ddd21db3c6c49e7e"
     )!
     XCTAssertThrowsError(try channel.writeInbound(data)) { error in
+      #if canImport(CryptoKit)
       guard case .authenticationFailure = error as? CryptoKitError else {
         XCTFail("error should be CryptoKitError.authenticationFailure but got \(error)")
         return
       }
+      #else
+      XCTAssertTrue(error is CryptoKitError, "error should be CryptoKitError")
+      #endif
     }
   }
 
