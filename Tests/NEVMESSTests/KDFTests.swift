@@ -33,7 +33,7 @@ class KDFTests: XCTestCase {
       outputByteCount: 32
     )
     result.withUnsafeBytes {
-      XCTAssertEqual($0.hexString, expectedKey)
+      XCTAssertEqual($0.hexEncodedString(), expectedKey)
     }
   }
 }

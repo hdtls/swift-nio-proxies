@@ -36,7 +36,7 @@ public struct SHAKE128Digest: DigestPrivate {
   }
 
   public var description: String {
-    return "\("SHAKE128") digest: \(toArray().hexString)"
+    return "\("SHAKE128") digest: \(toArray().hexEncodedString())"
   }
 
   public func hash(into hasher: inout Hasher) {

@@ -55,7 +55,7 @@ private func htoi(_ value: UInt8) throws -> UInt8 {
 
 extension DataProtocol {
 
-  public var hexString: String {
+  public func hexEncodedString() -> String {
     let hexLen = self.count * 2
     var hexChars = [UInt8](repeating: 0, count: hexLen)
     var offset = 0
@@ -72,44 +72,37 @@ extension DataProtocol {
   }
 }
 
-extension MutableDataProtocol {
-
-  public mutating func appendByte(_ byte: UInt64) {
-    withUnsafePointer(
-      to: byte.littleEndian,
-      { self.append(contentsOf: UnsafeRawBufferPointer(start: $0, count: 8)) }
-    )
-  }
-}
-
 extension Data {
 
-  public init<S>(hexString: S) throws where S: StringProtocol {
-    self.init()
-
+  public init?<S>(hexEncoded hexString: S) where S: StringProtocol {
     if hexString.count % 2 != 0 || hexString.count == 0 {
-      throw ByteHexEncodingErrors.incorrectString
+      return nil
     }
 
-    let stringBytes: [UInt8] = Array(hexString.lowercased().data(using: String.Encoding.utf8)!)
+    self.init()
+
+    let stringBytes: [UInt8] = Array(hexString.lowercased().data(using: .utf8)!)
 
     for i in stride(from: stringBytes.startIndex, to: stringBytes.endIndex - 1, by: 2) {
       let char1 = stringBytes[i]
       let char2 = stringBytes[i + 1]
 
-      try self.append(htoi(char1) << 4 + htoi(char2))
+      guard let newElement = try? htoi(char1) << 4 + htoi(char2) else {
+        return nil
+      }
+      self.append(newElement)
     }
   }
 }
 
 extension Array where Element == UInt8 {
 
-  public init<S>(hexString: S) throws where S: StringProtocol {
-    self.init()
-
+  public init?<S>(hexEncoded hexString: S) where S: StringProtocol {
     guard hexString.count.isMultiple(of: 2), !hexString.isEmpty else {
-      throw ByteHexEncodingErrors.incorrectString
+      return nil
     }
+
+    self.init()
 
     let stringBytes: [UInt8] = Array(hexString.data(using: String.Encoding.utf8)!)
 
@@ -117,7 +110,10 @@ extension Array where Element == UInt8 {
       let char1 = stringBytes[i]
       let char2 = stringBytes[i + 1]
 
-      try self.append(htoi(char1) << 4 + htoi(char2))
+      guard let newElement = try? htoi(char1) << 4 + htoi(char2) else {
+        return nil
+      }
+      self.append(newElement)
     }
   }
 }

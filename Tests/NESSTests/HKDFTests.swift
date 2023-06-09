@@ -32,7 +32,7 @@ final class HKDFTests: XCTestCase {
 
     testable.forEach { k, expected in
       hkdfDerivedSymmetricKey(secretKey: k, salt: salt, outputByteCount: 32).withUnsafeBytes {
-        XCTAssertEqual($0.hexString, expected)
+        XCTAssertEqual($0.hexEncodedString(), expected)
       }
     }
   }
