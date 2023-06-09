@@ -359,7 +359,7 @@ private class BetterVMESSParser {
       }
 
       let authenticationFailure = message.withUnsafeReadableBytes { buffPtr in
-        commonFNV1a(buffPtr) != code
+        FNV1a32.hash(data: buffPtr) != code
       }
       guard !authenticationFailure else {
         throw CryptoKitError.authenticationFailure
@@ -540,7 +540,7 @@ extension BetterVMESSParser {
       $0.load(as: UInt32.self).bigEndian
     }
 
-    let expectedAuthCode = commonFNV1a(mutableData[4...])
+    let expectedAuthCode = FNV1a32.hash(data: mutableData[4...])
 
     if actualAuthCode != expectedAuthCode {
       throw VMESSError.authenticationFailure

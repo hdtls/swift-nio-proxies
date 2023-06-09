@@ -21,24 +21,6 @@ import Foundation
 @_implementationOnly import CCryptoBoringSSL
 #endif
 
-/// Swift version FNV-1a for 32 bits.
-func commonFNV1a<Bytes: Sequence>(_ data: Bytes) -> UInt32 where Bytes.Element == UInt8 {
-  // These are the FNV-1a parameters for 32 bits.
-  let prime: UInt32 = 16_777_619
-  let initialResult: UInt32 = 2_166_136_261
-
-  return data.reduce(initialResult) { partialResult, byte in
-    var partialResult = partialResult
-    partialResult ^= UInt32(byte)
-    partialResult &*= prime
-    return partialResult
-  }
-}
-
-func commonFNV1a(_ ptr: UnsafeRawBufferPointer) -> UInt32 {
-  commonFNV1a(Array(ptr))
-}
-
 func commonAESCFB128Encrypt<Key, Nonce>(
   key: Key,
   nonce: Nonce,

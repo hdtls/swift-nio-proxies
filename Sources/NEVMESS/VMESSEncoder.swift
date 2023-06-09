@@ -207,7 +207,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
 
           var frame = Data()
 
-          withUnsafeBytes(of: commonFNV1a(message).bigEndian) { buffPtr in
+          withUnsafeBytes(of: FNV1a32.hash(data: message).bigEndian) { buffPtr in
             frame.append(contentsOf: buffPtr)
           }
 
@@ -453,7 +453,7 @@ extension BetterVMESSWriter {
 
     buffer.writeInteger(
       buffer.withUnsafeReadableBytes {
-        commonFNV1a($0)
+        FNV1a32.hash(data: $0)
       }
     )
     return buffer
