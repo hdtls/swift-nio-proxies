@@ -28,27 +28,28 @@ extension AES {
 
     public typealias SealedBox = Data
 
-    private static let defaultNonceByteCount = 16
-
     public struct Nonce: ContiguousBytes, Sequence {
-      let bytes: Data
+
+      private let bytes: Data
+
+      private static let byteCount = 16
 
       /// Generates a fresh random Nonce. Unless required by a specification to provide a specific Nonce, this is the recommended initializer.
       public init() {
-        var data = Data(repeating: 0, count: AES.CFB.defaultNonceByteCount)
+        var data = Data(repeating: 0, count: Nonce.byteCount)
         data.withUnsafeMutableBytes {
-          assert($0.count == AES.CFB.defaultNonceByteCount)
-          $0.initializeWithRandomBytes(count: AES.CFB.defaultNonceByteCount)
+          assert($0.count == Nonce.byteCount)
+          $0.initializeWithRandomBytes(count: Nonce.byteCount)
         }
         self.bytes = data
       }
 
       public init<D: DataProtocol>(data: D) throws {
-        guard data.count >= AES.CFB.defaultNonceByteCount else {
+        guard data.count >= Nonce.byteCount else {
           throw CryptoKitError.incorrectParameterSize
         }
 
-        self.bytes = Data(data.prefix(AES.CFB.defaultNonceByteCount))
+        self.bytes = Data(data.prefix(Nonce.byteCount))
       }
 
       public func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {

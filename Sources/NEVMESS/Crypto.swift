@@ -387,19 +387,19 @@ public struct Nonce: ContiguousBytes, Sequence {
 
   private let bytes: Data
 
-  private static let defaualtNonceByteCount = 16
+  private static let defaualtByteCount = 16
 
   public init() {
-    var data = Data(repeating: 0, count: Nonce.defaualtNonceByteCount)
+    var data = Data(repeating: 0, count: Nonce.defaualtByteCount)
     data.withUnsafeMutableBytes { buffPtr in
-      assert(buffPtr.count == Nonce.defaualtNonceByteCount)
-      buffPtr.initializeWithRandomBytes(count: Nonce.defaualtNonceByteCount)
+      assert(buffPtr.count == Nonce.defaualtByteCount)
+      buffPtr.initializeWithRandomBytes(count: Nonce.defaualtByteCount)
     }
     self.bytes = data
   }
 
   public init<D>(data: D) throws where D: DataProtocol {
-    guard data.count >= Nonce.defaualtNonceByteCount else {
+    guard data.count >= Nonce.defaualtByteCount else {
       throw CryptoKitError.incorrectParameterSize
     }
     self.bytes = Data(data)
