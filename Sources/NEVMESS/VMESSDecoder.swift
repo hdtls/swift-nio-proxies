@@ -41,6 +41,11 @@ private class BetterVMESSParser {
 
   var delegate: VMESSDecoderDelegate! = nil
 
+  enum HeadDecodingStrategy {
+    case useAEAD
+    case useLegacy
+  }
+
   private var decodingState: VMESSDecodingState = .headBegin
   private let kind: VMESSDecoderKind
   private let authenticationCode: UInt8
@@ -49,8 +54,8 @@ private class BetterVMESSParser {
   private let nonce: Nonce
   private let options: StreamOptions
   private let commandCode: CommandCode
-  private let AEADFlag = true
   private var nonceLeading = UInt16.zero
+  private let headDecodingStrategy: HeadDecodingStrategy
   private lazy var hasher: SHAKE128 = {
     var shake128 = SHAKE128()
     nonce.withUnsafeBytes { buffPtr in
@@ -67,7 +72,7 @@ private class BetterVMESSParser {
     nonce: Nonce,
     options: StreamOptions,
     commandCode: CommandCode,
-    enablePadding: Bool = false
+    headDecodingStrategy: HeadDecodingStrategy = .useAEAD
   ) {
     self.kind = kind
     self.authenticationCode = authenticationCode
@@ -79,18 +84,16 @@ private class BetterVMESSParser {
     }
     var options = options
     switch contentSecurity {
-    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
+    case .aes128Gcm, .chaCha20Poly1305:
       options.insert(.chunkMasking)
       options.insert(.globalPadding)
       self.contentSecurity = contentSecurity
     case .none:
       options.insert(.chunkMasking)
-      if enablePadding {
-        options.insert(.globalPadding)
-      }
+      options.insert(.globalPadding)
       self.contentSecurity = contentSecurity
-    case .encryptByAESCFB128:
-      if options.contains(.chunkMasking) && enablePadding {
+    case .aes128Cfb:
+      if options.contains(.chunkMasking) {
         options.insert(.globalPadding)
       }
       self.contentSecurity = contentSecurity
@@ -99,7 +102,7 @@ private class BetterVMESSParser {
       self.contentSecurity = contentSecurity
     case .zero:
       self.contentSecurity = .none
-      if options.contains(.chunkMasking) && enablePadding {
+      if options.contains(.chunkMasking) {
         options.insert(.globalPadding)
       }
       options.remove(.chunkStream)
@@ -109,6 +112,7 @@ private class BetterVMESSParser {
     }
     self.options = options
     self.commandCode = commandCode
+    self.headDecodingStrategy = headDecodingStrategy
   }
 
   func start() {}
@@ -193,7 +197,7 @@ private class BetterVMESSParser {
         return nil
       }
       return (frameLength, padding)
-    case .encryptByAESCFB128:
+    case .aes128Cfb:
       guard options.contains(.chunkStream) else {
         return (buffer.readableBytes, padding)
       }
@@ -231,7 +235,7 @@ private class BetterVMESSParser {
         throw CodingError.failedToParseDataSize
       }
       return (frameLength + 2, padding)
-    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
+    case .aes128Gcm, .chaCha20Poly1305:
       // Both `AES.GCM.tagSize` and `ChaChaPoly.tagSize` are 16.
       let tagDataLength = 16
       var frameLengthDataLength = MemoryLayout<UInt16>.size
@@ -264,7 +268,7 @@ private class BetterVMESSParser {
         Array($0) + Array(self.nonce.prefix(12).suffix(10))
       }
 
-      if contentSecurity == .encryptByAES128GCM {
+      if contentSecurity == .aes128Gcm {
         let sealedBox = try AES.GCM.SealedBox(combined: nonce + Array(buffer: frameLengthData))
         let frameLength = try AES.GCM.open(sealedBox, using: symmetricKey).withUnsafeBytes {
           $0.load(as: UInt16.self).bigEndian + UInt16(tagDataLength)
@@ -291,6 +295,7 @@ private class BetterVMESSParser {
     guard options.contains(.chunkMasking) else {
       return Int(l)
     }
+
     let frameLength = hasher.read(digestSize: 2).withUnsafeBytes {
       let mask = $0.load(as: UInt16.self).bigEndian
       return mask ^ l
@@ -320,7 +325,7 @@ private class BetterVMESSParser {
       }
       // TODO: Parse UDP Frame
       return nil
-    case .encryptByAESCFB128:
+    case .aes128Cfb:
       guard options.contains(.chunkStream) else {
         guard let message = buffer.readBytes(length: frameLength) else {
           return nil
@@ -365,7 +370,7 @@ private class BetterVMESSParser {
         throw CryptoKitError.authenticationFailure
       }
       return Data(Array(buffer: message))
-    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
+    case .aes128Gcm, .chaCha20Poly1305:
       // Tag for AES-GCM or ChaCha20-Poly1305 are both 16.
       guard frameLength != 16 + padding else {
         throw CryptoKitError.authenticationFailure
@@ -383,7 +388,7 @@ private class BetterVMESSParser {
       let combined = nonce + (message.dropLast(padding))
 
       var frame: Data
-      if contentSecurity == .encryptByAES128GCM {
+      if contentSecurity == .aes128Gcm {
         frame = try AES.GCM.open(.init(combined: combined), using: .init(data: symmetricKey))
       } else {
         let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
@@ -410,7 +415,7 @@ private class BetterVMESSParser {
 extension BetterVMESSParser {
 
   private func parseResponseHead(data: inout ByteBuffer) throws -> VMESSResponseHead? {
-    guard AEADFlag else {
+    guard headDecodingStrategy == .useAEAD else {
       return try parseHeadFromPlainMessage(&data)
     }
     return try parseHeadFromAEADMessage(&data)

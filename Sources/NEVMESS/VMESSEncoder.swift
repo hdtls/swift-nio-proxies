@@ -14,6 +14,7 @@
 
 import Crypto
 import Foundation
+import NEMisc
 import NESHAKE128
 import NIOCore
 
@@ -24,6 +25,11 @@ private enum VMESSEncodeKind: Sendable {
 
 private class BetterVMESSWriter<In> where In: Equatable {
 
+  enum HeadEncodingStrategy: Sendable {
+    case useAEAD
+    case useLegacy
+  }
+
   private let kind: VMESSEncodeKind
   private let authenticationCode: UInt8
   private let contentSecurity: ContentSecurity
@@ -31,7 +37,6 @@ private class BetterVMESSWriter<In> where In: Equatable {
   private let nonce: Nonce
   private let options: StreamOptions
   private let commandCode: CommandCode
-  private let AEADFlag: Bool = true
   private lazy var hasher: SHAKE128 = {
     var shake128 = SHAKE128()
     nonce.withUnsafeBytes { buffPtr in
@@ -40,6 +45,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
     return shake128
   }()
   private var nonceLeading = UInt16.zero
+  private let headEncodingStrategy: HeadEncodingStrategy
 
   init(
     authenticationCode: UInt8,
@@ -48,7 +54,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
     nonce: Nonce,
     options: StreamOptions,
     commandCode: CommandCode,
-    enablePadding: Bool = false
+    headEncodingStrategy: HeadEncodingStrategy = .useAEAD
   ) {
     if In.self == VMESSPart<VMESSRequestHead, ByteBuffer>.self {
       self.kind = .request
@@ -60,18 +66,16 @@ private class BetterVMESSWriter<In> where In: Equatable {
     self.nonce = nonce
     var options = options
     switch contentSecurity {
-    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
+    case .aes128Gcm, .chaCha20Poly1305:
       options.insert(.chunkMasking)
       options.insert(.globalPadding)
       self.contentSecurity = contentSecurity
     case .none:
       options.insert(.chunkMasking)
-      if enablePadding {
-        options.insert(.globalPadding)
-      }
+      options.insert(.globalPadding)
       self.contentSecurity = contentSecurity
-    case .encryptByAESCFB128:
-      if options.contains(.chunkMasking) && enablePadding {
+    case .aes128Cfb:
+      if options.contains(.chunkMasking) {
         options.insert(.globalPadding)
       }
       self.contentSecurity = contentSecurity
@@ -80,7 +84,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
       self.contentSecurity = contentSecurity
     case .zero:
       self.contentSecurity = .none
-      if options.contains(.chunkMasking) && enablePadding {
+      if options.contains(.chunkMasking) {
         options.insert(.globalPadding)
       }
       options.remove(.chunkStream)
@@ -90,6 +94,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
     }
     self.options = options
     self.commandCode = commandCode
+    self.headEncodingStrategy = headEncodingStrategy
   }
 
   func write(_ part: In) throws -> Data {
@@ -166,7 +171,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
         finalize += paddingData
       }
       return finalize
-    case .encryptByAESCFB128:
+    case .aes128Cfb:
       guard options.contains(.chunkStream) else {
         var dataOutMoved = 0
         finalize = Data(repeating: .zero, count: data.readableBytes)
@@ -253,7 +258,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
 
       // TODO: AES-CFB-128 UDP Frame Encoding
       return finalize
-    case .encryptByAES128GCM, .encryptByChaCha20Poly1305:
+    case .aes128Gcm, .chaCha20Poly1305:
       let maxAllowedMemorySize = 64 * 1024 * 1024
       guard mutableData.readableBytes + 10 <= maxAllowedMemorySize else {
         throw CodingError.payloadTooLarge
@@ -275,7 +280,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
         }
 
         let frame: Data
-        if contentSecurity == .encryptByAES128GCM {
+        if contentSecurity == .aes128Gcm {
           let sealedBox = try AES.GCM.seal(
             message,
             using: .init(data: symmetricKey),
@@ -340,7 +345,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
           info: Data("auth_len".utf8)
         )
 
-        if contentSecurity == .encryptByAES128GCM {
+        if contentSecurity == .aes128Gcm {
           let sealedBox = try AES.GCM.seal(
             $0,
             using: symmetricKey,
@@ -400,8 +405,8 @@ extension BetterVMESSWriter {
   private func prepareInstruction0(request: VMESSRequestHead) -> ByteBuffer {
     // Should enable padding
     var buffer = ByteBuffer()
-    if !AEADFlag {
-      // TODO: head
+    if case .useLegacy = headEncodingStrategy {
+      // TODO: Legacy HEAD Encoding
     }
     buffer.writeInteger(request.version.rawValue)
     buffer.writeBytes(nonce)
@@ -418,28 +423,7 @@ extension BetterVMESSWriter {
     buffer.writeInteger(request.commandCode.rawValue)
 
     if request.commandCode != .mux {
-      switch request.address {
-      case .domainPort(let domain, let port):
-        buffer.writeInteger(UInt16(port))
-        buffer.writeInteger(UInt8(2))
-        buffer.writeInteger(UInt8(domain.utf8.count))
-        buffer.writeString(domain)
-      case .socketAddress(.v4(let addr)):
-        buffer.writeInteger(addr.address.sin_port.bigEndian)
-        buffer.writeInteger(UInt8(1))
-        withUnsafeBytes(of: addr.address.sin_addr) { ptr in
-          _ = buffer.writeBytes(ptr)
-        }
-      case .socketAddress(.v6(let addr)):
-        buffer.writeInteger(addr.address.sin6_port.bigEndian)
-        buffer.writeInteger(UInt8(3))
-        withUnsafeBytes(of: addr.address.sin6_addr) { ptr in
-          _ = buffer.writeBytes(ptr)
-        }
-      case .socketAddress(.unixDomainSocket):
-        // enforced in the channel initalisers.
-        fatalError("UNIX domain sockets are not supported")
-      }
+      buffer.writeVMESSAddress(request.address)
     }
 
     if padding > 0 {
@@ -465,70 +449,50 @@ extension BetterVMESSWriter {
   private func prepareInstruction(request: VMESSRequestHead) throws -> Data {
     let instructionData = prepareInstruction0(request: request)
 
-    let inputKeyMaterial = generateCmdKey(request.user)
+    let material = generateCmdKey(request.user)
 
-    if AEADFlag {
-      let authenticatedData = try prepareAuthenticationData(inputKeyMaterial)
-      var randomPath = Data(repeating: UInt8.zero, count: 8)
+    if case .useAEAD = headEncodingStrategy {
+      let authenticatedData = try prepareAEADHeaderData(material)
+      var randomPath = Array(repeating: UInt8.zero, count: 8)
       randomPath.withUnsafeMutableBytes {
         $0.initializeWithRandomBytes(count: 8)
       }
 
       var info = [
-        Data(),
-        authenticatedData,
+        Array(),
+        Array(authenticatedData),
         randomPath,
       ]
 
-      let sealedLengthBox: AES.GCM.SealedBox = try withUnsafeBytes(
-        of: UInt16(instructionData.readableBytes).bigEndian
-      ) {
-        let kDFSaltConstVMessHeaderPayloadLengthAEADKey = Data("VMess Header AEAD Key_Length".utf8)
-        let kDFSaltConstVMessHeaderPayloadLengthAEADIV = Data("VMess Header AEAD Nonce_Length".utf8)
+      let payloadLength = UInt16(instructionData.readableBytes)
+      let sealedLengthBox = try withUnsafeBytes(of: payloadLength.bigEndian) { payloadLengthData in
+        info[0] = Array("VMess Header AEAD Key_Length".utf8)
+        let symmetricKey = KDF.deriveKey(inputKeyMaterial: material, info: info)
 
-        info[0] = kDFSaltConstVMessHeaderPayloadLengthAEADKey
-        let symmetricKey = KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
-
-        info[0] = kDFSaltConstVMessHeaderPayloadLengthAEADIV
-        let nonce = try KDF.deriveKey(
-          inputKeyMaterial: inputKeyMaterial,
-          info: info,
-          outputByteCount: 12
-        )
-        .withUnsafeBytes { ptr in
-          try AES.GCM.Nonce.init(data: ptr)
+        info[0] = Array("VMess Header AEAD Nonce_Length".utf8)
+        return try KDF.deriveKey(inputKeyMaterial: material, info: info).withUnsafeBytes {
+          try AES.GCM.seal(
+            payloadLengthData,
+            using: symmetricKey,
+            nonce: .init(data: $0.prefix(12)),
+            authenticating: authenticatedData
+          )
         }
-        return try AES.GCM.seal(
-          $0,
-          using: symmetricKey,
-          nonce: nonce,
-          authenticating: authenticatedData
-        )
       }
 
-      let sealedPayloadBox: AES.GCM.SealedBox = try instructionData.withUnsafeReadableBytes {
+      let sealedPayloadBox = try instructionData.withUnsafeReadableBytes { payloadData in
+        info[0] = Array("VMess Header AEAD Key".utf8)
+        let symmetricKey = KDF.deriveKey(inputKeyMaterial: material, info: info)
 
-        let kDFSaltConstVMessHeaderPayloadAEADKey = Data("VMess Header AEAD Key".utf8)
-        let kDFSaltConstVMessHeaderPayloadAEADIV = Data("VMess Header AEAD Nonce".utf8)
-
-        info[0] = kDFSaltConstVMessHeaderPayloadAEADKey
-        let symmetricKey = KDF.deriveKey(inputKeyMaterial: inputKeyMaterial, info: info)
-
-        info[0] = kDFSaltConstVMessHeaderPayloadAEADIV
-        let nonce = try KDF.deriveKey(
-          inputKeyMaterial: inputKeyMaterial,
-          info: info,
-          outputByteCount: 12
-        )
-        .withUnsafeBytes { ptr in
-          try AES.GCM.Nonce.init(data: ptr)
+        info[0] = Array("VMess Header AEAD Nonce".utf8)
+        return try KDF.deriveKey(inputKeyMaterial: material, info: info).withUnsafeBytes {
+          try AES.GCM.seal(
+            payloadData,
+            using: symmetricKey,
+            nonce: .init(data: $0.prefix(12)),
+            authenticating: authenticatedData
+          )
         }
-        return try AES.GCM.seal(
-          $0,
-          using: symmetricKey,
-          nonce: nonce,
-          authenticating: authenticatedData
-        )
       }
 
       return authenticatedData
@@ -560,7 +524,7 @@ extension BetterVMESSWriter {
       try instructionData.withUnsafeReadableBytes { inPtr in
         try result.withUnsafeMutableBytes { dataOut in
           try commonAESCFB128Encrypt(
-            key: inputKeyMaterial,
+            key: material,
             nonce: hasher.finalize(),
             dataIn: inPtr,
             dataOut: dataOut,
@@ -576,11 +540,12 @@ extension BetterVMESSWriter {
   /// Generate authenticated data with specified key.
   /// - Parameter key: Input key material.
   /// - Returns: Encrypted authenticated data bytes.
-  private func prepareAuthenticationData(_ key: SymmetricKey) throws -> Data {
-    var byteBuffer = withUnsafeBytes(
-      of: UInt64(Date().timeIntervalSince1970).bigEndian,
-      Array.init
-    )
+  private func prepareAEADHeaderData(_ key: SymmetricKey) throws -> Data {
+    let timeIntervalSince1970 = UInt64(Date().timeIntervalSince1970)
+    var byteBuffer = withUnsafeBytes(of: timeIntervalSince1970.bigEndian) {
+      Array($0)
+    }
+
     var randomBytes = Array(repeating: UInt8.zero, count: 4)
     randomBytes.withUnsafeMutableBytes {
       $0.initializeWithRandomBytes(count: 4)
@@ -611,6 +576,35 @@ extension BetterVMESSWriter {
 
 @available(*, unavailable)
 extension BetterVMESSWriter: Sendable {}
+
+extension ByteBuffer {
+
+  @discardableResult
+  mutating func writeVMESSAddress(_ address: NetAddress) -> Int {
+    switch address {
+    case .domainPort(let domain, let port):
+      return self.writeInteger(UInt16(port))
+        + self.writeInteger(UInt8(2))
+        + self.writeInteger(UInt8(domain.utf8.count))
+        + self.writeString(domain)
+    case .socketAddress(.v4(let addr)):
+      return self.writeInteger(addr.address.sin_port.bigEndian)
+        + self.writeInteger(UInt8(1))
+        + withUnsafeBytes(of: addr.address.sin_addr) { ptr in
+          self.writeBytes(ptr)
+        }
+    case .socketAddress(.v6(let addr)):
+      return self.writeInteger(addr.address.sin6_port.bigEndian)
+        + self.writeInteger(UInt8(3))
+        + withUnsafeBytes(of: addr.address.sin6_addr) { ptr in
+          self.writeBytes(ptr)
+        }
+    case .socketAddress(.unixDomainSocket):
+      // enforced in the channel initalisers.
+      fatalError("UNIX domain sockets are not supported")
+    }
+  }
+}
 
 /// A `ChannelOutboundHandler` that can serialize VMESS messages.
 ///

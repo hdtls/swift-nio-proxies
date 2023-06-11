@@ -356,7 +356,7 @@ extension ChannelPipeline.SynchronousOperations {
       return try addVMESSClientHandlers(
         position: position,
         authenticationCode: .random(in: 0 ... .max),
-        contentSecurity: .encryptByAES128GCM,
+        contentSecurity: .aes128Gcm,
         symmetricKey: .init(size: .bits128),
         nonce: .init(),
         user: UUID(uuidString: proxy.username) ?? UUID(),

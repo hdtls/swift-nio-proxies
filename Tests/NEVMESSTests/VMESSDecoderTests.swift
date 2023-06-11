@@ -71,7 +71,7 @@ final class VMESSDecoderTests: XCTestCase {
   func testBasicVerifications() throws {
     let decoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
       authenticationCode: authenticationCode,
-      contentSecurity: .encryptByAES128GCM,
+      contentSecurity: .aes128Gcm,
       symmetricKey: symmetricKey,
       nonce: nonce,
       options: .init(),
@@ -123,7 +123,7 @@ final class VMESSDecoderTests: XCTestCase {
   func testUsingInsufficientDataToParseResponseHeadersThatDoNotContainCommands() throws {
     let decoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
       authenticationCode: authenticationCode,
-      contentSecurity: .encryptByAES128GCM,
+      contentSecurity: .aes128Gcm,
       symmetricKey: symmetricKey,
       nonce: nonce,
       options: .init(),
@@ -160,7 +160,7 @@ final class VMESSDecoderTests: XCTestCase {
   func testParsingResponseHeaderWithDataContainingIncorrectlyEncryptedHeaderDataLength() {
     let decoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
       authenticationCode: authenticationCode,
-      contentSecurity: .encryptByAES128GCM,
+      contentSecurity: .aes128Gcm,
       symmetricKey: symmetricKey,
       nonce: nonce,
       options: .init(),
@@ -184,7 +184,7 @@ final class VMESSDecoderTests: XCTestCase {
   func testParsingResponseHeaderWithDataContainingIncorrectlyEncryptedHeaderData() {
     let decoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
       authenticationCode: authenticationCode,
-      contentSecurity: .encryptByAES128GCM,
+      contentSecurity: .aes128Gcm,
       symmetricKey: symmetricKey,
       nonce: nonce,
       options: .init(),
@@ -210,7 +210,7 @@ final class VMESSDecoderTests: XCTestCase {
   func testParsingResponseFrameWithInsufficientDataAndPaddingMaskingStreamOptions() throws {
     let decoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
       authenticationCode: authenticationCode,
-      contentSecurity: .encryptByAES128GCM,
+      contentSecurity: .aes128Gcm,
       symmetricKey: symmetricKey,
       nonce: nonce,
       options: [.chunkStream, .chunkMasking, .globalPadding],

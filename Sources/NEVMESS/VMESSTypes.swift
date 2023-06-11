@@ -36,7 +36,7 @@ extension Version {
   public static let v1 = Version.init(rawValue: 0x01)
 }
 
-/// `Algorithm` defines current VMESS supported data security algorithm.
+/// `ContentSecurity` defines current VMESS supported data security algorithm.
 public struct ContentSecurity: RawRepresentable, Hashable, Sendable {
 
   public var rawValue: UInt8
@@ -45,18 +45,16 @@ public struct ContentSecurity: RawRepresentable, Hashable, Sendable {
     self.rawValue = rawValue
   }
 
-  public static let unknown = ContentSecurity(rawValue: 0x00)
-
-  /// AES-CFB-128
-  public static let encryptByAESCFB128 = ContentSecurity(rawValue: 0x01)
+  /// AES-128-CFB
+  public static let aes128Cfb = ContentSecurity(rawValue: 0x01)
 
   public static let auto = ContentSecurity(rawValue: 0x02)
 
   /// AES-128-GCM
-  public static let encryptByAES128GCM = ContentSecurity(rawValue: 0x03)
+  public static let aes128Gcm = ContentSecurity(rawValue: 0x03)
 
   /// ChaCha20-Poly1305
-  public static let encryptByChaCha20Poly1305 = ContentSecurity(rawValue: 0x04)
+  public static let chaCha20Poly1305 = ContentSecurity(rawValue: 0x04)
 
   public static let none = ContentSecurity(rawValue: 0x05)
 
