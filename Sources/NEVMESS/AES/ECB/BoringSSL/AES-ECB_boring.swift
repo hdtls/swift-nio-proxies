@@ -19,27 +19,28 @@ import Foundation
 
 enum OpenSSLAESECBImpl {
 
-  typealias SealedBox = Data
-
-  static func seal<Plaintext: DataProtocol>(
+  static func encrypt<Plaintext>(
     _ message: Plaintext,
     using key: SymmetricKey
-  ) throws -> SealedBox {
+  ) throws -> Data where Plaintext: DataProtocol {
     try execute(AES_ENCRYPT, message, using: key)
   }
 
-  static func open(_ sealedBox: SealedBox, using key: SymmetricKey) throws -> Data {
-    try execute(AES_DECRYPT, sealedBox, using: key)
+  static func decrypt<Ciphertext>(
+    _ message: Ciphertext,
+    using key: SymmetricKey
+  ) throws -> Data where Ciphertext: DataProtocol {
+    try execute(AES_DECRYPT, message, using: key)
   }
 }
 
 extension OpenSSLAESECBImpl {
 
-  fileprivate static func execute<Message: DataProtocol>(
+  fileprivate static func execute<Message>(
     _ operation: Int32,
     _ message: Message,
     using key: SymmetricKey
-  ) throws -> Data {
+  ) throws -> Data where Message: DataProtocol {
     precondition(operation == AES_ENCRYPT || operation == AES_DECRYPT)
     guard key.bitCount == SymmetricKeySize.bits128.bitCount else {
       throw CryptoKitError.incorrectKeySize

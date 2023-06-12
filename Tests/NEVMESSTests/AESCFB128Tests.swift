@@ -23,7 +23,7 @@ final class AESCFB128Tests: XCTestCase {
     let key = SymmetricKey(size: .bits192)
     let nonce = AES.CFB.Nonce()
 
-    XCTAssertThrowsError(try AES.CFB.seal(plaintext, using: key, nonce: nonce))
+    XCTAssertThrowsError(try AES.CFB.encrypt(plaintext, using: key, nonce: nonce))
   }
 
   func testEncryptDecrypt() throws {
@@ -31,15 +31,13 @@ final class AESCFB128Tests: XCTestCase {
     let i = try AES.CFB.Nonce(data: Data("8000000000000000".utf8))
     let data = "00000000000000000000000000000000".data(using: .utf8)!
     let expected = "aebe0ec9f0d09b08a0dea6828afc93b3d2487b472cb143aca0307f81e1cd5c9f"
-    XCTAssertEqual(try AES.CFB.seal(data, using: k, nonce: i).hexEncodedString(), expected)
+    XCTAssertEqual(try AES.CFB.encrypt(data, using: k, nonce: i).hexEncodedString(), expected)
 
     let plaintext = Data("some secret message".utf8)
     let key = SymmetricKey(size: .bits128)
     let nonce = AES.CFB.Nonce()
-
-    let ciphertext = try AES.CFB.seal(plaintext, using: key, nonce: nonce)
-    let recoveredPlaintext = try AES.CFB.open(ciphertext, using: key, nonce: nonce)
-
+    let ciphertext = try AES.CFB.encrypt(plaintext, using: key, nonce: nonce)
+    let recoveredPlaintext = try AES.CFB.decrypt(ciphertext, using: key, nonce: nonce)
     XCTAssertEqual(plaintext, recoveredPlaintext)
   }
 }

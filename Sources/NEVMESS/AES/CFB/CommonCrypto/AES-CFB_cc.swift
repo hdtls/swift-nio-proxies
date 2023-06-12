@@ -19,31 +19,31 @@ import Foundation
 
 enum CommonCryptoAESCFBImpl {
 
-  typealias SealedBox = Data
-
-  static func seal<Plaintext: DataProtocol>(
+  static func encrypt<Plaintext>(
     _ message: Plaintext,
     using key: SymmetricKey,
     nonce: AES.CFB.Nonce
-  ) throws -> SealedBox {
+  ) throws -> Data where Plaintext: DataProtocol {
     try execute(CCOperation(kCCEncrypt), message, using: key, nonce: nonce)
   }
 
-  static func open(_ sealedBox: SealedBox, using key: SymmetricKey, nonce: AES.CFB.Nonce) throws
-    -> Data
-  {
-    try execute(CCOperation(kCCDecrypt), sealedBox, using: key, nonce: nonce)
+  static func decrypt<Ciphertext>(
+    _ message: Ciphertext,
+    using key: SymmetricKey,
+    nonce: AES.CFB.Nonce
+  ) throws -> Data where Ciphertext: DataProtocol {
+    try execute(CCOperation(kCCDecrypt), message, using: key, nonce: nonce)
   }
 }
 
 extension CommonCryptoAESCFBImpl {
 
-  private static func execute<Message: DataProtocol>(
+  private static func execute<Message>(
     _ operation: CCOperation,
     _ message: Message,
     using key: SymmetricKey,
     nonce: AES.CFB.Nonce
-  ) throws -> SealedBox {
+  ) throws -> Data where Message: DataProtocol {
     guard key.bitCount == SymmetricKeySize.bits128.bitCount else {
       throw CryptoKitError.incorrectKeySize
     }
@@ -58,7 +58,7 @@ extension CommonCryptoAESCFBImpl {
         CCCryptorCreateWithMode(
           operation,
           CCMode(kCCModeCFB),
-          CCAlgorithm(kCCAlgorithmAES),
+          CCAlgorithm(kCCAlgorithmAES128),
           CCPadding(ccNoPadding),
           iv.baseAddress,
           $0.baseAddress,

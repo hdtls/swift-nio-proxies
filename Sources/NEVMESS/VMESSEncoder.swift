@@ -173,21 +173,12 @@ private class BetterVMESSWriter<In> where In: Equatable {
       return finalize
     case .aes128Cfb:
       guard options.contains(.chunkStream) else {
-        var dataOutMoved = 0
-        finalize = Data(repeating: .zero, count: data.readableBytes)
-        try finalize.withUnsafeMutableBytes { dataOut in
-          try data.withUnsafeReadableBytes { dataIn in
-            try commonAESCFB128Encrypt(
-              key: symmetricKey,
-              nonce: nonce,
-              dataIn: dataIn,
-              dataOut: dataOut,
-              dataOutAvailable: dataIn.count,
-              dataOutMoved: &dataOutMoved
-            )
-          }
-        }
-        return finalize.prefix(dataOutMoved)
+        finalize = try AES.CFB.encrypt(
+          Array(buffer: data),
+          using: symmetricKey,
+          nonce: .init(data: Array(nonce))
+        )
+        return finalize
       }
 
       guard commandCode == .udp else {
@@ -239,21 +230,12 @@ private class BetterVMESSWriter<In> where In: Equatable {
           }
         }
 
-        var dataOutMoved = 0
-        let copy = finalize
-        try finalize.withUnsafeMutableBytes { dataOut in
-          try copy.withUnsafeBytes { dataIn in
-            try commonAESCFB128Encrypt(
-              key: symmetricKey,
-              nonce: nonce,
-              dataIn: dataIn,
-              dataOut: dataOut,
-              dataOutAvailable: copy.count,
-              dataOutMoved: &dataOutMoved
-            )
-          }
-        }
-        return finalize.prefix(dataOutMoved)
+        finalize = try AES.CFB.encrypt(
+          finalize,
+          using: symmetricKey,
+          nonce: .init(data: Array(nonce))
+        )
+        return finalize
       }
 
       // TODO: AES-CFB-128 UDP Frame Encoding
@@ -520,17 +502,9 @@ extension BetterVMESSWriter {
           hasher.update(bufferPointer: $0)
         }
       }
-      var result = Data(repeating: 0, count: instructionData.readableBytes)
-      try instructionData.withUnsafeReadableBytes { inPtr in
-        try result.withUnsafeMutableBytes { dataOut in
-          try commonAESCFB128Encrypt(
-            key: material,
-            nonce: hasher.finalize(),
-            dataIn: inPtr,
-            dataOut: dataOut,
-            dataOutAvailable: instructionData.readableBytes
-          )
-        }
+
+      let result = try hasher.finalize().withUnsafeBytes {
+        try AES.CFB.encrypt(Array(buffer: instructionData), using: material, nonce: .init(data: $0))
       }
       authenticatedData += result
       return authenticatedData
@@ -557,20 +531,9 @@ extension BetterVMESSWriter {
 
     let key = KDF.deriveKey(inputKeyMaterial: key, info: kDFSaltConstAuthIDEncryptionKey)
 
-    var result = Data(repeating: 0, count: byteBuffer.count + 16)
-
-    try byteBuffer.withUnsafeBytes { inPtr in
-      try result.withUnsafeMutableBytes { outPtr in
-        try commonAESEncrypt(
-          key: key,
-          dataIn: inPtr,
-          dataOut: outPtr,
-          dataOutAvailable: byteBuffer.count + 16
-        )
-      }
-    }
-
-    return result.prefix(16)
+    let ciphertext = try AES.ECB.encrypt(byteBuffer, using: key)
+    // We only need 16 bytes.
+    return ciphertext.prefix(16)
   }
 }
 

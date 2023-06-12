@@ -13,37 +13,37 @@
 //===----------------------------------------------------------------------===//
 
 #if !canImport(CommonCrypto)
+@_implementationOnly import CCryptoBoringSSL
 import Crypto
 import Foundation
-@_implementationOnly import CCryptoBoringSSL
 
 struct OpenSSLAESCFBImpl {
 
-  typealias SealedBox = Data
-
-  static func seal<Plaintext: DataProtocol>(
+  static func encrypt<Plaintext>(
     _ message: Plaintext,
     using key: SymmetricKey,
     nonce: AES.CFB.Nonce
-  ) throws -> SealedBox {
+  ) throws -> Data where Plaintext: DataProtocol {
     try execute(AES_ENCRYPT, message, using: key, nonce: nonce)
   }
 
-  static func open(_ sealedBox: SealedBox, using key: SymmetricKey, nonce: AES.CFB.Nonce) throws
-    -> Data
-  {
-    try execute(AES_DECRYPT, sealedBox, using: key, nonce: nonce)
+  static func decrypt<Ciphertext>(
+    _ message: Ciphertext,
+    using key: SymmetricKey,
+    nonce: AES.CFB.Nonce
+  ) throws -> Data where Ciphertext: DataProtocol {
+    try execute(AES_DECRYPT, message, using: key, nonce: nonce)
   }
 }
 
 extension OpenSSLAESCFBImpl {
 
-  private static func execute<Message: DataProtocol>(
+  private static func execute<Message>(
     _ operation: Int32,
     _ message: Message,
     using key: SymmetricKey,
     nonce: AES.CFB.Nonce
-  ) throws -> SealedBox {
+  ) throws -> Data where Message: DataProtocol {
     precondition(operation == AES_ENCRYPT || operation == AES_DECRYPT)
     guard key.bitCount == SymmetricKeySize.bits128.bitCount else {
       throw CryptoKitError.incorrectKeySize
@@ -76,8 +76,8 @@ extension OpenSSLAESCFBImpl {
 
     var dataOut = Data(repeating: .zero, count: dataOutMoved)
 
-    var copy = Array(nonce)
-    copy.withUnsafeMutableBufferPointer { nonce in
+    var nonce = Array(nonce)
+    nonce.withUnsafeMutableBytes { nonce in
       dataOut.withUnsafeMutableBytes { dataOut in
         Array(message).withUnsafeBufferPointer { dataIn in
           CCryptoBoringSSL_AES_cfb128_encrypt(

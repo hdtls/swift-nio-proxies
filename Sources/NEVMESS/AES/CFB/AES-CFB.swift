@@ -26,13 +26,13 @@ extension AES {
   /// AES in CFB mode with 128-bit key.
   public enum CFB {
 
-    public typealias SealedBox = Data
-
     public struct Nonce: ContiguousBytes, Sequence {
 
-      private let bytes: Data
+      let bytes: Data
 
       private static let byteCount = 16
+
+      public typealias Iterator = IndexingIterator<[UInt8]>
 
       /// Generates a fresh random Nonce. Unless required by a specification to provide a specific Nonce, this is the recommended initializer.
       public init() {
@@ -44,7 +44,7 @@ extension AES {
         self.bytes = data
       }
 
-      public init<D: DataProtocol>(data: D) throws {
+      public init<D>(data: D) throws where D: DataProtocol {
         guard data.count >= Nonce.byteCount else {
           throw CryptoKitError.incorrectParameterSize
         }
@@ -56,7 +56,7 @@ extension AES {
         return try self.bytes.withUnsafeBytes(body)
       }
 
-      public func makeIterator() -> Array<UInt8>.Iterator {
+      public func makeIterator() -> Iterator {
         self.withUnsafeBytes({ (buffPtr) in
           return Array(buffPtr).makeIterator()
         })
@@ -68,27 +68,29 @@ extension AES {
     /// - Parameters:
     ///   - message: The message to encrypt
     ///   - key: An encryption key of 128 bits
-    ///   - nonce: An Nonce for AES-CFB encryption. The nonce must be unique for every use of the key to seal data. It can be safely generated with AES.CFB.Nonce()
-    /// - Returns: A sealed box returning the ciphertext
-    public static func seal<Plaintext: DataProtocol>(
+    ///   - nonce: An Nonce for AES-CFB encryption. It can be safely generated with AES.CFB.Nonce()
+    /// - Returns: Encrypted data if success.
+    public static func encrypt<Plaintext>(
       _ message: Plaintext,
       using key: SymmetricKey,
       nonce: Nonce
-    ) throws -> SealedBox {
-      try AESCFBImpl.seal(message, using: key, nonce: nonce)
+    ) throws -> Data where Plaintext: DataProtocol {
+      try AESCFBImpl.encrypt(message, using: key, nonce: nonce)
     }
 
     /// Decrypts data using AES-128-ECB without padding.
     ///
     /// - Parameters:
-    ///   - sealedBox: The sealed box to decrypt
-    ///   - key: An encryption key of 128 bits
-    ///   - nonce: An Nonce for AES-CFB encryption. The nonce must be unique for every use of the key to seal data. It can be safely generated with AES.CFB.Nonce().
-    /// - Returns: The ciphertext if opening was successful
-    public static func open(_ sealedBox: SealedBox, using key: SymmetricKey, nonce: Nonce) throws
-      -> Data
-    {
-      try AESCFBImpl.open(sealedBox, using: key, nonce: nonce)
+    ///   - message: The message to decrypt
+    ///   - key: An decryption key of 128 bits
+    ///   - nonce: An Nonce for AES-CFB encryption. It can be safely generated with AES.CFB.Nonce().
+    /// - Returns: Decrypted data if success.
+    public static func decrypt<Ciphertext>(
+      _ message: Ciphertext,
+      using key: SymmetricKey,
+      nonce: Nonce
+    ) throws -> Data where Ciphertext: DataProtocol {
+      try AESCFBImpl.decrypt(message, using: key, nonce: nonce)
     }
   }
 }

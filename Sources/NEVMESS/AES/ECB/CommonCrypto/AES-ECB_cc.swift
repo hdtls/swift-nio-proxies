@@ -19,27 +19,28 @@ import Foundation
 
 enum CommonCryptoAESECBImpl {
 
-  typealias SealedBox = Data
-
-  static func seal<Plaintext: DataProtocol>(
+  static func encrypt<Plaintext>(
     _ message: Plaintext,
     using key: SymmetricKey
-  ) throws -> SealedBox {
+  ) throws -> Data where Plaintext: DataProtocol {
     try execute(CCOperation(kCCEncrypt), message, using: key)
   }
 
-  static func open(_ sealedBox: SealedBox, using key: SymmetricKey) throws -> Data {
-    try execute(CCOperation(kCCDecrypt), sealedBox, using: key)
+  static func decrypt<Ciphertext>(
+    _ message: Ciphertext,
+    using key: SymmetricKey
+  ) throws -> Data where Ciphertext: DataProtocol {
+    try execute(CCOperation(kCCDecrypt), message, using: key)
   }
 }
 
 extension CommonCryptoAESECBImpl {
 
-  private static func execute<Message: DataProtocol>(
+  private static func execute<Message>(
     _ operation: CCOperation,
     _ message: Message,
     using key: SymmetricKey
-  ) throws -> SealedBox {
+  ) throws -> Data where Message: DataProtocol {
     guard key.bitCount == SymmetricKeySize.bits128.bitCount else {
       throw CryptoKitError.incorrectKeySize
     }

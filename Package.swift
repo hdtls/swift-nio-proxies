@@ -108,7 +108,13 @@ let package = Package(
     .target(name: "NESS", dependencies: ["NEMisc", "NEPrettyBytes", swiftCrypto, swiftNIOCore]),
     .target(
       name: "NEVMESS",
-      dependencies: ["NEMisc", "NEPrettyBytes", "NESHAKE128", swiftCrypto, swiftNIOCore]
+      dependencies: [
+        "NEMisc",
+        "NEPrettyBytes",
+        "NESHAKE128",
+        swiftCrypto,
+        swiftNIOCore
+      ]
     ),
     .testTarget(
       name: "NECLICoreTests",

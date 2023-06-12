@@ -26,29 +26,30 @@ extension AES {
   /// AES in ECB mode with 128-bit key.
   public enum ECB {
 
-    public typealias SealedBox = Data
-
     /// Encrypts data using AES-128-ECB with PKCS7Padding.
     ///
     /// - Parameters:
     ///   - message: The message to encrypt
-    ///   - key: An encryption key of 128 bits
-    /// - Returns: A sealed box returning the ciphertext
-    public static func seal<Plaintext: DataProtocol>(
+    ///   - key: A 128-bits encryption key
+    /// - Returns: The encrypted ciphertext
+    public static func encrypt<Plaintext>(
       _ message: Plaintext,
       using key: SymmetricKey
-    ) throws -> SealedBox {
-      try AESECBImpl.seal(message, using: key)
+    ) throws -> Data where Plaintext: DataProtocol {
+      try AESECBImpl.encrypt(message, using: key)
     }
 
     /// Decrypts data using AES-128-ECB with PKCS7Padding.
     ///
     /// - Parameters:
-    ///   - sealedBox: The sealed box to decrypt
-    ///   - key: An encryption key of 128 bits
-    /// - Returns: The message if opening was successful
-    public static func open(_ sealedBox: SealedBox, using key: SymmetricKey) throws -> Data {
-      try AESECBImpl.open(sealedBox, using: key)
+    ///   - message: The message to decrypt
+    ///   - key: A 128-bits encryption key
+    /// - Returns: The decrypted message if success
+    public static func decrypt<Ciphertext>(
+      _ message: Ciphertext,
+      using key: SymmetricKey
+    ) throws -> Data where Ciphertext: DataProtocol {
+      try AESECBImpl.decrypt(message, using: key)
     }
   }
 }

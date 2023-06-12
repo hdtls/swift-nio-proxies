@@ -22,7 +22,7 @@ final class AESECBTests: XCTestCase {
     let plaintext = "some message".data(using: .utf8)!
     let key = SymmetricKey(size: .bits192)
 
-    XCTAssertThrowsError(try AES.ECB.seal(plaintext, using: key))
+    XCTAssertThrowsError(try AES.ECB.encrypt(plaintext, using: key))
   }
 
   func testEncryptDecrypt() throws {
@@ -30,13 +30,13 @@ final class AESECBTests: XCTestCase {
     let data = "00000000000000000000000000000000".data(using: .utf8)!
     let expected =
       "edc855576a902fb1613be4b269b3d69dedc855576a902fb1613be4b269b3d69df4031b1bceeef566208b3d013cd30e96"
-    XCTAssertEqual(try AES.ECB.seal(data, using: .init(data: k)).hexEncodedString(), expected)
+    XCTAssertEqual(try AES.ECB.encrypt(data, using: .init(data: k)).hexEncodedString(), expected)
 
     let plaintext = "some secret message".data(using: .utf8)!
     let key = SymmetricKey(size: .bits128)
 
-    let ciphertext = try AES.ECB.seal(plaintext, using: key)
-    let recoveredPlaintext = try AES.ECB.open(ciphertext, using: key)
+    let ciphertext = try AES.ECB.encrypt(plaintext, using: key)
+    let recoveredPlaintext = try AES.ECB.decrypt(ciphertext, using: key)
 
     XCTAssertEqual(plaintext, recoveredPlaintext)
   }

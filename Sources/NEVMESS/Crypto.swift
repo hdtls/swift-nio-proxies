@@ -15,254 +15,6 @@
 import Crypto
 import Foundation
 
-#if canImport(CommonCrypto)
-@_implementationOnly import CommonCrypto
-#else
-@_implementationOnly import CCryptoBoringSSL
-#endif
-
-func commonAESCFB128Encrypt<Key, Nonce>(
-  key: Key,
-  nonce: Nonce,
-  dataIn: UnsafeRawBufferPointer,
-  dataOut: UnsafeMutableRawBufferPointer,
-  dataOutAvailable: Int,
-  dataOutMoved: UnsafeMutablePointer<Int>? = nil
-) throws where Key: ContiguousBytes, Nonce: ContiguousBytes {
-  try commonAESCFB128Crypt(
-    enc: true,
-    key: key,
-    nonce: nonce,
-    dataIn: dataIn,
-    dataOut: dataOut,
-    dataOutAvailable: dataOutAvailable,
-    dataOutMoved: dataOutMoved
-  )
-}
-
-func commonAESCFB128Decrypt<Key, Nonce>(
-  key: Key,
-  nonce: Nonce,
-  dataIn: UnsafeRawBufferPointer,
-  dataOut: UnsafeMutableRawBufferPointer,
-  dataOutAvailable: Int,
-  dataOutMoved: UnsafeMutablePointer<Int>? = nil
-) throws where Key: ContiguousBytes, Nonce: ContiguousBytes {
-  try commonAESCFB128Crypt(
-    enc: false,
-    key: key,
-    nonce: nonce,
-    dataIn: dataIn,
-    dataOut: dataOut,
-    dataOutAvailable: dataOutAvailable,
-    dataOutMoved: dataOutMoved
-  )
-}
-
-func commonAESEncrypt<Key>(
-  key: Key,
-  dataIn: UnsafeRawBufferPointer,
-  dataOut: UnsafeMutableRawBufferPointer,
-  dataOutAvailable: Int,
-  dataOutMoved: UnsafeMutablePointer<Int>? = nil
-) throws where Key: ContiguousBytes {
-  try commonAESCrypt(
-    enc: true,
-    key: key,
-    dataIn: dataIn,
-    dataOut: dataOut,
-    dataOutAvailable: dataOutAvailable,
-    dataOutMoved: dataOutMoved
-  )
-}
-
-func commonAESDecrypt<Key>(
-  key: Key,
-  dataIn: UnsafeRawBufferPointer,
-  dataOut: UnsafeMutableRawBufferPointer,
-  dataOutAvailable: Int,
-  dataOutMoved: UnsafeMutablePointer<Int>? = nil
-) throws where Key: ContiguousBytes {
-  try commonAESCrypt(
-    enc: false,
-    key: key,
-    dataIn: dataIn,
-    dataOut: dataOut,
-    dataOutAvailable: dataOutAvailable,
-    dataOutMoved: dataOutMoved
-  )
-}
-
-private func commonAESCFB128Crypt<Key, Nonce>(
-  enc: Bool,
-  key: Key,
-  nonce: Nonce,
-  dataIn: UnsafeRawBufferPointer,
-  dataOut: UnsafeMutableRawBufferPointer,
-  dataOutAvailable: Int,
-  dataOutMoved: UnsafeMutablePointer<Int>?
-) throws where Key: ContiguousBytes, Nonce: ContiguousBytes {
-  #if canImport(CommonCrypto)
-  var dataOutAvailable = dataOutAvailable
-  var cryptor: CCCryptorRef?
-  var retval: CCCryptorStatus
-  //    var updateLen = 0
-  //    var finalLen = 0
-
-  retval = nonce.withUnsafeBytes { iv in
-    key.withUnsafeBytes {
-      CCCryptorCreateWithMode(
-        CCOperation(enc ? kCCEncrypt : kCCDecrypt),
-        CCMode(kCCModeCFB),
-        CCAlgorithm(kCCAlgorithmAES),
-        CCPadding(ccNoPadding),
-        iv.baseAddress,
-        $0.baseAddress,
-        16,
-        nil,
-        0,
-        0,
-        CCModeOptions(kCCModeOptionCTR_BE),
-        &cryptor
-      )
-    }
-  }
-  guard retval == kCCSuccess else {
-    throw CryptoKitError.underlyingCoreCryptoError(error: Int32(retval))
-  }
-
-  let dataInLength = dataIn.count
-  let needed = CCCryptorGetOutputLength(cryptor, dataInLength, true)
-  dataOutMoved?.pointee = needed
-
-  guard needed <= dataOutAvailable else {
-    CCCryptorRelease(cryptor)
-    throw CryptoKitError.underlyingCoreCryptoError(error: Int32(retval))
-  }
-
-  retval = CCCryptorUpdate(
-    cryptor,
-    dataIn.baseAddress,
-    dataInLength,
-    dataOut.baseAddress,
-    dataOutAvailable,
-    dataOutMoved
-  )
-
-  guard retval == kCCSuccess else {
-    CCCryptorRelease(cryptor)
-    throw CryptoKitError.underlyingCoreCryptoError(error: Int32(retval))
-  }
-
-  //    dataOut += updateLen
-  //    dataOutAvailable -= updateLen
-  //    retval = CCCryptorFinal(cryptor, dataOut.baseAddress, dataOutAvailable, &finalLen)
-  //    dataOutMoved?.pointee = updateLen + finalLen
-
-  CCCryptorRelease(cryptor)
-  #else
-  let symmetricKey = UnsafeMutablePointer<AES_KEY>.allocate(
-    capacity: MemoryLayout<AES_KEY>.size
-  )
-  symmetricKey.initialize(to: .init())
-  defer {
-    symmetricKey.deinitialize(count: MemoryLayout<AES_KEY>.size)
-    symmetricKey.deallocate()
-  }
-
-  let status = key.withUnsafeBytes {
-    CCryptoBoringSSL_AES_set_encrypt_key(
-      $0.bindMemory(to: UInt8.self).baseAddress,
-      128,
-      symmetricKey
-    )
-  }
-  guard status == 0 else {
-    throw CryptoKitError.underlyingCoreCryptoError(
-      error: Int32(CCryptoBoringSSL_ERR_get_error())
-    )
-  }
-
-  var num: Int32 = 0
-
-  nonce.withUnsafeBytes {
-    CCryptoBoringSSL_AES_cfb128_encrypt(
-      dataIn.bindMemory(to: UInt8.self).baseAddress,
-      dataOut.bindMemory(to: UInt8.self).baseAddress,
-      dataOutAvailable,
-      symmetricKey,
-      UnsafeMutableRawPointer(mutating: $0.baseAddress),
-      &num,
-      enc ? AES_ENCRYPT : AES_DECRYPT
-    )
-  }
-  #endif
-}
-
-private func commonAESCrypt<Key>(
-  enc: Bool,
-  key: Key,
-  dataIn: UnsafeRawBufferPointer,
-  dataOut: UnsafeMutableRawBufferPointer,
-  dataOutAvailable: Int,
-  dataOutMoved: UnsafeMutablePointer<Int>?
-) throws where Key: ContiguousBytes {
-  #if canImport(CommonCrypto)
-  let status = key.withUnsafeBytes { k in
-    CCCrypt(
-      CCOperation(enc ? kCCEncrypt : kCCDecrypt),
-      CCAlgorithm(kCCAlgorithmAES128),
-      CCOptions(kCCOptionPKCS7Padding | kCCOptionECBMode),
-      k.baseAddress,
-      kCCKeySizeAES128,
-      nil,
-      dataIn.baseAddress,
-      dataIn.count,
-      dataOut.baseAddress,
-      dataOutAvailable,
-      dataOutMoved
-    )
-  }
-  guard status == kCCSuccess else {
-    throw CryptoKitError.underlyingCoreCryptoError(error: status)
-  }
-  #else
-  let symmetricKey = UnsafeMutablePointer<AES_KEY>.allocate(
-    capacity: MemoryLayout<AES_KEY>.size
-  )
-  symmetricKey.initialize(to: .init())
-  defer {
-    symmetricKey.deinitialize(count: MemoryLayout<AES_KEY>.size)
-    symmetricKey.deallocate()
-  }
-
-  let status = key.withUnsafeBytes {
-    CCryptoBoringSSL_AES_set_encrypt_key(
-      $0.bindMemory(to: UInt8.self).baseAddress,
-      128,
-      symmetricKey
-    )
-  }
-  guard status == 0 else {
-    throw CryptoKitError.underlyingCoreCryptoError(
-      error: Int32(CCryptoBoringSSL_ERR_get_error())
-    )
-  }
-
-  enc
-    ? CCryptoBoringSSL_AES_encrypt(
-      dataIn.baseAddress,
-      dataOut.baseAddress,
-      symmetricKey
-    )
-    : CCryptoBoringSSL_AES_decrypt(
-      dataIn.baseAddress,
-      dataOut.baseAddress,
-      symmetricKey
-    )
-  #endif
-}
-
 private protocol HashFunction {
 
   static var blockSize: Int { get }
@@ -383,14 +135,16 @@ struct KDF {
   }
 }
 
-public struct Nonce: ContiguousBytes, Sequence {
+public struct Nonce: ContiguousBytes, Sequence, Sendable {
 
-  private let bytes: Data
+  private let bytes: [UInt8]
 
   private static let defaualtByteCount = 16
 
+  public typealias Iterator = IndexingIterator<[UInt8]>
+
   public init() {
-    var data = Data(repeating: 0, count: Nonce.defaualtByteCount)
+    var data = Array(repeating: UInt8.zero, count: Nonce.defaualtByteCount)
     data.withUnsafeMutableBytes { buffPtr in
       assert(buffPtr.count == Nonce.defaualtByteCount)
       buffPtr.initializeWithRandomBytes(count: Nonce.defaualtByteCount)
@@ -402,14 +156,14 @@ public struct Nonce: ContiguousBytes, Sequence {
     guard data.count >= Nonce.defaualtByteCount else {
       throw CryptoKitError.incorrectParameterSize
     }
-    self.bytes = Data(data)
+    self.bytes = Array(data)
   }
 
   public func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {
     try bytes.withUnsafeBytes(body)
   }
 
-  public func makeIterator() -> Array<UInt8>.Iterator {
+  public func makeIterator() -> Iterator {
     withUnsafeBytes { buffPtr in
       Array(buffPtr).makeIterator()
     }

@@ -202,30 +202,23 @@ private class BetterVMESSParser {
         return (buffer.readableBytes, padding)
       }
 
-      guard let dataIn = buffer.getSlice(at: buffer.readerIndex, length: MemoryLayout<UInt16>.size)
-      else {
+      // We can't actual read payload length data there, it will cause frame decrypt failed.
+      let payloadLengthDataSize = MemoryLayout<UInt16>.size
+      let startIndex = buffer.readerIndex
+      guard var message = buffer.getSlice(at: startIndex, length: payloadLengthDataSize) else {
         return nil
       }
-      var dataOut = dataIn
-      var dataOutMoved = 0
-      try dataOut.withUnsafeMutableReadableBytes { dataOutPtr in
-        try dataIn.withUnsafeReadableBytes { dataInPtr in
-          try commonAESCFB128Decrypt(
-            key: symmetricKey,
-            nonce: nonce,
-            dataIn: dataInPtr,
-            dataOut: dataOutPtr,
-            dataOutAvailable: dataIn.readableBytes,
-            dataOutMoved: &dataOutMoved
-          )
-        }
-      }
 
-      guard var message = dataOut.readSlice(length: dataOutMoved),
-        message.readableBytes == dataIn.readableBytes
-      else {
+      let plaintext = try AES.CFB.decrypt(
+        Array(buffer: message),
+        using: symmetricKey,
+        nonce: .init(data: Array(nonce))
+      )
+      guard plaintext.count == message.readableBytes else {
         throw CodingError.failedToParseDataSize
       }
+      message.clear()
+      message.writeBytes(plaintext)
 
       padding = nextPadding()
 
@@ -234,7 +227,10 @@ private class BetterVMESSParser {
         // need throw error.
         throw CodingError.failedToParseDataSize
       }
-      return (frameLength + 2, padding)
+
+      // We don't actual read the payload length data while parsing, so there the full frame
+      // length should contain payload length data size.
+      return (frameLength + payloadLengthDataSize, padding)
     case .aes128Gcm, .chaCha20Poly1305:
       // Both `AES.GCM.tagSize` and `ChaChaPoly.tagSize` are 16.
       let tagDataLength = 16
@@ -333,36 +329,26 @@ private class BetterVMESSParser {
         return Data(message)
       }
 
-      guard let dataIn = buffer.readSlice(length: frameLength) else {
+      guard var message = buffer.readSlice(length: frameLength) else {
         return nil
       }
 
       // AES-CFB-128 decrypt...
-      var dataOut = dataIn
-      var dataOutMoved = 0
-      try dataOut.withUnsafeMutableReadableBytes { dataOutPtr in
-        try dataIn.withUnsafeReadableBytes { dataInPtr in
-          try commonAESCFB128Decrypt(
-            key: symmetricKey,
-            nonce: nonce,
-            dataIn: dataInPtr,
-            dataOut: dataOutPtr,
-            dataOutAvailable: dataIn.readableBytes,
-            dataOutMoved: &dataOutMoved
-          )
-        }
-      }
-      guard var message = dataOut.readSlice(length: dataOutMoved),
-        message.readableBytes == dataIn.readableBytes
-      else {
-        throw CodingError.failedToParseData([])
-      }
+      let plaintext = try AES.CFB.decrypt(
+        Array(buffer: message),
+        using: symmetricKey,
+        nonce: .init(data: Array(nonce))
+      )
 
+      message.clear()
+      message.writeBytes(plaintext)
+
+      // Those 2(`MemoryLayout<UInt16>.size`) bytes contain payload data length data,
+      // we should move reader index forward to ignore those bytes.
       message.moveReaderIndex(forwardBy: MemoryLayout<UInt16>.size)
       guard let code = message.readInteger(as: UInt32.self) else {
-        throw CodingError.failedToParseData(Array(buffer: message))
+        throw CodingError.failedToParseData
       }
-
       let authenticationFailure = message.withUnsafeReadableBytes { buffPtr in
         FNV1a32.hash(data: buffPtr) != code
       }
@@ -371,16 +357,12 @@ private class BetterVMESSParser {
       }
       return Data(Array(buffer: message))
     case .aes128Gcm, .chaCha20Poly1305:
-      // Tag for AES-GCM or ChaCha20-Poly1305 are both 16.
-      guard frameLength != 16 + padding else {
-        throw CryptoKitError.authenticationFailure
-      }
-
       guard let message = buffer.readBytes(length: frameLength) else {
         return nil
       }
 
-      let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
+      // Tag for AES-GCM or ChaCha20-Poly1305 are both 16.
+     let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
         Array($0) + Array(self.nonce.prefix(12).suffix(10))
       }
 
