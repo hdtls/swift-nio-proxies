@@ -603,12 +603,13 @@ extension BetterVMESSParser {
         throw CodingError.incorrectDataSize
       }
 
-      return SwitchAccountCommand.init(
-        id: id,
+      return DynamicPortInstruction(
+        address: address?.host,
+        port: address?.port ?? 0,
+        uid: id,
         level: level,
-        countOfAlterIDs: countOfAlterIDs,
-        address: address,
-        validMin: mutableData.removeFirst()
+        numberOfAlterIDs: countOfAlterIDs,
+        effectiveTime: mutableData.removeFirst()
       )
     default:
       throw VMESSError.operationUnsupported

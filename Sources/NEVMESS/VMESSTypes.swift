@@ -117,17 +117,35 @@ extension StreamOptions {
 
 public protocol ResponseCommand: Sendable {}
 
-public struct SwitchAccountCommand: ResponseCommand, Hashable {
+public struct DynamicPortInstruction: ResponseCommand, Hashable {
 
-  var id: UUID
+  public var address: String?
 
-  var level: UInt32
+  public var port: Int
 
-  var countOfAlterIDs: UInt16
+  public var uid: UUID
 
-  var address: NetAddress?
+  public var level: UInt32
 
-  var validMin: UInt8
+  public var numberOfAlterIDs: UInt16
+
+  public var effectiveTime: UInt8
+
+  public init(
+    address: String? = nil,
+    port: Int,
+    uid: UUID,
+    level: UInt32,
+    numberOfAlterIDs: UInt16,
+    effectiveTime: UInt8
+  ) {
+    self.address = address
+    self.port = port
+    self.uid = uid
+    self.level = level
+    self.numberOfAlterIDs = numberOfAlterIDs
+    self.effectiveTime = effectiveTime
+  }
 }
 
 /// A representation of the response header  frame of a VMESS response.
