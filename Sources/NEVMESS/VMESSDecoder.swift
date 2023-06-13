@@ -41,21 +41,16 @@ private class BetterVMESSParser {
 
   var delegate: VMESSDecoderDelegate! = nil
 
-  enum HeadDecodingStrategy {
-    case useAEAD
-    case useLegacy
-  }
-
   private var decodingState: VMESSDecodingState = .headBegin
   private let kind: VMESSDecoderKind
   private let authenticationCode: UInt8
   private let contentSecurity: ContentSecurity
   private let symmetricKey: SymmetricKey
-  private let nonce: Nonce
+  private let nonce: [UInt8]
   private let options: StreamOptions
   private let commandCode: CommandCode
   private var nonceLeading = UInt16.zero
-  private let headDecodingStrategy: HeadDecodingStrategy
+  private let headDecryptionStrategy: ResponseHeadDecryptionStrategy
   private lazy var hasher: SHAKE128 = {
     var shake128 = SHAKE128()
     nonce.withUnsafeBytes { buffPtr in
@@ -69,19 +64,17 @@ private class BetterVMESSParser {
     authenticationCode: UInt8,
     contentSecurity: ContentSecurity,
     symmetricKey: SymmetricKey,
-    nonce: Nonce,
+    nonce: [UInt8],
     options: StreamOptions,
     commandCode: CommandCode,
-    headDecodingStrategy: HeadDecodingStrategy = .useAEAD
+    headDecryptionStrategy: ResponseHeadDecryptionStrategy
   ) {
     self.kind = kind
     self.authenticationCode = authenticationCode
     self.symmetricKey = symmetricKey.withUnsafeBytes {
       SymmetricKey(data: Array(SHA256.hash(data: $0).prefix(16)))
     }
-    self.nonce = nonce.withUnsafeBytes {
-      try! Nonce(data: Array(SHA256.hash(data: $0).prefix(16)))
-    }
+    self.nonce = Array(SHA256.hash(data: nonce).prefix(16))
     var options = options
     switch contentSecurity {
     case .aes128Gcm, .chaCha20Poly1305:
@@ -112,7 +105,7 @@ private class BetterVMESSParser {
     }
     self.options = options
     self.commandCode = commandCode
-    self.headDecodingStrategy = headDecodingStrategy
+    self.headDecryptionStrategy = headDecryptionStrategy
   }
 
   func start() {}
@@ -149,9 +142,16 @@ private class BetterVMESSParser {
     loop: while byteBuffer.readableBytes > 0 {
       switch decodingState {
       case .headBegin:
-        guard let head = try parseResponseHead(data: &byteBuffer) else {
+        let parseStrategy = ResponseHeadParseStrategy(
+          authenticationCode: authenticationCode,
+          symmetricKey: symmetricKey,
+          nonce: nonce,
+          decryptionStrategy: headDecryptionStrategy
+        )
+        guard let (head, consumed) = try parseStrategy.parse(byteBuffer) else {
           return 0
         }
+        byteBuffer.moveReaderIndex(forwardBy: consumed)
         decodingState = .frameLengthBegin
         didReceiveHead(head)
       case .frameLengthBegin:
@@ -212,7 +212,7 @@ private class BetterVMESSParser {
       let plaintext = try AES.CFB.decrypt(
         Array(buffer: message),
         using: symmetricKey,
-        nonce: .init(data: Array(nonce))
+        nonce: .init(data: nonce)
       )
       guard plaintext.count == message.readableBytes else {
         throw CodingError.failedToParseDataSize
@@ -266,14 +266,16 @@ private class BetterVMESSParser {
 
       if contentSecurity == .aes128Gcm {
         let sealedBox = try AES.GCM.SealedBox(combined: nonce + Array(buffer: frameLengthData))
-        let frameLength = try AES.GCM.open(sealedBox, using: symmetricKey).withUnsafeBytes {
+        let frameLengthData = try AES.GCM.open(sealedBox, using: symmetricKey)
+        let frameLength = frameLengthData.withUnsafeBytes {
           $0.load(as: UInt16.self).bigEndian + UInt16(tagDataLength)
         }
         return (Int(frameLength), padding)
       } else {
         symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
         let sealedBox = try ChaChaPoly.SealedBox(combined: nonce + Array(buffer: frameLengthData))
-        let frameLength = try ChaChaPoly.open(sealedBox, using: symmetricKey).withUnsafeBytes {
+        let frameLengthData = try ChaChaPoly.open(sealedBox, using: symmetricKey)
+        let frameLength = frameLengthData.withUnsafeBytes {
           $0.load(as: UInt16.self).bigEndian + UInt16(tagDataLength)
         }
         return (Int(frameLength), padding)
@@ -303,41 +305,31 @@ private class BetterVMESSParser {
   private func parseFrame(from buffer: inout ByteBuffer, frameLength: Int, padding: Int) throws
     -> Data?
   {
+    guard var message = buffer.readSlice(length: frameLength) else {
+      return nil
+    }
     switch contentSecurity {
     case .none:
       guard options.contains(.chunkStream) else {
-        guard let message = buffer.readBytes(length: frameLength) else {
-          return nil
-        }
-        return Data(message)
+        return Data(Array(buffer: message))
       }
 
       guard commandCode == .udp else {
         // Transfer type stream...
-        guard let message = buffer.readBytes(length: frameLength) else {
-          return nil
-        }
-        return Data(message)
+        return Data(Array(buffer: message))
       }
       // TODO: Parse UDP Frame
       return nil
     case .aes128Cfb:
       guard options.contains(.chunkStream) else {
-        guard let message = buffer.readBytes(length: frameLength) else {
-          return nil
-        }
-        return Data(message)
-      }
-
-      guard var message = buffer.readSlice(length: frameLength) else {
-        return nil
+        return Data(Array(buffer: message))
       }
 
       // AES-CFB-128 decrypt...
       let plaintext = try AES.CFB.decrypt(
         Array(buffer: message),
         using: symmetricKey,
-        nonce: .init(data: Array(nonce))
+        nonce: .init(data: nonce)
       )
 
       message.clear()
@@ -357,17 +349,13 @@ private class BetterVMESSParser {
       }
       return Data(Array(buffer: message))
     case .aes128Gcm, .chaCha20Poly1305:
-      guard let message = buffer.readBytes(length: frameLength) else {
-        return nil
-      }
-
       // Tag for AES-GCM or ChaCha20-Poly1305 are both 16.
-     let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
+      let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
         Array($0) + Array(self.nonce.prefix(12).suffix(10))
       }
 
       // Remove random padding bytes.
-      let combined = nonce + (message.dropLast(padding))
+      let combined = nonce + Array(buffer: message).dropLast(padding)
 
       var frame: Data
       if contentSecurity == .aes128Gcm {
@@ -391,242 +379,6 @@ private class BetterVMESSParser {
     return hasher.read(digestSize: 2).withUnsafeBytes {
       Int($0.load(as: UInt16.self).bigEndian % 64)
     }
-  }
-}
-
-extension BetterVMESSParser {
-
-  private func parseResponseHead(data: inout ByteBuffer) throws -> VMESSResponseHead? {
-    guard headDecodingStrategy == .useAEAD else {
-      return try parseHeadFromPlainMessage(&data)
-    }
-    return try parseHeadFromAEADMessage(&data)
-  }
-
-  /// Parse VMESS response head part from AEAD encrypted data.
-  private func parseHeadFromAEADMessage(_ message: inout ByteBuffer) throws -> VMESSResponseHead? {
-    let kDFSaltConstAEADRespHeaderLenKey = Data("AEAD Resp Header Len Key".utf8)
-    let kDFSaltConstAEADRespHeaderLenIV = Data("AEAD Resp Header Len IV".utf8)
-
-    var symmetricKey = KDF.deriveKey(
-      inputKeyMaterial: .init(data: self.symmetricKey),
-      info: kDFSaltConstAEADRespHeaderLenKey
-    )
-    var nonce = KDF.deriveKey(
-      inputKeyMaterial: .init(data: self.nonce),
-      info: kDFSaltConstAEADRespHeaderLenIV,
-      outputByteCount: 12
-    ).withUnsafeBytes {
-      Array($0)
-    }
-
-    // 2 byte packet length data and 16 overhead
-    var byteCountNeeded = 18
-    guard var combined = message.readBytes(length: byteCountNeeded) else {
-      return nil
-    }
-
-    combined = nonce + combined
-    let ciphertextLengthData = try AES.GCM.open(.init(combined: combined), using: symmetricKey)
-    assert(ciphertextLengthData.count == 2)
-
-    let ciphertextLength = ciphertextLengthData.withUnsafeBytes {
-      $0.load(as: UInt16.self).bigEndian
-    }
-    byteCountNeeded = Int(ciphertextLength) + 16
-    guard let ciphertextAndTag = message.readBytes(length: byteCountNeeded) else {
-      // return nil to tell decoder we need more data.
-      return nil
-    }
-
-    let kDFSaltConstAEADRespHeaderPayloadKey = Data("AEAD Resp Header Key".utf8)
-    let kDFSaltConstAEADRespHeaderPayloadIV = Data("AEAD Resp Header IV".utf8)
-
-    symmetricKey = KDF.deriveKey(
-      inputKeyMaterial: .init(data: self.symmetricKey),
-      info: kDFSaltConstAEADRespHeaderPayloadKey
-    )
-    nonce = KDF.deriveKey(
-      inputKeyMaterial: .init(data: self.nonce),
-      info: kDFSaltConstAEADRespHeaderPayloadIV,
-      outputByteCount: 12
-    ).withUnsafeBytes {
-      Array($0)
-    }
-    combined = nonce + ciphertextAndTag
-    let headPartData = try AES.GCM.open(.init(combined: combined), using: symmetricKey)
-    assert(headPartData.count >= 4)
-
-    return try parseHeadFromData(headPartData)
-  }
-
-  private func parseHeadFromPlainMessage(_ message: inout ByteBuffer) throws -> VMESSResponseHead? {
-    var byteCountNeeded = 4
-    guard message.readableBytes >= byteCountNeeded,
-      let commandLength = message.getInteger(at: message.readerIndex &+ 3, as: UInt8.self)
-    else {
-      return nil
-    }
-
-    byteCountNeeded += Int(commandLength)
-    guard message.readableBytes >= byteCountNeeded else {
-      return nil
-    }
-    // Force unwrapping is ok as we have already checked readableBytes.
-    let headPartData = Data(message.readBytes(length: byteCountNeeded)!)
-    return try parseHeadFromData(headPartData)
-  }
-
-  private func parseHeadFromData(_ headPartData: Data) throws -> VMESSResponseHead {
-    var headPartData = headPartData
-
-    guard authenticationCode == headPartData.removeFirst() else {
-      // Unexpected response header
-      throw VMESSError.authenticationFailure
-    }
-
-    let options = StreamOptions.init(rawValue: headPartData.removeFirst())
-
-    let commandCode = headPartData.removeFirst()
-
-    var head = VMESSResponseHead.init(
-      authenticationCode: authenticationCode,
-      options: options,
-      commandCode: .init(rawValue: commandCode),
-      command: nil
-    )
-
-    guard commandCode != 0 else {
-      return head
-    }
-
-    headPartData.removeFirst()
-
-    // We don't care about command there just read it if possible.
-    if let command = try? parseCommand(code: commandCode, data: headPartData) {
-      head.command = command
-    }
-    return head
-  }
-
-  /// Parse command from data with specified commandCode.
-  private func parseCommand(code: UInt8, data: Data) throws -> ResponseCommand? {
-    var mutableData = data
-
-    let commandLength = Int(mutableData.removeFirst())
-
-    guard commandLength != 0 else {
-      return nil
-    }
-
-    guard mutableData.count > 4, mutableData.count >= commandLength else {
-      throw CodingError.incorrectDataSize
-    }
-
-    let actualAuthCode = mutableData.prefix(upTo: 4).withUnsafeBytes {
-      $0.load(as: UInt32.self).bigEndian
-    }
-
-    let expectedAuthCode = FNV1a32.hash(data: mutableData[4...])
-
-    if actualAuthCode != expectedAuthCode {
-      throw VMESSError.authenticationFailure
-    }
-
-    switch code {
-    case 1:
-      mutableData = mutableData.dropFirst(4)
-      guard !mutableData.isEmpty else {
-        throw CodingError.incorrectDataSize
-      }
-
-      let addressLength = Int(mutableData.removeFirst())
-      guard mutableData.count >= addressLength else {
-        throw CodingError.incorrectDataSize
-      }
-
-      var address: NetAddress?
-      // Parse address
-      if addressLength > 0 {
-        address = try parseAddress(data: mutableData.prefix(addressLength))
-        mutableData = mutableData.dropFirst(4)
-      }
-
-      // Parse port
-      guard mutableData.count >= 2 else {
-        throw CodingError.incorrectDataSize
-      }
-      let port = mutableData.prefix(2).withUnsafeBytes {
-        $0.load(as: in_port_t.self)
-      }
-      if let v = address {
-        switch v {
-        case .domainPort(let host, _):
-          address = .domainPort(host: host, port: Int(port))
-        case .socketAddress(let socketAddress):
-          var socketAddress = socketAddress
-          socketAddress.port = Int(port)
-          address = .socketAddress(socketAddress)
-        }
-      }
-      mutableData = mutableData.dropFirst(2)
-
-      // Parse ID
-      guard mutableData.count >= MemoryLayout<UUID>.size else {
-        throw CodingError.incorrectDataSize
-      }
-      let id = mutableData.prefix(MemoryLayout<UUID>.size).withUnsafeBytes {
-        $0.load(as: UUID.self)
-      }
-      mutableData = mutableData.dropFirst(MemoryLayout<UUID>.size)
-
-      // Parse countOfAlterIDs
-      guard mutableData.count >= 2 else {
-        throw CodingError.incorrectDataSize
-      }
-      let countOfAlterIDs = mutableData.prefix(2).withUnsafeBytes {
-        $0.load(as: UInt16.self).bigEndian
-      }
-      mutableData = mutableData.dropFirst(2)
-
-      // Parse level
-      guard mutableData.count >= 2 else {
-        throw CodingError.incorrectDataSize
-      }
-      let level = mutableData.prefix(2).withUnsafeBytes {
-        UInt32($0.load(as: UInt16.self))
-      }
-      mutableData = mutableData.dropFirst(2)
-
-      // Parse valid time
-      guard mutableData.count >= 1 else {
-        throw CodingError.incorrectDataSize
-      }
-
-      return DynamicPortInstruction(
-        address: address?.host,
-        port: address?.port ?? 0,
-        uid: id,
-        level: level,
-        numberOfAlterIDs: countOfAlterIDs,
-        effectiveTime: mutableData.removeFirst()
-      )
-    default:
-      throw VMESSError.operationUnsupported
-    }
-  }
-
-  /// Parse address with specified data.
-  private func parseAddress(data: Data) throws -> NetAddress {
-    guard let string = String(data: data, encoding: .utf8), !string.isEmpty else {
-      throw SocketAddressError.unsupported
-    }
-
-    guard string.isIPAddress() else {
-      return .domainPort(host: string, port: 0)
-    }
-
-    return .socketAddress(try .init(ipAddress: string, port: 0))
   }
 }
 
@@ -659,13 +411,15 @@ final public class VMESSDecoder<Out>: ByteToMessageDecoder, VMESSDecoderDelegate
   ///   - symmetricKey: SymmetricKey for decriptor.
   ///   - nonce: Nonce for decryptor.
   ///   - options: The stream options use to control data padding and mask.
+  ///   - headDecryptionStrategy: Strategy to decrypt encrypted response head. Defaults to `.useAEAD`.
   public init(
     authenticationCode: UInt8,
     contentSecurity: ContentSecurity,
     symmetricKey: SymmetricKey,
-    nonce: Nonce,
+    nonce: [UInt8],
     options: StreamOptions,
-    commandCode: CommandCode
+    commandCode: CommandCode,
+    headDecryptionStrategy: ResponseHeadDecryptionStrategy = .useAEAD
   ) {
     if Out.self == VMESSPart<VMESSResponseHead, ByteBuffer>.self {
       self.kind = .response
@@ -679,7 +433,8 @@ final public class VMESSDecoder<Out>: ByteToMessageDecoder, VMESSDecoderDelegate
       symmetricKey: symmetricKey,
       nonce: nonce,
       options: options,
-      commandCode: commandCode
+      commandCode: commandCode,
+      headDecryptionStrategy: headDecryptionStrategy
     )
   }
 

@@ -121,7 +121,7 @@ extension ChannelPipeline.SynchronousOperations {
       authenticationCode: authenticationCode,
       contentSecurity: contentSecurity,
       symmetricKey: symmetricKey,
-      nonce: nonce,
+      nonce: Array(nonce),
       options: options,
       commandCode: commandCode
     )

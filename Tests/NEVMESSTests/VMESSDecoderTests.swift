@@ -62,7 +62,7 @@ final class VMESSDecoderTests: XCTestCase {
 
   let authenticationCode: UInt8 = 0x3d
   let symmetricKey = SymmetricKey(data: Data(hexEncoded: "45d4c42bbefab09de35e498fca4ff920")!)
-  let nonce = try! Nonce(data: Data(hexEncoded: "9ebdbde706ba8d3e6e96241dc6344afa")!)
+  let nonce = Array(hexEncoded: "9ebdbde706ba8d3e6e96241dc6344afa")!
 
   override func setUpWithError() throws {
     channel = EmbeddedChannel()
