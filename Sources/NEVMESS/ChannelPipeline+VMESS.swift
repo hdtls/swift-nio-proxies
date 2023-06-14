@@ -118,7 +118,6 @@ extension ChannelPipeline.SynchronousOperations {
     )
 
     let messageDecoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
-      authenticationCode: authenticationCode,
       contentSecurity: contentSecurity,
       symmetricKey: symmetricKey,
       nonce: Array(nonce),

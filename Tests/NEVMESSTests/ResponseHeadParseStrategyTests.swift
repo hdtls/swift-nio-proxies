@@ -31,7 +31,6 @@ final class ResponseHeadParseStrategyTests: XCTestCase {
     )
 
     let parseStrategy = ResponseHeadParseStrategy(
-      authenticationCode: 0x3d,
       symmetricKey: symmetricKey,
       nonce: nonce,
       decryptionStrategy: .useAEAD
@@ -54,7 +53,6 @@ final class ResponseHeadParseStrategyTests: XCTestCase {
     let nonce = Array(hexEncoded: "3237668dc5ece4cb4ddd0fe362f17987")!
 
     let parseStrategy = ResponseHeadParseStrategy(
-      authenticationCode: 0x3d,
       symmetricKey: symmetricKey,
       nonce: nonce,
       decryptionStrategy: .useAEAD
@@ -104,7 +102,6 @@ final class ResponseHeadParseStrategyTests: XCTestCase {
     let nonce = Array(hexEncoded: "3237668dc5ece4cb4ddd0fe362f17987")!
 
     let parseStrategy = ResponseHeadParseStrategy(
-      authenticationCode: 0x3d,
       symmetricKey: symmetricKey,
       nonce: nonce,
       decryptionStrategy: .useLegacy
@@ -112,8 +109,8 @@ final class ResponseHeadParseStrategyTests: XCTestCase {
 
     var parseInput = ByteBuffer()
 
-    // Failed to read auth code
-    XCTAssertThrowsError(try parseStrategy.parse(parseInput))
+    // Missing auth code
+    XCTAssertNil(try parseStrategy.parse(parseInput))
 
     parseInput.writeInteger(UInt8(0x3d))
     // Missing options data

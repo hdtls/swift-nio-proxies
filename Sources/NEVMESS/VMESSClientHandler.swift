@@ -61,8 +61,11 @@ final public class VMESSClientHandler: ChannelInboundHandler, ChannelOutboundHan
 
   public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
     switch unwrapInboundIn(data) {
-    case .head:
-      break
+    case .head(let head):
+      guard head.authenticationCode == authenticationCode else {
+        context.fireErrorCaught(VMESSError.authenticationFailure)
+        return
+      }
     case .body(let frame):
       context.fireChannelRead(wrapInboundOut(frame))
     case .end:

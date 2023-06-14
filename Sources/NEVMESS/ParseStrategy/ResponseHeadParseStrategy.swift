@@ -35,8 +35,6 @@ struct ResponseHeadParseStrategy: Sendable {
   /// The type of the data type.
   typealias ParseOutput = (VMESSResponseHead, Int)?
 
-  let authenticationCode: UInt8
-
   let symmetricKey: SymmetricKey
 
   let nonce: [UInt8]
@@ -105,9 +103,12 @@ struct ResponseHeadParseStrategy: Sendable {
   /// Should be private but for tests we make it internal.
   func _parse(_ value: ParseInput) throws -> ParseOutput {
     var headPartData = value
-    guard authenticationCode == headPartData.readInteger() else {
-      // Unexpected response header
-      throw VMESSError.authenticationFailure
+    guard let authenticationCode = headPartData.readInteger(as: UInt8.self) else {
+      if case .useAEAD = decryptionStrategy {
+        throw CodingError.failedToParseData
+      } else {
+        return nil
+      }
     }
 
     guard let rawValue = headPartData.readInteger(as: UInt8.self) else {

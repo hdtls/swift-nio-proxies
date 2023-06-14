@@ -60,7 +60,6 @@ final class VMESSDecoderTests: XCTestCase {
     channel.embeddedEventLoop
   }
 
-  let authenticationCode: UInt8 = 0x3d
   let symmetricKey = SymmetricKey(data: Data(hexEncoded: "45d4c42bbefab09de35e498fca4ff920")!)
   let nonce = Array(hexEncoded: "9ebdbde706ba8d3e6e96241dc6344afa")!
 
@@ -70,7 +69,6 @@ final class VMESSDecoderTests: XCTestCase {
 
   func testBasicVerifications() throws {
     let decoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
-      authenticationCode: authenticationCode,
       contentSecurity: .aes128Gcm,
       symmetricKey: symmetricKey,
       nonce: nonce,
@@ -81,7 +79,7 @@ final class VMESSDecoderTests: XCTestCase {
 
     var expected = VMESSPart<VMESSResponseHead, ByteBuffer>.head(
       .init(
-        authenticationCode: authenticationCode,
+        authenticationCode: 0x3d,
         options: .init(rawValue: 0),
         commandCode: .init(rawValue: 0),
         command: nil
@@ -122,7 +120,6 @@ final class VMESSDecoderTests: XCTestCase {
 
   func testUsingInsufficientDataToParseResponseHeadersThatDoNotContainCommands() throws {
     let decoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
-      authenticationCode: authenticationCode,
       contentSecurity: .aes128Gcm,
       symmetricKey: symmetricKey,
       nonce: nonce,
@@ -145,7 +142,7 @@ final class VMESSDecoderTests: XCTestCase {
     XCTAssertNoThrow(try channel.writeInbound(data))
     let expected = VMESSPart<VMESSResponseHead, ByteBuffer>.head(
       .init(
-        authenticationCode: authenticationCode,
+        authenticationCode: 0x3d,
         options: .init(rawValue: 0),
         commandCode: .init(rawValue: 0),
         command: nil
@@ -159,7 +156,6 @@ final class VMESSDecoderTests: XCTestCase {
 
   func testParsingResponseHeaderWithDataContainingIncorrectlyEncryptedHeaderDataLength() {
     let decoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
-      authenticationCode: authenticationCode,
       contentSecurity: .aes128Gcm,
       symmetricKey: symmetricKey,
       nonce: nonce,
@@ -183,7 +179,6 @@ final class VMESSDecoderTests: XCTestCase {
 
   func testParsingResponseHeaderWithDataContainingIncorrectlyEncryptedHeaderData() {
     let decoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
-      authenticationCode: authenticationCode,
       contentSecurity: .aes128Gcm,
       symmetricKey: symmetricKey,
       nonce: nonce,
@@ -209,7 +204,6 @@ final class VMESSDecoderTests: XCTestCase {
 
   func testParsingResponseFrameWithInsufficientDataAndPaddingMaskingStreamOptions() throws {
     let decoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
-      authenticationCode: authenticationCode,
       contentSecurity: .aes128Gcm,
       symmetricKey: symmetricKey,
       nonce: nonce,

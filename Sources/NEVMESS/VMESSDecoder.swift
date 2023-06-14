@@ -43,7 +43,6 @@ private class BetterVMESSParser {
 
   private var decodingState: VMESSDecodingState = .headBegin
   private let kind: VMESSDecoderKind
-  private let authenticationCode: UInt8
   private let contentSecurity: ContentSecurity
   private let symmetricKey: SymmetricKey
   private let nonce: [UInt8]
@@ -61,7 +60,6 @@ private class BetterVMESSParser {
 
   init(
     kind: VMESSDecoderKind,
-    authenticationCode: UInt8,
     contentSecurity: ContentSecurity,
     symmetricKey: SymmetricKey,
     nonce: [UInt8],
@@ -70,7 +68,6 @@ private class BetterVMESSParser {
     headDecryptionStrategy: ResponseHeadDecryptionStrategy
   ) {
     self.kind = kind
-    self.authenticationCode = authenticationCode
     self.symmetricKey = symmetricKey.withUnsafeBytes {
       SymmetricKey(data: Array(SHA256.hash(data: $0).prefix(16)))
     }
@@ -143,7 +140,6 @@ private class BetterVMESSParser {
       switch decodingState {
       case .headBegin:
         let parseStrategy = ResponseHeadParseStrategy(
-          authenticationCode: authenticationCode,
           symmetricKey: symmetricKey,
           nonce: nonce,
           decryptionStrategy: headDecryptionStrategy
@@ -406,14 +402,12 @@ final public class VMESSDecoder<Out>: ByteToMessageDecoder, VMESSDecoderDelegate
 
   /// Creates a new instance of `VMESSDecoder`.
   /// - Parameters:
-  ///   - authenticationCode: The authentication code to use to verify authenticated head message.
   ///   - contentSecurity: The security type use to control message decoding method.
   ///   - symmetricKey: SymmetricKey for decriptor.
   ///   - nonce: Nonce for decryptor.
   ///   - options: The stream options use to control data padding and mask.
   ///   - headDecryptionStrategy: Strategy to decrypt encrypted response head. Defaults to `.useAEAD`.
   public init(
-    authenticationCode: UInt8,
     contentSecurity: ContentSecurity,
     symmetricKey: SymmetricKey,
     nonce: [UInt8],
@@ -428,7 +422,6 @@ final public class VMESSDecoder<Out>: ByteToMessageDecoder, VMESSDecoderDelegate
     }
     self.parser = BetterVMESSParser(
       kind: kind,
-      authenticationCode: authenticationCode,
       contentSecurity: contentSecurity,
       symmetricKey: symmetricKey,
       nonce: nonce,
