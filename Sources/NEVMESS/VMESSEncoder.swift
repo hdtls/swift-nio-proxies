@@ -34,14 +34,12 @@ private class BetterVMESSWriter<In> where In: Equatable {
   private let authenticationCode: UInt8
   private let contentSecurity: ContentSecurity
   private let symmetricKey: SymmetricKey
-  private let nonce: Nonce
+  private let nonce: [UInt8]
   private let options: StreamOptions
   private let commandCode: CommandCode
   private lazy var hasher: SHAKE128 = {
     var shake128 = SHAKE128()
-    nonce.withUnsafeBytes { buffPtr in
-      shake128.update(data: buffPtr)
-    }
+    shake128.update(data: nonce)
     return shake128
   }()
   private var nonceLeading = UInt16.zero
@@ -51,7 +49,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
     authenticationCode: UInt8,
     contentSecurity: ContentSecurity,
     symmetricKey: SymmetricKey,
-    nonce: Nonce,
+    nonce: [UInt8],
     options: StreamOptions,
     commandCode: CommandCode,
     headEncodingStrategy: HeadEncodingStrategy = .useAEAD
@@ -62,8 +60,10 @@ private class BetterVMESSWriter<In> where In: Equatable {
       preconditionFailure("unknown VMESS message type \(In.self)")
     }
     self.authenticationCode = authenticationCode
+    assert(symmetricKey.bitCount == SymmetricKeySize.bits128.bitCount, "incorrect key size")
     self.symmetricKey = symmetricKey
-    self.nonce = nonce
+    assert(nonce.count >= 16, "incorrect parameter size")
+    self.nonce = Array(nonce.prefix(16))
     var options = options
     switch contentSecurity {
     case .aes128Gcm, .chaCha20Poly1305:
@@ -176,7 +176,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
         finalize = try AES.CFB.encrypt(
           Array(buffer: data),
           using: symmetricKey,
-          nonce: .init(data: Array(nonce))
+          nonce: .init(data: nonce)
         )
         return finalize
       }
@@ -233,7 +233,7 @@ private class BetterVMESSWriter<In> where In: Equatable {
         finalize = try AES.CFB.encrypt(
           finalize,
           using: symmetricKey,
-          nonce: .init(data: Array(nonce))
+          nonce: .init(data: nonce)
         )
         return finalize
       }
@@ -592,7 +592,7 @@ final public class VMESSEncoder<In: Equatable>: ChannelOutboundHandler {
     authenticationCode: UInt8,
     contentSecurity: ContentSecurity,
     symmetricKey: SymmetricKey,
-    nonce: Nonce,
+    nonce: [UInt8],
     options: StreamOptions,
     commandCode: CommandCode
   ) {

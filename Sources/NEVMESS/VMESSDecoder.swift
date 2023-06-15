@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
-import Foundation
 import NEMisc
 import NEPrettyBytes
 import NESHAKE128
@@ -165,7 +164,7 @@ private class BetterVMESSParser {
         else {
           break loop
         }
-        didReceiveBody(ByteBuffer(bytes: frameData))
+        didReceiveBody(frameData)
         decodingState = .frameLengthBegin
       case .complete:
         break loop
@@ -254,7 +253,7 @@ private class BetterVMESSParser {
 
       var symmetricKey = KDF.deriveKey(
         inputKeyMaterial: .init(data: symmetricKey),
-        info: Data("auth_len".utf8)
+        info: Array("auth_len".utf8)
       )
       let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
         Array($0) + Array(self.nonce.prefix(12).suffix(10))
@@ -299,7 +298,7 @@ private class BetterVMESSParser {
 
   /// Parse frame from buffer with specified frameLength and padding..
   private func parseFrame(from buffer: inout ByteBuffer, frameLength: Int, padding: Int) throws
-    -> Data?
+    -> ByteBuffer?
   {
     guard var message = buffer.readSlice(length: frameLength) else {
       return nil
@@ -307,18 +306,18 @@ private class BetterVMESSParser {
     switch contentSecurity {
     case .none:
       guard options.contains(.chunkStream) else {
-        return Data(Array(buffer: message))
+        return message
       }
 
       guard commandCode == .udp else {
         // Transfer type stream...
-        return Data(Array(buffer: message))
+        return message
       }
       // TODO: Parse UDP Frame
       return nil
     case .aes128Cfb:
       guard options.contains(.chunkStream) else {
-        return Data(Array(buffer: message))
+        return message
       }
 
       // AES-CFB-128 decrypt...
@@ -343,7 +342,7 @@ private class BetterVMESSParser {
       guard !authenticationFailure else {
         throw CryptoKitError.authenticationFailure
       }
-      return Data(Array(buffer: message))
+      return message
     case .aes128Gcm, .chaCha20Poly1305:
       // Tag for AES-GCM or ChaCha20-Poly1305 are both 16.
       let nonce = withUnsafeBytes(of: nonceLeading.bigEndian) {
@@ -353,16 +352,18 @@ private class BetterVMESSParser {
       // Remove random padding bytes.
       let combined = nonce + Array(buffer: message).dropLast(padding)
 
-      var frame: Data
+      message.clear()
       if contentSecurity == .aes128Gcm {
-        frame = try AES.GCM.open(.init(combined: combined), using: .init(data: symmetricKey))
+        let frame = try AES.GCM.open(.init(combined: combined), using: .init(data: symmetricKey))
+        message.writeBytes(frame)
       } else {
         let symmetricKey = generateChaChaPolySymmetricKey(inputKeyMaterial: symmetricKey)
-        frame = try ChaChaPoly.open(.init(combined: combined), using: symmetricKey)
+        let frame = try ChaChaPoly.open(.init(combined: combined), using: symmetricKey)
+        message.writeBytes(frame)
       }
 
       nonceLeading &+= 1
-      return frame
+      return message
     default:
       throw CodingError.operationUnsupported
     }

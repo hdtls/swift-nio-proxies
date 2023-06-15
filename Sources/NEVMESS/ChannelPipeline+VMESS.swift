@@ -23,23 +23,15 @@ extension ChannelPipeline {
   /// Configure a `ChannelPipeline` for use as a VMESS proxy client.
   /// - Parameters:
   ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy client handlers. Defaults to `.last`.
-  ///   - authenticationCode: VMESS head authentication code. Defaults to `UInt8.random(in: 0 ... .max)`.
   ///   - contentSecurity: VMESS data stream security settings..
-  ///   - symmetricKey: Symmetric key for encryption/decryption.
-  ///   - nonce: Nonce for encryption/decryption.
   ///   - user: VMESS client ID.
   ///   - commandCode: Command code for VMESS request/response. Defaults to `.tcp`.
-  ///   - options: VMESS stream options. Defaults to `.masking`.
   ///   - destinationAddress: The destination for proxy connection.
   public func addVMESSClientHandlers(
     position: Position = .last,
-    authenticationCode: UInt8 = .random(in: 0 ... .max),
     contentSecurity: ContentSecurity,
-    symmetricKey: SymmetricKey,
-    nonce: Nonce,
     user: UUID,
     commandCode: CommandCode = .tcp,
-    options: StreamOptions = .chunkStream,
     destinationAddress: NetAddress
   ) -> EventLoopFuture<Void> {
     let eventLoopFuture: EventLoopFuture<Void>
@@ -48,13 +40,9 @@ extension ChannelPipeline {
       let result = Result<Void, Error> {
         try syncOperations.addVMESSClientHandlers(
           position: position,
-          authenticationCode: authenticationCode,
           contentSecurity: contentSecurity,
-          symmetricKey: symmetricKey,
-          nonce: nonce,
           user: user,
           commandCode: commandCode,
-          options: options,
           destinationAddress: destinationAddress
         )
       }
@@ -63,13 +51,9 @@ extension ChannelPipeline {
       eventLoopFuture = eventLoop.submit {
         try self.syncOperations.addVMESSClientHandlers(
           position: position,
-          authenticationCode: authenticationCode,
           contentSecurity: contentSecurity,
-          symmetricKey: symmetricKey,
-          nonce: nonce,
           user: user,
           commandCode: commandCode,
-          options: options,
           destinationAddress: destinationAddress
         )
       }
@@ -83,30 +67,26 @@ extension ChannelPipeline.SynchronousOperations {
   /// Configure a `ChannelPipeline` for use as a VMESS proxy client.
   /// - Parameters:
   ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy client handlers. Defaults to `.last`.
-  ///   - authenticationCode: VMESS head authentication code. Defaults to `UInt8.random(in: 0 ... .max)`.
   ///   - contentSecurity: VMESS data stream security settings..
-  ///   - symmetricKey: Symmetric key for encryption/decryption.
-  ///   - nonce: Nonce for encryption/decryption.
   ///   - user: VMESS client ID.
   ///   - commandCode: Command code for VMESS request/response. Defaults to `.tcp`.
-  ///   - options: VMESS stream options. Defaults to `.masking`.
   ///   - destinationAddress: The destination for proxy connection.
   public func addVMESSClientHandlers(
     position: ChannelPipeline.Position = .last,
-    authenticationCode: UInt8 = .random(in: 0 ... .max),
     contentSecurity: ContentSecurity,
-    symmetricKey: SymmetricKey,
-    nonce: Nonce,
     user: UUID,
     commandCode: CommandCode = .tcp,
-    options: StreamOptions = .chunkStream,
     destinationAddress: NetAddress
   ) throws {
     eventLoop.assertInEventLoop()
 
-    guard symmetricKey.bitCount == SymmetricKeySize.bits128.bitCount else {
-      throw CryptoKitError.incorrectKeySize
+    let authenticationCode = UInt8.random(in: .min ... .max)
+    let symmetricKey = SymmetricKey(size: .bits128)
+    var nonce = Array(repeating: UInt8.zero, count: 16)
+    nonce.withUnsafeMutableBytes {
+      $0.initializeWithRandomBytes(count: 16)
     }
+    let options = StreamOptions.chunkStream
 
     let messageEncoder = VMESSEncoder<VMESSPart<VMESSRequestHead, ByteBuffer>>(
       authenticationCode: authenticationCode,

@@ -135,41 +135,6 @@ struct KDF {
   }
 }
 
-public struct Nonce: ContiguousBytes, Sequence, Sendable {
-
-  private let bytes: [UInt8]
-
-  private static let defaualtByteCount = 16
-
-  public typealias Iterator = IndexingIterator<[UInt8]>
-
-  public init() {
-    var data = Array(repeating: UInt8.zero, count: Nonce.defaualtByteCount)
-    data.withUnsafeMutableBytes { buffPtr in
-      assert(buffPtr.count == Nonce.defaualtByteCount)
-      buffPtr.initializeWithRandomBytes(count: Nonce.defaualtByteCount)
-    }
-    self.bytes = data
-  }
-
-  public init<D>(data: D) throws where D: DataProtocol {
-    guard data.count >= Nonce.defaualtByteCount else {
-      throw CryptoKitError.incorrectParameterSize
-    }
-    self.bytes = Array(data)
-  }
-
-  public func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {
-    try bytes.withUnsafeBytes(body)
-  }
-
-  public func makeIterator() -> Iterator {
-    withUnsafeBytes { buffPtr in
-      Array(buffPtr).makeIterator()
-    }
-  }
-}
-
 func generateCmdKey(_ id: UUID) -> SymmetricKey {
   withUnsafeBytes(of: id) {
     var hasher = Insecure.MD5.init()
