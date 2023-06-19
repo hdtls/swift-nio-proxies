@@ -458,9 +458,7 @@ final public class Netbot: @unchecked Sendable {
               HTTPResponseEncoder(),
               ByteToMessageHandler(HTTPRequestDecoder()),
               HTTPResponseCompressor(),
-              HTTPCaptureHandler<HTTPRequestHead>(
-                logger: Logger(label: "io.HTTP.capture")
-              ),
+              HTTPCaptureHandler<HTTPRequestHead>(logger: self.logger),
               HTTPIOTransformer<HTTPRequestHead>(),
               localGlue,
             ]
@@ -471,9 +469,7 @@ final public class Netbot: @unchecked Sendable {
               HTTPRequestEncoder(),
               ByteToMessageHandler(HTTPResponseDecoder()),
               NIOHTTPResponseDecompressor(limit: .none),
-              HTTPCaptureHandler<HTTPResponseHead>(
-                logger: Logger(label: "io.HTTP.capture")
-              ),
+              HTTPCaptureHandler<HTTPResponseHead>(logger: self.logger),
               HTTPIOTransformer<HTTPResponseHead>(),
               peerGlue,
             ]

@@ -12,13 +12,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import NIOCore
+import NIOCore
 
-public final class GlueHandler: ChannelDuplexHandler {
+final class GlueHandler: ChannelDuplexHandler {
 
-  public typealias InboundIn = NIOAny
-  public typealias OutboundIn = NIOAny
-  public typealias OutboundOut = NIOAny
+  typealias InboundIn = NIOAny
+
+  typealias OutboundIn = NIOAny
+
+  typealias OutboundOut = NIOAny
 
   private var partner: GlueHandler?
 
@@ -28,50 +30,53 @@ public final class GlueHandler: ChannelDuplexHandler {
 
   private init() {}
 
-  public func handlerAdded(context: ChannelHandlerContext) {
+  func handlerAdded(context: ChannelHandlerContext) {
     self.context = context
   }
 
-  public func handlerRemoved(context: ChannelHandlerContext) {
+  func handlerRemoved(context: ChannelHandlerContext) {
     self.context = nil
     self.partner = nil
   }
 
-  public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-    self.partner?.partnerWrite(data)
+  func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+    partner?.partnerWrite(data)
   }
 
-  public func channelReadComplete(context: ChannelHandlerContext) {
-    self.partner?.partnerFlush()
+  func channelReadComplete(context: ChannelHandlerContext) {
+    partner?.partnerFlush()
+    context.fireChannelReadComplete()
   }
 
-  public func channelInactive(context: ChannelHandlerContext) {
-    self.partner?.partnerCloseFull()
+  func channelInactive(context: ChannelHandlerContext) {
+    partner?.partnerCloseFull()
+    context.fireChannelInactive()
   }
 
-  public func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+  func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
     if let event = event as? ChannelEvent, case .inputClosed = event {
       // We have read EOF.
-      self.partner?.partnerWriteEOF()
+      partner?.partnerWriteEOF()
     }
+    context.fireUserInboundEventTriggered(event)
   }
 
-  public func errorCaught(context: ChannelHandlerContext, error: Error) {
+  func errorCaught(context: ChannelHandlerContext, error: Error) {
     context.fireErrorCaught(error)
-    self.partner?.partnerCloseFull()
+    partner?.partnerCloseFull()
   }
 
-  public func channelWritabilityChanged(context: ChannelHandlerContext) {
+  func channelWritabilityChanged(context: ChannelHandlerContext) {
     if context.channel.isWritable {
-      self.partner?.partnerBecameWritable()
+      partner?.partnerBecameWritable()
     }
   }
 
-  public func read(context: ChannelHandlerContext) {
-    if let partner = self.partner, partner.partnerWritable {
+  func read(context: ChannelHandlerContext) {
+    if let partner, partner.partnerWritable {
       context.read()
     } else {
-      self.pendingRead = true
+      pendingRead = true
     }
   }
 }
@@ -93,32 +98,29 @@ extension GlueHandler {
 extension GlueHandler {
 
   private func partnerWrite(_ data: NIOAny) {
-    guard let context = context else {
-      return
-    }
-    context.write(data, promise: nil)
+    context?.write(data, promise: nil)
   }
 
   private func partnerFlush() {
-    self.context?.flush()
+    context?.flush()
   }
 
   private func partnerWriteEOF() {
-    self.context?.close(mode: .output, promise: nil)
+    context?.close(mode: .output, promise: nil)
   }
 
   private func partnerCloseFull() {
-    self.context?.close(promise: nil)
+    context?.close(promise: nil)
   }
 
   private func partnerBecameWritable() {
-    if self.pendingRead {
-      self.pendingRead = false
-      self.context?.read()
+    if pendingRead {
+      pendingRead = false
+      context?.read()
     }
   }
 
   private var partnerWritable: Bool {
-    return self.context?.channel.isWritable ?? false
+    return context?.channel.isWritable ?? false
   }
 }

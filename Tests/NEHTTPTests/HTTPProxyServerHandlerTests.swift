@@ -21,26 +21,19 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
 
   private var eventLoop: EmbeddedEventLoop!
   private var channel: EmbeddedChannel!
-  private var clientChannel: EmbeddedChannel!
   private var handler: HTTPProxyServerHandler!
 
   override func setUp() {
     XCTAssertNil(channel)
-    XCTAssertNil(clientChannel)
 
     eventLoop = EmbeddedEventLoop()
-    clientChannel = EmbeddedChannel(loop: eventLoop)
-
-    let (localGlue, peerGlue) = GlueHandler.matchedPair()
 
     handler = HTTPProxyServerHandler(
       username: "username",
       passwordReference: "passwordReference",
       authenticationRequired: false
     ) { _ in
-      self.channel.pipeline.addHandler(localGlue).flatMap {
-        self.clientChannel.pipeline.addHandler(peerGlue)
-      }
+      self.eventLoop.makeSucceededVoidFuture()
     }
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
   }
@@ -48,7 +41,6 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
   override func tearDown() {
     XCTAssertNotNil(channel)
     channel = nil
-    clientChannel = nil
     eventLoop = nil
     handler = nil
   }
@@ -123,13 +115,9 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     headers.add(name: .contentLength, value: "0")
     XCTAssertEqual(headPart, .head(.init(version: .http1_1, status: .ok, headers: headers)))
 
-    let expected = ByteBuffer(bytes: [1, 2, 3, 4, 5])
-    try channel.writeInbound(expected)
-    let data = try clientChannel.readOutbound(as: ByteBuffer.self)
-    XCTAssertEqual(data, expected)
-
-    try clientChannel.writeInbound(expected)
-    XCTAssertEqual(try channel.readOutbound(as: ByteBuffer.self), expected)
+    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyServerHandler.self).wait()) {
+      XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
+    }
     XCTAssertNoThrow(try channel.finish())
   }
 
@@ -138,7 +126,6 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     try channel.writeInbound(HTTPServerRequestPart.head(head))
     try channel.writeInbound(HTTPServerRequestPart.end(nil))
 
-    XCTAssertNoThrow(try channel.pipeline.syncOperations.handler(type: GlueHandler.self))
     XCTAssertThrowsError(
       try channel.pipeline.syncOperations.handler(
         type: ByteToMessageHandler<HTTPRequestDecoder>.self
@@ -160,9 +147,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
   }
 
   func testBufferingBeforePipelineSetupSuccess() async throws {
-    let deferPromise = eventLoop.makePromise(of: Channel.self)
-
-    let (localGlue, peerGlue) = GlueHandler.matchedPair()
+    let deferPromise = eventLoop.makePromise(of: Void.self)
 
     handler = HTTPProxyServerHandler(
       username: "username",
@@ -170,11 +155,6 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
       authenticationRequired: false
     ) { _ in
       deferPromise.futureResult
-        .flatMap { clientChannel in
-          self.channel.pipeline.addHandler(localGlue).flatMap {
-            clientChannel.pipeline.addHandler(peerGlue)
-          }
-        }
     }
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
 
@@ -185,11 +165,8 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     let expected = ByteBuffer(bytes: [1, 2, 3, 4, 5])
     try channel.writeInbound(expected)
 
-    deferPromise.succeed(clientChannel)
+    deferPromise.succeed(())
 
-    let data = try clientChannel.readOutbound(as: ByteBuffer.self)
-
-    XCTAssertEqual(data, expected)
     XCTAssertNoThrow(try channel.finish())
   }
 
@@ -200,10 +177,9 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     try channel.writeInbound(HTTPServerRequestPart.head(head))
     try channel.writeInbound(HTTPServerRequestPart.end(nil))
 
-    let expected = ByteBuffer(bytes: [1, 2, 3, 4, 5])
-    try clientChannel.writeInbound(expected)
-    let data = try channel.readOutbound(as: ByteBuffer.self)
-    XCTAssertEqual(data, expected)
+    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyServerHandler.self).wait()) {
+      XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
+    }
     XCTAssertNoThrow(try channel.finish())
   }
 }
