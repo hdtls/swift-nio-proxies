@@ -120,7 +120,7 @@ struct ResponseHeadParseStrategy: Sendable {
     }
     let options = StreamOptions.init(rawValue: rawValue)
 
-    guard let commandCode: UInt8 = headPartData.readInteger() else {
+    guard let code: UInt8 = headPartData.readInteger() else {
       if case .useAEAD = decryptionStrategy {
         throw CodingError.failedToParseData
       } else {
@@ -131,11 +131,11 @@ struct ResponseHeadParseStrategy: Sendable {
     var head = VMESSResponseHead.init(
       authenticationCode: authenticationCode,
       options: options,
-      commandCode: .init(rawValue: commandCode),
-      command: nil
+      instructionCode: .init(rawValue: code),
+      instruction: nil
     )
 
-    guard let commandLength = headPartData.readInteger(as: UInt8.self) else {
+    guard let instructionDataLength = headPartData.readInteger(as: UInt8.self) else {
       if case .useAEAD = decryptionStrategy {
         throw CodingError.failedToParseData
       } else {
@@ -143,18 +143,18 @@ struct ResponseHeadParseStrategy: Sendable {
       }
     }
 
-    guard commandLength > 0 else {
+    guard instructionDataLength > 0 else {
       let consumed =
         decryptionStrategy == .useAEAD ? 0 : headPartData.readerIndex - value.readerIndex
       return (head, consumed)
     }
 
     // This read should always success, adding Nil-Coalescing Operator is to avoid force unwrapping.
-    guard let slice = headPartData.readSlice(length: Int(commandLength)) else {
+    guard let slice = headPartData.readSlice(length: Int(instructionDataLength)) else {
       throw CodingError.failedToParseData
     }
 
-    head.command = try ResponseCommandParseStrategy(commandCode: commandCode).parse(slice)
+    head.instruction = try ResponseInstructionParseStrategy(instructionCode: code).parse(slice)
 
     let consumed =
       decryptionStrategy == .useAEAD ? 0 : headPartData.readerIndex - value.readerIndex

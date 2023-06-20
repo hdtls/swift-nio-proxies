@@ -21,7 +21,7 @@ import Foundation
 #endif
 
 /// `Version` defines VMESS protocol version.
-public struct Version: Hashable, RawRepresentable, Sendable {
+public struct VMESSVersion: Hashable, RawRepresentable, Sendable {
 
   public var rawValue: UInt8
 
@@ -30,10 +30,10 @@ public struct Version: Hashable, RawRepresentable, Sendable {
   }
 }
 
-extension Version {
+extension VMESSVersion {
 
   /// VMESS protocol version 1.
-  public static let v1 = Version.init(rawValue: 0x01)
+  public static let v1 = VMESSVersion.init(rawValue: 0x01)
 }
 
 /// `ContentSecurity` defines current VMESS supported data security algorithm.
@@ -115,9 +115,9 @@ extension StreamOptions {
   public static let authenticatedLength = StreamOptions.init(rawValue: 0x10)
 }
 
-public protocol ResponseCommand: Sendable {}
+public protocol ResponseInstruction: Sendable {}
 
-public struct DynamicPortInstruction: ResponseCommand, Hashable {
+public struct DynamicPortInstruction: ResponseInstruction, Hashable {
 
   public var address: String?
 
@@ -148,40 +148,51 @@ public struct DynamicPortInstruction: ResponseCommand, Hashable {
   }
 }
 
+public struct InstructionCode: Hashable, RawRepresentable, Sendable {
+
+  public typealias RawValue = UInt8
+
+  public let rawValue: UInt8
+
+  public init(rawValue: UInt8) {
+    self.rawValue = rawValue
+  }
+}
+
 /// A representation of the response header  frame of a VMESS response.
 public struct VMESSResponseHead: Hashable {
 
   final private class _Storage {
     /// Authentication code.
-    var authenticationCode: UInt8
+    fileprivate var authenticationCode: UInt8
 
     /// Stream options.
-    var options: StreamOptions
+    fileprivate var options: StreamOptions
 
-    /// Command code.
-    var commandCode: CommandCode
+    /// Instruction code.
+    fileprivate var instructionCode: InstructionCode
 
-    /// Command.
-    var command: ResponseCommand?
+    /// Instruction.
+    fileprivate var instruction: ResponseInstruction?
 
-    init(
+    fileprivate init(
       authenticationCode: UInt8,
       options: StreamOptions,
-      commandCode: CommandCode,
-      command: ResponseCommand?
+      instructionCode: InstructionCode,
+      instruction: ResponseInstruction?
     ) {
       self.authenticationCode = authenticationCode
       self.options = options
-      self.commandCode = commandCode
-      self.command = command
+      self.instructionCode = instructionCode
+      self.instruction = instruction
     }
 
-    func copy() -> _Storage {
+    fileprivate func copy() -> _Storage {
       return .init(
         authenticationCode: authenticationCode,
         options: options,
-        commandCode: commandCode,
-        command: command
+        instructionCode: instructionCode,
+        instruction: instruction
       )
     }
   }
@@ -210,51 +221,51 @@ public struct VMESSResponseHead: Hashable {
     }
   }
 
-  /// Command code.
-  public var commandCode: CommandCode {
+  /// Instruction code.
+  public var instructionCode: InstructionCode {
     get {
-      return self._storage.commandCode
+      return self._storage.instructionCode
     }
     set {
       self.copyStorageIfNotUniquelyReferenced()
-      self._storage.commandCode = newValue
+      self._storage.instructionCode = newValue
     }
   }
 
-  /// Command.
-  public var command: ResponseCommand? {
+  /// Instruction.
+  public var instruction: ResponseInstruction? {
     get {
-      return self._storage.command
+      return self._storage.instruction
     }
     set {
       self.copyStorageIfNotUniquelyReferenced()
-      self._storage.command = newValue
+      self._storage.instruction = newValue
     }
   }
 
   public init(
     authenticationCode: UInt8,
     options: StreamOptions,
-    commandCode: CommandCode,
-    command: ResponseCommand?
+    instructionCode: InstructionCode,
+    instruction: ResponseInstruction?
   ) {
     self._storage = .init(
       authenticationCode: authenticationCode,
       options: options,
-      commandCode: commandCode,
-      command: command
+      instructionCode: instructionCode,
+      instruction: instruction
     )
   }
 
   public static func == (lhs: VMESSResponseHead, rhs: VMESSResponseHead) -> Bool {
     lhs.authenticationCode == rhs.authenticationCode && lhs.options == rhs.options
-      && lhs.commandCode == rhs.commandCode
+      && lhs.instructionCode == rhs.instructionCode
   }
 
   public func hash(into hasher: inout Hasher) {
     hasher.combine(authenticationCode)
     hasher.combine(options)
-    hasher.combine(commandCode)
+    hasher.combine(instructionCode)
   }
 
   private mutating func copyStorageIfNotUniquelyReferenced() {
@@ -269,7 +280,7 @@ extension VMESSResponseHead: @unchecked Sendable {}
 /// A representation of the request header  frame of a VMESS request.
 public struct VMESSRequestHead: Hashable, Sendable {
 
-  public var version: Version = .v1
+  public var version: VMESSVersion = .v1
 
   public var user: UUID
 
@@ -284,7 +295,7 @@ public struct VMESSRequestHead: Hashable, Sendable {
   public var address: NetAddress
 
   public init(
-    version: Version = .v1,
+    version: VMESSVersion = .v1,
     user: UUID,
     authenticationCode: UInt8,
     algorithm: ContentSecurity,

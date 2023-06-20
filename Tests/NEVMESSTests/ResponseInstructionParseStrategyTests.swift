@@ -17,7 +17,7 @@ import XCTest
 
 @testable import NEVMESS
 
-final class ResponseCommandParseStrategyTests: XCTestCase {
+final class ResponseInstructionParseStrategyTests: XCTestCase {
 
   func testBasicDynamicPortInstructionParsing() throws {
     let value = ByteBuffer(hexEncoded: "0004d24cfc9664f3815e657f2d72aa8218b1a504008010")!
@@ -76,7 +76,7 @@ final class ResponseCommandParseStrategyTests: XCTestCase {
     )
   }
 
-  func testBasicResponseCommandParsing() throws {
+  func testBasicResponseInstructionParsing() throws {
     let value = ByteBuffer(hexEncoded: "de56c8e30004d253b665767706e927b99f57abd2a35aba04008010")!
 
     let expected = DynamicPortInstruction(
@@ -88,21 +88,21 @@ final class ResponseCommandParseStrategyTests: XCTestCase {
       effectiveTime: 16
     )
 
-    let command = try ResponseCommandParseStrategy(commandCode: 0x01).parse(value)
-    XCTAssertEqual(command as! DynamicPortInstruction, expected)
+    let instruction = try ResponseInstructionParseStrategy(instructionCode: 0x01).parse(value)
+    XCTAssertEqual(instruction as! DynamicPortInstruction, expected)
   }
 
   func testParseWithIncopleteData() {
     var value = ByteBuffer()
-    XCTAssertThrowsError(try ResponseCommandParseStrategy(commandCode: 0x01).parse(value))
+    XCTAssertThrowsError(try ResponseInstructionParseStrategy(instructionCode: 0x01).parse(value))
 
     value = ByteBuffer(hexEncoded: "de56c8e30004d253b665767706e927b99f57abd2a35aba040080")!
     // Data validating failed
-    XCTAssertThrowsError(try ResponseCommandParseStrategy(commandCode: 0x01).parse(value))
+    XCTAssertThrowsError(try ResponseInstructionParseStrategy(instructionCode: 0x01).parse(value))
   }
 
-  func testParseUnsupportedCommand() {
+  func testParseUnsupportedInstruction() {
     let value = ByteBuffer(hexEncoded: "de56c8e30004d253b665767706e927b99f57abd2a35aba04008010")!
-    XCTAssertThrowsError(try ResponseCommandParseStrategy(commandCode: 0x02).parse(value))
+    XCTAssertThrowsError(try ResponseInstructionParseStrategy(instructionCode: 0x02).parse(value))
   }
 }

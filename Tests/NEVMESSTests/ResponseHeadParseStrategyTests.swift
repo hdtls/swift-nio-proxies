@@ -26,8 +26,8 @@ final class ResponseHeadParseStrategyTests: XCTestCase {
     let expected = VMESSResponseHead(
       authenticationCode: 0x3d,
       options: .init(rawValue: 0),
-      commandCode: .init(rawValue: 0),
-      command: nil
+      instructionCode: .init(rawValue: 0),
+      instruction: nil
     )
 
     let parseStrategy = ResponseHeadParseStrategy(
@@ -86,11 +86,11 @@ final class ResponseHeadParseStrategyTests: XCTestCase {
     XCTAssertThrowsError(try parseStrategy._parse(parseInput))
 
     parseInput.writeInteger(UInt8.zero)
-    // Missing command code data
+    // Missing instruction code data
     XCTAssertThrowsError(try parseStrategy._parse(parseInput))
 
     parseInput.writeInteger(UInt8.zero)
-    // Missing command length data
+    // Missing instruction length data
     XCTAssertThrowsError(try parseStrategy._parse(parseInput))
 
     parseInput.writeInteger(UInt8.zero)
@@ -117,11 +117,11 @@ final class ResponseHeadParseStrategyTests: XCTestCase {
     XCTAssertNil(try parseStrategy.parse(parseInput))
 
     parseInput.writeInteger(UInt8.zero)
-    // Missing command code data
+    // Missing instruction code data
     XCTAssertNil(try parseStrategy.parse(parseInput))
 
     parseInput.writeInteger(UInt8.zero)
-    // Missing command length data
+    // Missing instruction length data
     XCTAssertNil(try parseStrategy.parse(parseInput))
 
     parseInput.writeInteger(UInt8.zero)

@@ -81,8 +81,8 @@ final class VMESSDecoderTests: XCTestCase {
       .init(
         authenticationCode: 0x3d,
         options: .init(rawValue: 0),
-        commandCode: .init(rawValue: 0),
-        command: nil
+        instructionCode: .init(rawValue: 0),
+        instruction: nil
       )
     )
     try channel.writeInbound(paddingMaskingAES128GCMResponse[0])
@@ -144,8 +144,8 @@ final class VMESSDecoderTests: XCTestCase {
       .init(
         authenticationCode: 0x3d,
         options: .init(rawValue: 0),
-        commandCode: .init(rawValue: 0),
-        command: nil
+        instructionCode: .init(rawValue: 0),
+        instruction: nil
       )
     )
     XCTAssertEqual(

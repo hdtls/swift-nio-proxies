@@ -33,7 +33,7 @@ final public class VMESSClientHandler: ChannelInboundHandler, ChannelOutboundHan
   public typealias OutboundOut = VMESSPart<VMESSRequestHead, ByteBuffer>
 
   private var writeState: VMESSWriteState = .headBegin
-  private var version: Version
+  private var version: VMESSVersion
   private var user: UUID
   private var authenticationCode: UInt8
   private var contentSecurity: ContentSecurity
@@ -42,7 +42,7 @@ final public class VMESSClientHandler: ChannelInboundHandler, ChannelOutboundHan
   private var destinationAddress: NetAddress
 
   public init(
-    version: Version = .v1,
+    version: VMESSVersion = .v1,
     user: UUID,
     authenticationCode: UInt8 = .random(in: 0 ... .max),
     contentSecurity: ContentSecurity,

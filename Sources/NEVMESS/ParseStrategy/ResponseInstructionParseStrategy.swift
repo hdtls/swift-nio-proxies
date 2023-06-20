@@ -15,34 +15,35 @@
 import Foundation
 import NIOCore
 
-/// Response head part command parse strategy.
-struct ResponseCommandParseStrategy: Sendable {
+/// Response head part instruction parse strategy.
+struct ResponseInstructionParseStrategy: Sendable {
 
   typealias ParseInput = ByteBuffer
 
   /// The type of the data type.
-  typealias ParseOutput = ResponseCommand
+  typealias ParseOutput = ResponseInstruction
 
-  let commandCode: UInt8
+  let instructionCode: UInt8
 
   func parse(_ value: ParseInput) throws -> ParseOutput {
-    var commandData = value
+    var byteBuffer = value
 
-    guard let expectedCode = commandData.readInteger(as: UInt32.self) else {
+    guard let expectedCode = byteBuffer.readInteger(as: UInt32.self) else {
       throw CodingError.failedToParseData
     }
 
-    try commandData.withUnsafeReadableBytes {
+    try byteBuffer.withUnsafeReadableBytes {
       let code = FNV1a32.hash(data: $0)
       guard code == expectedCode else {
         throw VMESSError.authenticationFailure
       }
     }
 
-    switch commandCode {
+    switch instructionCode {
     case 1:
-      let command = try DynamicPortInstructionParseStrategy().parse(commandData.slice())
-      return command
+      let parseInput = byteBuffer.slice()
+      let dynamicPortInstruction = try DynamicPortInstructionParseStrategy().parse(parseInput)
+      return dynamicPortInstruction
     default:
       throw CodingError.operationUnsupported
     }
@@ -62,29 +63,29 @@ struct DynamicPortInstructionParseStrategy: Sendable {
   typealias ParseOutput = DynamicPortInstruction
 
   func parse(_ value: ParseInput) throws -> ParseOutput {
-    var commandData = value
+    var byteBuffer = value
 
-    guard let l = commandData.getInteger(at: commandData.readerIndex, as: UInt8.self) else {
+    guard let l = byteBuffer.getInteger(at: byteBuffer.readerIndex, as: UInt8.self) else {
       throw CodingError.failedToParseData
     }
     let addressLength = Int(l)
 
     let bytesToCopy = 3 + addressLength
-    guard let slice = commandData.readSlice(length: bytesToCopy) else {
+    guard let slice = byteBuffer.readSlice(length: bytesToCopy) else {
       throw CodingError.failedToParseData
     }
     let (address, port) = try AddressParseStrategy().parse(slice)
 
-    guard let uuid = commandData.readBytes(length: MemoryLayout<UUID>.size) else {
+    guard let uuid = byteBuffer.readBytes(length: MemoryLayout<UUID>.size) else {
       throw CodingError.failedToParseData
     }
     let uid = uuid.withUnsafeBytes {
       $0.load(as: UUID.self)
     }
 
-    guard let numberOfAlterIDs = commandData.readInteger(as: UInt16.self),
-      let level = commandData.readInteger(as: UInt8.self),
-      let effectiveTime = commandData.readInteger(as: UInt8.self)
+    guard let numberOfAlterIDs = byteBuffer.readInteger(as: UInt16.self),
+      let level = byteBuffer.readInteger(as: UInt8.self),
+      let effectiveTime = byteBuffer.readInteger(as: UInt8.self)
     else {
       throw CodingError.failedToParseData
     }
