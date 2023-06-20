@@ -278,21 +278,126 @@ public struct VMESSResponseHead: Hashable {
 extension VMESSResponseHead: @unchecked Sendable {}
 
 /// A representation of the request header  frame of a VMESS request.
-public struct VMESSRequestHead: Hashable, Sendable {
+public struct VMESSRequestHead: Hashable {
 
-  public var version: VMESSVersion = .v1
+  final private class _Storage {
 
-  public var user: UUID
+    fileprivate var version: VMESSVersion = .v1
 
-  public var authenticationCode: UInt8
+    fileprivate var user: UUID
 
-  public var contentSecurity: ContentSecurity
+    fileprivate var authenticationCode: UInt8
 
-  public var options: StreamOptions
+    fileprivate var contentSecurity: ContentSecurity
 
-  public var commandCode: CommandCode
+    fileprivate var options: StreamOptions
 
-  public var address: NetAddress
+    fileprivate var commandCode: CommandCode
+
+    fileprivate var address: NetAddress
+
+    fileprivate init(
+      version: VMESSVersion,
+      user: UUID,
+      authenticationCode: UInt8,
+      contentSecurity: ContentSecurity,
+      options: StreamOptions,
+      commandCode: CommandCode,
+      address: NetAddress
+    ) {
+      self.version = version
+      self.user = user
+      self.authenticationCode = authenticationCode
+      self.contentSecurity = contentSecurity
+      self.options = options
+      self.commandCode = commandCode
+      self.address = address
+    }
+
+    fileprivate func copy() -> _Storage {
+      .init(
+        version: version,
+        user: user,
+        authenticationCode: authenticationCode,
+        contentSecurity: contentSecurity,
+        options: options,
+        commandCode: commandCode,
+        address: address
+      )
+    }
+  }
+
+  private var _storage: _Storage
+
+  public var version: VMESSVersion {
+    get {
+      return self._storage.version
+    }
+    set {
+      self.copyStorageIfNotUniquelyReferenced()
+      self._storage.version = newValue
+    }
+  }
+
+  public var user: UUID {
+    get {
+      return self._storage.user
+    }
+    set {
+      self.copyStorageIfNotUniquelyReferenced()
+      self._storage.user = newValue
+    }
+  }
+
+  public var authenticationCode: UInt8 {
+    get {
+      return self._storage.authenticationCode
+    }
+    set {
+      self.copyStorageIfNotUniquelyReferenced()
+      self._storage.authenticationCode = newValue
+    }
+  }
+
+  public var contentSecurity: ContentSecurity {
+    get {
+      return self._storage.contentSecurity
+    }
+    set {
+      self.copyStorageIfNotUniquelyReferenced()
+      self._storage.contentSecurity = newValue
+    }
+  }
+
+  public var options: StreamOptions {
+    get {
+      return self._storage.options
+    }
+    set {
+      self.copyStorageIfNotUniquelyReferenced()
+      self._storage.options = newValue
+    }
+  }
+
+  public var commandCode: CommandCode {
+    get {
+      return self._storage.commandCode
+    }
+    set {
+      self.copyStorageIfNotUniquelyReferenced()
+      self._storage.commandCode = newValue
+    }
+  }
+
+  public var address: NetAddress {
+    get {
+      return self._storage.address
+    }
+    set {
+      self.copyStorageIfNotUniquelyReferenced()
+      self._storage.address = newValue
+    }
+  }
 
   public init(
     version: VMESSVersion = .v1,
@@ -303,15 +408,45 @@ public struct VMESSRequestHead: Hashable, Sendable {
     commandCode: CommandCode,
     address: NetAddress
   ) {
-    self.version = version
-    self.user = user
-    self.authenticationCode = authenticationCode
-    self.contentSecurity = algorithm
-    self.options = options
-    self.commandCode = commandCode
-    self.address = address
+    self._storage = .init(
+      version: version,
+      user: user,
+      authenticationCode: authenticationCode,
+      contentSecurity: algorithm,
+      options: options,
+      commandCode: commandCode,
+      address: address
+    )
+  }
+
+  public static func == (lhs: VMESSRequestHead, rhs: VMESSRequestHead) -> Bool {
+    lhs.version == rhs.version
+      && lhs.user == rhs.user
+      && lhs.authenticationCode == rhs.authenticationCode
+      && lhs.contentSecurity == rhs.contentSecurity
+      && lhs.options == rhs.options
+      && lhs.commandCode == rhs.commandCode
+      && lhs.address == rhs.address
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(version)
+    hasher.combine(user)
+    hasher.combine(authenticationCode)
+    hasher.combine(contentSecurity)
+    hasher.combine(options)
+    hasher.combine(commandCode)
+    hasher.combine(address)
+  }
+
+  private mutating func copyStorageIfNotUniquelyReferenced() {
+    if !isKnownUniquelyReferenced(&self._storage) {
+      self._storage = self._storage.copy()
+    }
   }
 }
+
+extension VMESSRequestHead: @unchecked Sendable {}
 
 /// The parts of a complete VMESS message, either request or response.
 public enum VMESSPart<HeadT: Equatable, BodyT: Equatable> {
