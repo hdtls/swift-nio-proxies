@@ -87,7 +87,7 @@ struct ProfileParser {
       return .string(readStringTillNextLine())
     }
 
-    key = key.trimmingCharacters(in: .whitespaces)
+    key = key.trimmingWhitespaces()
 
     self.pop()  // =
 
@@ -117,7 +117,7 @@ struct ProfileParser {
     let output = self.byteBuffer.readString(length: readLength) ?? ""
 
     guard let first = output.first, let last = output.last else {
-      return output.trimmingCharacters(in: .whitespaces)
+      return output.trimmingWhitespaces()
     }
     // check for quoted strings
     switch (first, last) {
@@ -125,11 +125,11 @@ struct ProfileParser {
       // double quoted strings support escaped \n
       return output.dropFirst().dropLast()
         .replacingOccurrences(of: "\\n", with: "\n")
-        .trimmingCharacters(in: .whitespaces)
+        .trimmingWhitespaces()
     case ("'", "'"):
       // single quoted strings just need quotes removed
-      return (output.dropFirst().dropLast() + "").trimmingCharacters(in: .whitespaces)
-    default: return output.trimmingCharacters(in: .whitespaces)
+      return (output.dropFirst().dropLast() + "").trimmingWhitespaces()
+    default: return output.trimmingWhitespaces()
     }
   }
 }
@@ -165,4 +165,11 @@ extension UInt8 {
   internal static let openbracket = UInt8(ascii: "[")
   internal static let closebracket = UInt8(ascii: "]")
   internal static let equal = UInt8(ascii: "=")
+}
+
+extension StringProtocol {
+
+  func trimmingWhitespaces() -> String {
+    self.trimmingCharacters(in: .whitespaces)
+  }
 }

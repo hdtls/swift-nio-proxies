@@ -30,7 +30,7 @@ public struct Profile: Sendable {
   public var policies: [ConnectionPolicy] = [DirectPolicy(), RejectPolicy(), RejectTinyGifPolicy()]
 
   /// All selectable policy groups contains in this configuration object.
-  public var policyGroups: [PolicyGroup] = []
+  public var policyGroups: [ConnectionPolicyGroup] = []
 
   /// Initialize an instance of `Profile` with the specified basicSettings, replicat, rules, manInTheMiddleSettings,
   /// polcies and policyGroups.
@@ -39,7 +39,7 @@ public struct Profile: Sendable {
     rules: [ParsableRule],
     manInTheMiddleSettings: ManInTheMiddleSettings,
     policies: [ConnectionPolicy],
-    policyGroups: [PolicyGroup]
+    policyGroups: [ConnectionPolicyGroup]
   ) {
     self.basicSettings = basicSettings
     self.rules = rules
@@ -60,23 +60,5 @@ public struct Profile: Sendable {
   ///     policyGroups: []
   ///   )
   ///   ```
-  public init() {
-    self.init(
-      basicSettings: .init(),
-      rules: [],
-      manInTheMiddleSettings: .init(),
-      policies: [DirectPolicy(), RejectPolicy(), RejectTinyGifPolicy()],
-      policyGroups: []
-    )
-  }
-}
-
-/// Selectable policy group object that defines policy group and current selected policy.
-public protocol PolicyGroup: Sendable {
-
-  /// The name for this PolicyGroup.
-  var name: String { get set }
-
-  /// Policies included in this policy group.
-  var policies: [String] { get set }
+  public init() {}
 }

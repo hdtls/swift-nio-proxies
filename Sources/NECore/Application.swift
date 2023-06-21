@@ -333,7 +333,7 @@ final public class Netbot: @unchecked Sendable {
     // Policy evaluating.
     var preferred: String?
 
-    // Check whether there is a `PolicyGroup` with then same name as the rule's policy in
+    // Check whether there is a `ConnectionPolicyGroup` with then same name as the rule's policy in
     // `policyGroups`, if group exists use group's `selected` as policy ID else use rule's
     // policy as ID.
     if let g = profile.policyGroups.first(where: { $0.name == savedFinalRule.policy }) {

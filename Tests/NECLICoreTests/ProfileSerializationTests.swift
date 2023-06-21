@@ -126,15 +126,15 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializePolicyGroups() throws {
     let expectedPolicyGroupsJsonString =
-      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"]},{\"name\":\"PROXY\",\"policies\":[\"HTTP\"]}]}"
+      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"},{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}]}"
 
     let policyGroupsString = """
       [Policies]
       HTTP = http, port = 8310, protocol = http, server-address = 127.0.0.1
 
       [Policy Group]
-      BLOCK = DIRECT, REJECT, REJECT-TINYGIF
-      PROXY = HTTP
+      BLOCK = select, policies = DIRECT, REJECT, REJECT-TINYGIF
+      PROXY = select, policies = HTTP
       """
 
     let jsonObject = try ProfileSerialization.jsonObject(
@@ -152,7 +152,7 @@ final class ProfileSerializationTests: XCTestCase {
   func testSerializePolicyGroupsWithUnknownPolicy() {
     let policyGroupsString = """
       [Policy Group]
-      PROXY = HTTP
+      PROXY = select, policies = HTTP
       """
 
     XCTAssertThrowsError(
@@ -162,15 +162,15 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializeRules() throws {
     let expectedRulesJsonString =
-      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"]},{\"name\":\"PROXY\",\"policies\":[\"HTTP\"]}],\"rules\":[\"DOMAIN-SUFFIX,example.com,DIRECT\",\"RULE-SET,SYSTEM,DIRECT\",\"GEOIP,CN,DIRECT\",\"FINAL,PROXY\"]}"
+      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"},{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}],\"rules\":[\"DOMAIN-SUFFIX,example.com,DIRECT\",\"RULE-SET,SYSTEM,DIRECT\",\"GEOIP,CN,DIRECT\",\"FINAL,PROXY\"]}"
 
     let rulesString = """
       [Policies]
       HTTP = http, port = 8310, protocol = http, server-address = 127.0.0.1
 
       [Policy Group]
-      BLOCK = DIRECT, REJECT, REJECT-TINYGIF
-      PROXY = HTTP
+      BLOCK = select, policies = DIRECT, REJECT, REJECT-TINYGIF
+      PROXY = select, policies = HTTP
 
       [Rule]
       DOMAIN-SUFFIX,example.com,DIRECT
@@ -228,14 +228,14 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializeRulesThatDefineWithPolicyGroup() throws {
     let expectedRulesJsonString =
-      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"HTTP\"]}],\"rules\":[\"DOMAIN-SUFFIX,example.com,PROXY\",\"RULE-SET,SYSTEM,PROXY\",\"GEOIP,CN,PROXY\",\"FINAL,PROXY\"]}"
+      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}],\"rules\":[\"DOMAIN-SUFFIX,example.com,PROXY\",\"RULE-SET,SYSTEM,PROXY\",\"GEOIP,CN,PROXY\",\"FINAL,PROXY\"]}"
 
     let rulesString = """
       [Policies]
       HTTP = http, port = 8310, protocol = http, server-address = 127.0.0.1
 
       [Policy Group]
-      PROXY = HTTP
+      PROXY = select, policies = HTTP
 
       [Rule]
       DOMAIN-SUFFIX,example.com,PROXY

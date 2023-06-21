@@ -197,20 +197,20 @@ final public class ProfileSerialization {
             throw ProfileSerializationError.dataCorrupted
           }
 
-          // Rebuild policy group as json array.
-          let policies = o.1
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-
-          _groupKeyedByLine[cursor] = [o.0: policies]
-
-          array.append(
-            .object([
-              AnyPolicyGroup.CodingKeys.name.rawValue: .string(o.0),
-              AnyPolicyGroup.CodingKeys.policies.rawValue: .array(policies.map(JSONValue.string)),
-            ])
-          )
-
+          guard case .object(let j) = try serializePolicyGroup(o),
+            case .array(let policies) = j[AnyPolicyGroup.CodingKeys.policies.rawValue]
+          else {
+            throw ProfileSerializationError.dataCorrupted
+          }
+          _groupKeyedByLine[cursor] = [
+            o.0: policies.compactMap({
+              guard case .string(let p) = $0 else {
+                return nil
+              }
+              return p
+            })
+          ]
+          array.append(try serializePolicyGroup(o))
           jsonValue = .array(array)
         default:
           guard case .object(var dictionary) = _json[currentGroup] ?? .object([:]) else {
@@ -320,7 +320,8 @@ final public class ProfileSerialization {
             guard let policies = $0[AnyPolicyGroup.CodingKeys.policies.rawValue] as? [String] else {
               return "\(name) = "
             }
-            return "\(name) = \(policies.joined(separator: ", "))"
+            return
+              "\(name) = \($0[AnyPolicyGroup.CodingKeys.type.rawValue] ?? "select"), policies = \(policies.joined(separator: ", "))"
           }
         )
         return
@@ -423,6 +424,47 @@ extension ProfileSerialization {
         AnyConnectionPolicy.CodingKeys.proxy.rawValue: .object(configuration),
       ])
     }
+  }
+
+  private static func serializePolicyGroup(_ o: (String, String)) throws -> JSONValue {
+    // Rebuild proxy configuration as json array.
+    let name = o.0.trimmingWhitespaces()
+    var expression = o.1
+
+    guard let maxLength = expression.firstIndex(of: ",") else {
+      throw ProfileSerializationError.dataCorrupted
+    }
+
+    var startIndex = expression.startIndex
+    let type = expression[startIndex..<maxLength].trimmingWhitespaces()
+
+    // Remove type
+    startIndex = expression.index(after: maxLength)
+    expression = expression[startIndex...].trimmingWhitespaces()
+
+    var components = expression.split(separator: "=")
+
+    var json = JSONValue.object([:])
+
+    while !components.isEmpty {
+      let key = components.removeFirst()
+      var values = components.removeFirst().split(separator: ",")
+      if !components.isEmpty {
+        components.insert(values.removeLast(), at: 0)
+      }
+      guard case .object(var j) = json else {
+        fatalError()
+      }
+      j[key.trimmingWhitespaces()] = .array(values.map({ .string($0.trimmingWhitespaces()) }))
+      json = .object(j)
+    }
+
+    guard case .object(var j) = json else {
+      fatalError()
+    }
+    j[AnyPolicyGroup.CodingKeys.name.rawValue] = .string(name)
+    j[AnyPolicyGroup.CodingKeys.type.rawValue] = .string(type)
+    return .object(j)
   }
 
   private static func serialize(_ obj: Any) throws -> String {
