@@ -21,7 +21,7 @@ final class NamingConventionTests: XCTestCase {
   func testConvertProfileFieldNameToKebabCase() {
     XCTAssertEqual("dnsServers".convertToKebabCase(), "dns-servers")
     XCTAssertEqual("basicSettings".convertToKebabCase(), "[General]")
-    XCTAssertEqual("rules".convertToKebabCase(), "[Rule]")
+    XCTAssertEqual("routingRules".convertToKebabCase(), "[Rule]")
     XCTAssertEqual("policies".convertToKebabCase(), "[Policies]")
     XCTAssertEqual("policyGroups".convertToKebabCase(), "[Policy Group]")
     XCTAssertEqual("manInTheMiddleSettings".convertToKebabCase(), "[MitM]")
@@ -30,7 +30,7 @@ final class NamingConventionTests: XCTestCase {
   func testConvertProfileFieldNameToCamelCase() {
     XCTAssertEqual("dns-servers".convertToCamelCase(), "dnsServers")
     XCTAssertEqual("[General]".convertToCamelCase(), "basicSettings")
-    XCTAssertEqual("[Rule]".convertToCamelCase(), "rules")
+    XCTAssertEqual("[Rule]".convertToCamelCase(), "routingRules")
     XCTAssertEqual("[Policies]".convertToCamelCase(), "policies")
     XCTAssertEqual("[Policy Group]".convertToCamelCase(), "policyGroups")
     XCTAssertEqual("[MitM]".convertToCamelCase(), "manInTheMiddleSettings")

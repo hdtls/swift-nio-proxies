@@ -162,7 +162,7 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializeRules() throws {
     let expectedRulesJsonString =
-      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"},{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}],\"rules\":[\"DOMAIN-SUFFIX,example.com,DIRECT\",\"RULE-SET,SYSTEM,DIRECT\",\"GEOIP,CN,DIRECT\",\"FINAL,PROXY\"]}"
+      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"},{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}],\"routingRules\":[\"DOMAIN-SUFFIX,example.com,DIRECT\",\"RULE-SET,SYSTEM,DIRECT\",\"GEOIP,CN,DIRECT\",\"FINAL,PROXY\"]}"
 
     let rulesString = """
       [Policies]
@@ -202,7 +202,7 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializeRulesThatDefineWithPolicy() throws {
     let expectedRulesJsonString =
-      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"rules\":[\"DOMAIN-SUFFIX,example.com,DIRECT\",\"RULE-SET,SYSTEM,DIRECT\",\"GEOIP,CN,DIRECT\",\"FINAL,HTTP\"]}"
+      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"routingRules\":[\"DOMAIN-SUFFIX,example.com,DIRECT\",\"RULE-SET,SYSTEM,DIRECT\",\"GEOIP,CN,DIRECT\",\"FINAL,HTTP\"]}"
 
     let rulesString = """
       [Policies]
@@ -228,7 +228,7 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializeRulesThatDefineWithPolicyGroup() throws {
     let expectedRulesJsonString =
-      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}],\"rules\":[\"DOMAIN-SUFFIX,example.com,PROXY\",\"RULE-SET,SYSTEM,PROXY\",\"GEOIP,CN,PROXY\",\"FINAL,PROXY\"]}"
+      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}],\"routingRules\":[\"DOMAIN-SUFFIX,example.com,PROXY\",\"RULE-SET,SYSTEM,PROXY\",\"GEOIP,CN,PROXY\",\"FINAL,PROXY\"]}"
 
     let rulesString = """
       [Policies]

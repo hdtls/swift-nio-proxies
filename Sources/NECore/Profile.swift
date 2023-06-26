@@ -18,7 +18,7 @@
 public struct Profile: Sendable {
 
   /// The rules contains in this configuration.
-  public var rules: [ParsableRule] = []
+  public var routingRules: [RoutingRule] = []
 
   /// A setting object that provides HTTP MitM settings for this process.
   public var manInTheMiddleSettings: ManInTheMiddleSettings = .init()
@@ -32,17 +32,17 @@ public struct Profile: Sendable {
   /// All selectable policy groups contains in this configuration object.
   public var policyGroups: [ConnectionPolicyGroup] = []
 
-  /// Initialize an instance of `Profile` with the specified basicSettings, replicat, rules, manInTheMiddleSettings,
+  /// Initialize an instance of `Profile` with the specified basicSettings, replicat, routingRules, manInTheMiddleSettings,
   /// polcies and policyGroups.
   public init(
     basicSettings: BasicSettings,
-    rules: [ParsableRule],
+    routingRules: [RoutingRule],
     manInTheMiddleSettings: ManInTheMiddleSettings,
     policies: [ConnectionPolicy],
     policyGroups: [ConnectionPolicyGroup]
   ) {
     self.basicSettings = basicSettings
-    self.rules = rules
+    self.routingRules = routingRules
     self.manInTheMiddleSettings = manInTheMiddleSettings
     self.policies = policies
     self.policyGroups = policyGroups
@@ -54,7 +54,7 @@ public struct Profile: Sendable {
   ///   ```swift
   ///   init(
   ///     basicSettings: .init(),
-  ///     rules: [],
+  ///     routingRules: [],
   ///     manInTheMiddleSettings: .init(),
   ///     policies: [DirectPolicy(), RejectPolicy(), RejectTinyGifPolicy()],
   ///     policyGroups: []

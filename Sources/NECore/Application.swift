@@ -89,7 +89,7 @@ final public class Netbot: @unchecked Sendable {
 
   @Protected private var mutableState: MutableState = MutableState()
 
-  private let ruleCache = LRUCache<String, ParsableRule>(capacity: 100)
+  private let ruleCache = LRUCache<String, RoutingRule>(capacity: 100)
 
   private var certificatePool: CertificatePool {
     get throws {
@@ -291,7 +291,7 @@ final public class Netbot: @unchecked Sendable {
 
     startTime = .now()
 
-    var savedFinalRule: ParsableRule!
+    var savedFinalRule: RoutingRule!
     for pattern in patterns {
       if let value = ruleCache.value(forKey: pattern) {
         savedFinalRule = value
@@ -299,19 +299,15 @@ final public class Netbot: @unchecked Sendable {
     }
 
     if savedFinalRule == nil {
-      for rule in profile.rules {
+      for rule in profile.routingRules {
         guard !patterns.contains(where: rule.match(_:)) else {
           savedFinalRule = rule
           break
         }
-
-        if rule is FinalRule {
-          savedFinalRule = rule
-        }
       }
     }
 
-    guard let savedFinalRule else {
+    guard let savedFinalRule, !savedFinalRule.disabled else {
       return try await fallback.makeConnection(logger: logger, on: eventLoop).get()
     }
 

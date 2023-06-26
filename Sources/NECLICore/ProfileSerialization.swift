@@ -55,7 +55,7 @@ public enum ProfileSerializationError: Error {
     case invalidExternalResources
 
     /// Error that failed to parse rule to specified type.
-    case failedToParseAs(ParsableRule.Type, butCanBeParsedAs: ParsableRule.Type)
+    case failedToParseAs(RoutingRule.Type, butCanBeParsedAs: RoutingRule.Type)
 
     public var description: String {
       switch self {
@@ -614,7 +614,7 @@ extension String {
   func convertToCamelCase() -> String {
     switch self {
     case "[General]": return "basicSettings"
-    case "[Rule]": return "rules"
+    case "[Rule]": return "routingRules"
     case "[Policies]": return "policies"
     case "[Policy Group]": return "policyGroups"
     case "[MitM]": return "manInTheMiddleSettings"
@@ -673,7 +673,7 @@ extension String {
   func convertToKebabCase() -> String {
     switch self {
     case "basicSettings": return "[General]"
-    case "rules": return "[Rule]"
+    case "routingRules": return "[Rule]"
     case "policies": return "[Policies]"
     case "policyGroups": return "[Policy Group]"
     case "manInTheMiddleSettings": return "[MitM]"

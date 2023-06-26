@@ -109,8 +109,8 @@ public struct NetbotCLITool: AsyncParsableCommand {
     )
 
     var isLogged = false
-    for (position, rule) in profile.rules.enumerated() {
-      guard var resources = rule as? ExternalRuleResources & ParsableRule else {
+    for (position, rule) in profile.routingRules.enumerated() {
+      guard var resources = rule as? ExternalRuleResources & RoutingRule else {
         continue
       }
 
@@ -154,7 +154,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
 
       resources.loadAllRules(from: fileURL)
 
-      profile.rules[position] = resources
+      profile.routingRules[position] = resources
     }
 
     // Overrides settings with input options

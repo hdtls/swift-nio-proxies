@@ -15,9 +15,9 @@
 import Crypto
 import Foundation
 @_exported import MaxMindDB
-@_exported import NECore
+import NECore
 
-protocol CheckedParsableRule: ParsableRule {
+protocol CheckedParsableRule: RoutingRule {
 
   static var label: RuleSystem.Label { get }
 
@@ -27,33 +27,6 @@ protocol CheckedParsableRule: ParsableRule {
 }
 
 extension CheckedParsableRule {
-
-  public init?(_ description: String) {
-    // Rule definitions are comma-separated except comments, and comment are
-    // always at the end of the rule and followed by //.
-    //
-    // Becase comments may contain commas, so we parse comments first.
-    var components = description.split(separator: ",").map {
-      $0.trimmingCharacters(in: .whitespaces)
-    }
-
-    let type = components.removeFirst()
-
-    guard type == Self.label.rawValue else {
-      return nil
-    }
-
-    let countOfRequiredFields = type == RuleSystem.Label.final.rawValue ? 1 : 2
-    guard components.count >= countOfRequiredFields else {
-      return nil
-    }
-
-    let expression = type != RuleSystem.Label.final.rawValue ? components.removeFirst() : ""
-
-    let policy = components.removeFirst()
-
-    self.init(expression: expression, policy: policy)
-  }
 
   static func validate(_ description: String) throws {
     let components = description.split(separator: ",").map {
@@ -91,7 +64,7 @@ public protocol ExternalRuleResources {
   mutating func loadAllRules(from file: URL)
 }
 
-extension ExternalRuleResources where Self: ParsableRule {
+extension ExternalRuleResources where Self: RoutingRule {
 
   public var externalResourcesURL: URL {
     get throws {
@@ -116,7 +89,7 @@ extension ExternalRuleResources where Self: ParsableRule {
   }
 }
 
-public struct DomainKeywordRule: ParsableRule, CheckedParsableRule {
+public struct DomainKeywordRule: RoutingRule, CheckedParsableRule {
 
   static let label: RuleSystem.Label = .domainKeyword
 
@@ -124,13 +97,46 @@ public struct DomainKeywordRule: ParsableRule, CheckedParsableRule {
 
   public var policy: String
 
+  public var disabled: Bool = false
+
   public var description: String {
-    "\(Self.label.rawValue),\(expression),\(policy)"
+    let prefix = disabled ? "# DOMAIN-KEYWORD" : "DOMAIN-KEYWORD"
+    return prefix + ",\(expression),\(policy)"
   }
 
-  public init(expression: String, policy: String) {
-    self.expression = expression
-    self.policy = policy
+  init() {
+    expression = ""
+    policy = ""
+  }
+
+  public init?(_ description: String) {
+    var parseOutput = DomainKeywordRule()
+
+    let value = description.trimmingCharacters(in: .whitespaces)
+    parseOutput.disabled = value.hasPrefix("#")
+
+    var components = value.split(separator: ",").map {
+      $0.trimmingCharacters(in: .whitespaces)
+    }
+
+    let type = components.removeFirst()
+    guard type == "DOMAIN-KEYWORD" else {
+      return nil
+    }
+
+    guard let expression = components.first else {
+      return nil
+    }
+    components.removeFirst()
+    parseOutput.expression = expression
+
+    guard let policy = components.first else {
+      return nil
+    }
+    components.removeFirst()
+    parseOutput.policy = policy
+
+    self = parseOutput
   }
 
   public func match(_ pattern: String) -> Bool {
@@ -138,7 +144,7 @@ public struct DomainKeywordRule: ParsableRule, CheckedParsableRule {
   }
 }
 
-public struct DomainRule: ParsableRule, CheckedParsableRule {
+public struct DomainRule: RoutingRule, CheckedParsableRule {
 
   static let label: RuleSystem.Label = .domain
 
@@ -146,13 +152,46 @@ public struct DomainRule: ParsableRule, CheckedParsableRule {
 
   public var policy: String
 
+  public var disabled: Bool = false
+
   public var description: String {
-    "\(Self.label.rawValue),\(expression),\(policy)"
+    let prefix = disabled ? "# DOMAIN" : "DOMAIN"
+    return prefix + ",\(expression),\(policy)"
   }
 
-  public init(expression: String, policy: String) {
-    self.expression = expression
-    self.policy = policy
+  init() {
+    expression = ""
+    policy = ""
+  }
+
+  public init?(_ description: String) {
+    var parseOutput = DomainRule()
+
+    let value = description.trimmingCharacters(in: .whitespaces)
+    parseOutput.disabled = value.hasPrefix("#")
+
+    var components = value.split(separator: ",").map {
+      $0.trimmingCharacters(in: .whitespaces)
+    }
+
+    let type = components.removeFirst()
+    guard type == "DOMAIN" else {
+      return nil
+    }
+
+    guard let expression = components.first else {
+      return nil
+    }
+    components.removeFirst()
+    parseOutput.expression = expression
+
+    guard let policy = components.first else {
+      return nil
+    }
+    components.removeFirst()
+    parseOutput.policy = policy
+
+    self = parseOutput
   }
 
   public func match(_ pattern: String) -> Bool {
@@ -160,7 +199,7 @@ public struct DomainRule: ParsableRule, CheckedParsableRule {
   }
 }
 
-public struct DomainSetRule: ExternalRuleResources, ParsableRule, CheckedParsableRule {
+public struct DomainSetRule: ExternalRuleResources, RoutingRule, CheckedParsableRule {
 
   static let label: RuleSystem.Label = .domainSet
 
@@ -168,15 +207,48 @@ public struct DomainSetRule: ExternalRuleResources, ParsableRule, CheckedParsabl
 
   public var policy: String
 
+  public var disabled: Bool = false
+
   @Protected private var domains: [String] = []
 
   public var description: String {
-    "\(Self.label.rawValue),\(expression),\(policy)"
+    let prefix = disabled ? "# DOMAIN-SET" : "DOMAIN-SET"
+    return prefix + ",\(expression),\(policy)"
   }
 
-  public init(expression: String, policy: String) {
-    self.expression = expression
-    self.policy = policy
+  init() {
+    expression = ""
+    policy = ""
+  }
+
+  public init?(_ description: String) {
+    var parseOutput = DomainSetRule()
+
+    let value = description.trimmingCharacters(in: .whitespaces)
+    parseOutput.disabled = value.hasPrefix("#")
+
+    var components = value.split(separator: ",").map {
+      $0.trimmingCharacters(in: .whitespaces)
+    }
+
+    let type = components.removeFirst()
+    guard type == "DOMAIN-SET" else {
+      return nil
+    }
+
+    guard let expression = components.first else {
+      return nil
+    }
+    components.removeFirst()
+    parseOutput.expression = expression
+
+    guard let policy = components.first else {
+      return nil
+    }
+    components.removeFirst()
+    parseOutput.policy = policy
+
+    self = parseOutput
   }
 
   public func match(_ expression: String) -> Bool {
@@ -203,7 +275,7 @@ public struct DomainSetRule: ExternalRuleResources, ParsableRule, CheckedParsabl
   }
 }
 
-public struct DomainSuffixRule: ParsableRule, CheckedParsableRule {
+public struct DomainSuffixRule: RoutingRule, CheckedParsableRule {
 
   static let label: RuleSystem.Label = .domainSuffix
 
@@ -211,13 +283,46 @@ public struct DomainSuffixRule: ParsableRule, CheckedParsableRule {
 
   public var policy: String
 
+  public var disabled: Bool = false
+
   public var description: String {
-    "\(Self.label.rawValue),\(expression),\(policy)"
+    let prefix = disabled ? "# DOMAIN-SUFFIX" : "DOMAIN-SUFFIX"
+    return prefix + ",\(expression),\(policy)"
   }
 
-  public init(expression: String, policy: String) {
-    self.expression = expression
-    self.policy = policy
+  init() {
+    expression = ""
+    policy = ""
+  }
+
+  public init?(_ description: String) {
+    var parseOutput = DomainSuffixRule()
+
+    let value = description.trimmingCharacters(in: .whitespaces)
+    parseOutput.disabled = value.hasPrefix("#")
+
+    var components = value.split(separator: ",").map {
+      $0.trimmingCharacters(in: .whitespaces)
+    }
+
+    let type = components.removeFirst()
+    guard type == "DOMAIN-SUFFIX" else {
+      return nil
+    }
+
+    guard let expression = components.first else {
+      return nil
+    }
+    components.removeFirst()
+    parseOutput.expression = expression
+
+    guard let policy = components.first else {
+      return nil
+    }
+    components.removeFirst()
+    parseOutput.policy = policy
+
+    self = parseOutput
   }
 
   public func match(_ pattern: String) -> Bool {
@@ -227,7 +332,7 @@ public struct DomainSuffixRule: ParsableRule, CheckedParsableRule {
   }
 }
 
-public struct GeoIPRule: ParsableRule, CheckedParsableRule, @unchecked Sendable {
+public struct GeoIPRule: RoutingRule, CheckedParsableRule, @unchecked Sendable {
 
   static let label: RuleSystem.Label = .geoIp
 
@@ -235,15 +340,48 @@ public struct GeoIPRule: ParsableRule, CheckedParsableRule, @unchecked Sendable 
 
   public var policy: String
 
+  public var disabled: Bool = false
+
   @Protected public static var database: MaxMindDB?
 
   public var description: String {
-    "\(Self.label.rawValue),\(expression),\(policy)"
+    let prefix = disabled ? "# GEOIP" : "GEOIP"
+    return prefix + ",\(expression),\(policy)"
   }
 
-  public init(expression: String, policy: String) {
-    self.expression = expression
-    self.policy = policy
+  init() {
+    expression = ""
+    policy = ""
+  }
+
+  public init?(_ description: String) {
+    var parseOutput = GeoIPRule()
+
+    let value = description.trimmingCharacters(in: .whitespaces)
+    parseOutput.disabled = value.hasPrefix("#")
+
+    var components = value.split(separator: ",").map {
+      $0.trimmingCharacters(in: .whitespaces)
+    }
+
+    let type = components.removeFirst()
+    guard type == "GEOIP" else {
+      return nil
+    }
+
+    guard let expression = components.first else {
+      return nil
+    }
+    components.removeFirst()
+    parseOutput.expression = expression
+
+    guard let policy = components.first else {
+      return nil
+    }
+    components.removeFirst()
+    parseOutput.policy = policy
+
+    self = parseOutput
   }
 
   public func match(_ pattern: String) -> Bool {
@@ -256,45 +394,7 @@ public struct GeoIPRule: ParsableRule, CheckedParsableRule, @unchecked Sendable 
   }
 }
 
-//public struct IPRangeRule: ParsableRule, Equatable, Hashable, Identifiable {
-//
-//    public let id: UUID = .init()
-//
-//    var type: String
-//
-//    public var expression: String
-//
-//    public var policy: String
-//
-//    public var description: String {
-//        "\(type),\(expression),\(policy)"
-//    }
-//
-//    public mutating func validate() throws {
-//        guard RuleType(rawValue: type) != nil else {
-//            throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
-//        }
-//    }
-//
-//    public func match(_ pattern: String) -> Bool {
-//        pattern.contains(expression)
-//    }
-//
-//    public init?(_ description: String) {
-//        // Rule definitions are comma-separated.
-//        let components = description.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-//
-//        guard components.count == 3 else {
-//            return nil
-//        }
-//
-//        type = components.first!
-//        expression = components[1]
-//        policy = components.last!
-//    }
-//}
-
-public struct RuleSetRule: ExternalRuleResources, ParsableRule, CheckedParsableRule {
+public struct RuleSetRule: ExternalRuleResources, RoutingRule, CheckedParsableRule {
 
   static let label: RuleSystem.Label = .ruleSet
 
@@ -302,15 +402,48 @@ public struct RuleSetRule: ExternalRuleResources, ParsableRule, CheckedParsableR
 
   public var policy: String
 
+  public var disabled: Bool = false
+
   public var description: String {
-    "\(Self.label.rawValue),\(expression),\(policy)"
+    let prefix = disabled ? "# RULE-SET" : "RULE-SET"
+    return prefix + ",\(expression),\(policy)"
   }
 
-  @Protected private var standardRules: [ParsableRule] = []
+  @Protected private var standardRules: [RoutingRule] = []
 
-  public init(expression: String, policy: String) {
-    self.expression = expression
-    self.policy = policy
+  init() {
+    expression = ""
+    policy = ""
+  }
+
+  public init?(_ description: String) {
+    var parseOutput = RuleSetRule()
+
+    let value = description.trimmingCharacters(in: .whitespaces)
+    parseOutput.disabled = value.hasPrefix("#")
+
+    var components = value.split(separator: ",").map {
+      $0.trimmingCharacters(in: .whitespaces)
+    }
+
+    let type = components.removeFirst()
+    guard type == "RULE-SET" else {
+      return nil
+    }
+
+    guard let expression = components.first else {
+      return nil
+    }
+    components.removeFirst()
+    parseOutput.expression = expression
+
+    guard let policy = components.first else {
+      return nil
+    }
+    components.removeFirst()
+    parseOutput.policy = policy
+
+    self = parseOutput
   }
 
   public func match(_ expression: String) -> Bool {
@@ -342,7 +475,36 @@ public struct RuleSetRule: ExternalRuleResources, ParsableRule, CheckedParsableR
   }
 }
 
-extension FinalRule: CheckedParsableRule {
+public struct FinalRule: Hashable, RoutingRule, CheckedParsableRule {
+
+  public var expression: String
+
+  public var policy: String
+
+  public var disabled: Bool = false
+
+  public var description: String {
+    let prefix = disabled ? "# FINAL" : "FINAL"
+    return prefix + ",\(policy)"
+  }
+
+  public init?(_ description: String) {
+    // Rule definitions are comma-separated.
+    let components = description.components(separatedBy: ",").map {
+      $0.trimmingCharacters(in: .whitespaces)
+    }
+
+    guard components.count == 2, components.first == "FINAL" else {
+      return nil
+    }
+
+    expression = ""
+    policy = components[1]
+  }
+
+  public func match(_ pattern: String) -> Bool {
+    true
+  }
 
   static let label: RuleSystem.Label = .final
 

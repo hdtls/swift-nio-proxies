@@ -18,7 +18,7 @@ import Foundation
 extension Profile: Codable {
 
   enum CodingKeys: String, CodingKey {
-    case rules
+    case routingRules
     case manInTheMiddleSettings
     case basicSettings
     case policies
@@ -28,7 +28,7 @@ extension Profile: Codable {
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
-    let ruleLiterals = try container.decodeIfPresent([String].self, forKey: .rules) ?? []
+    let ruleLiterals = try container.decodeIfPresent([String].self, forKey: .routingRules) ?? []
     let rules = try ruleLiterals.compactMap {
       var components = $0.split(separator: ",")
       let id = String(components.removeFirst())
@@ -67,7 +67,7 @@ extension Profile: Codable {
 
     self.init(
       basicSettings: basicSettings ?? .init(),
-      rules: rules,
+      routingRules: rules,
       manInTheMiddleSettings: manInTheMiddleSettings ?? .init(),
       policies: policies,
       policyGroups: policyGroups
@@ -76,7 +76,7 @@ extension Profile: Codable {
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(rules.map { $0.description }, forKey: .rules)
+    try container.encode(routingRules.map { $0.description }, forKey: .routingRules)
     try container.encode(manInTheMiddleSettings, forKey: .manInTheMiddleSettings)
     try container.encode(basicSettings, forKey: .basicSettings)
     try container.encode(policies.map(AnyConnectionPolicy.init), forKey: .policies)
