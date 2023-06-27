@@ -69,6 +69,18 @@ final public class Protected<Value> {
 
 extension Protected: @unchecked Sendable where Value: Sendable {}
 
+extension Protected: Equatable where Value: Equatable {
+  public static func == (lhs: Protected<Value>, rhs: Protected<Value>) -> Bool {
+    lhs.wrappedValue == rhs.wrappedValue
+  }
+}
+
+extension Protected: Hashable where Value: Hashable {
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(wrappedValue)
+  }
+}
+
 extension Protected where Value: RangeReplaceableCollection {
   /// Adds a new element to the end of this protected collection.
   ///
