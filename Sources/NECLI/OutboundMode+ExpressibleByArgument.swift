@@ -13,6 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import ArgumentParser
-import NECore
+import NEAppEssentials
 
 extension OutboundMode: ExpressibleByArgument {}

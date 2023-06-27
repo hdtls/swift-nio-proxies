@@ -14,7 +14,7 @@
 
 import XCTest
 
-@testable import NECore
+@testable import NEAppEssentials
 
 final class DispathTimeTests: XCTestCase {
 

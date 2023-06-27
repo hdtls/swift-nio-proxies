@@ -16,6 +16,7 @@ import ArgumentParser
 import Foundation
 import Logging
 import NECLICore
+import NEAppEssentials
 
 #if canImport(FoundationNetworking)
 import FoundationNetworking

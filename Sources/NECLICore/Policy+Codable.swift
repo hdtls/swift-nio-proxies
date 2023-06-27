@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NECore
+import NEAppEssentials
 
 /// ConnectionPolicy coding wrapper.
 struct AnyConnectionPolicy {

@@ -16,7 +16,7 @@ import NIOEmbedded
 import NIOWebSocket
 import XCTest
 
-@testable import NECore
+@testable import NEAppEssentials
 
 final class WebSocketFrameProducerTests: XCTestCase {
 

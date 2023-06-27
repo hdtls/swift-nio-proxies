@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NECore
+import NEAppEssentials
 import NIOConcurrencyHelpers
 
 enum RuleSystem {

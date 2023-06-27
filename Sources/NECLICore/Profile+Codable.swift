@@ -13,7 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-@_exported import NECore
+import NEAppEssentials
+import NEHTTPMitM
 
 extension Profile: Codable {
 

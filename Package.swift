@@ -39,8 +39,8 @@ let package = Package(
     .iOS(.v13),
   ],
   products: [
+    .library(name: "NEAppEssentials", targets: ["NEAppEssentials"]),
     .library(name: "NECLICore", targets: ["NECLICore"]),
-    .library(name: "NECore", targets: ["NECore"]),
     .library(name: "NEDNS", targets: ["NEDNS"]),
     .library(name: "NEHTTP", targets: ["NEHTTP"]),
     .library(name: "NEHTTPMitM", targets: ["NEHTTPMitM"]),
@@ -69,11 +69,7 @@ let package = Package(
     .executableTarget(name: "NECLI", dependencies: ["NECLICore", swiftLog, swiftArgumentParser]),
     .target(name: "CNESHAKE128"),
     .target(
-      name: "NECLICore",
-      dependencies: ["NECore", swiftLog, .product(name: "MaxMindDB", package: "swift-maxminddb")]
-    ),
-    .target(
-      name: "NECore",
+      name: "NEAppEssentials",
       dependencies: [
         "NEDNS",
         "NEHTTP",
@@ -94,6 +90,10 @@ let package = Package(
         .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
         .product(name: "NIOWebSocket", package: "swift-nio"),
       ]
+    ),
+    .target(
+      name: "NECLICore",
+      dependencies: ["NEAppEssentials", swiftLog, .product(name: "MaxMindDB", package: "swift-maxminddb")]
     ),
     .target(name: "NEDNS", dependencies: [swiftNIOCore, swiftNIOPosix]),
     .target(name: "NEHTTP", dependencies: ["NEMisc", swiftNIOCore, swiftNIOHTTP1]),
@@ -126,9 +126,9 @@ let package = Package(
       exclude: ["ParsableRuleTests.g.swift.gyb"]
     ),
     .testTarget(
-      name: "NECoreTests",
+      name: "NEAppEssentialsTests",
       dependencies: [
-        "NECore",
+        "NEAppEssentials",
         "NEHTTP",
         "NEMisc",
         "NESOCKS",

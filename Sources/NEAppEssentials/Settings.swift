@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import Logging
+import Logging
 
 /// Basic settings object that defines behavior and polices for logging and proxy settings.
 public struct BasicSettings: Sendable {

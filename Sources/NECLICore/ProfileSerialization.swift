@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-@_exported import NIOCore
+import NEAppEssentials
 
 /// Errors that can be raised while parsing profile file.
 public enum ProfileSerializationError: Error {

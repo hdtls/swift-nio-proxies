@@ -13,7 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
-@_exported import NECore
+import NEAppEssentials
+import NEHTTPMitM
 
 extension BasicSettings: Codable {
 

@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NECore
+import NEAppEssentials
 
 private enum AnyPolicyGroupType: CaseIterable, Sendable {
   case selection

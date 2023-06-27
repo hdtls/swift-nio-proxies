@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NEHTTPMitM
 import XCTest
 
 @testable import NECLICore

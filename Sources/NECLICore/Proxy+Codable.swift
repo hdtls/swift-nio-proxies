@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import NECore
+import NEAppEssentials
 
 extension Proxy: Codable {
 

@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NEAppEssentials
 import XCTest
 
 @testable import NECLICore

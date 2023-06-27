@@ -13,9 +13,10 @@
 //===----------------------------------------------------------------------===//
 
 import NIOEmbedded
+import NIOHTTP1
 import XCTest
 
-@testable import NECore
+@testable import NEAppEssentials
 
 final class HTTPRequestWriterTests: XCTestCase {
 

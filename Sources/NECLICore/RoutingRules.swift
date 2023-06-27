@@ -15,7 +15,7 @@
 import Crypto
 import Foundation
 @_exported import MaxMindDB
-import NECore
+import NEAppEssentials
 
 protocol CheckedParsableRule: RoutingRule {
 
