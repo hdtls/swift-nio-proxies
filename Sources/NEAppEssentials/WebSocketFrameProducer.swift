@@ -31,6 +31,10 @@ final public class WebSocketFrameProducer: ChannelInboundHandler, ChannelOutboun
 
   private var waitingForClose = false
 
+  public init() {
+
+  }
+
   public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
     let frame = unwrapInboundIn(data)
     switch frame.opcode {

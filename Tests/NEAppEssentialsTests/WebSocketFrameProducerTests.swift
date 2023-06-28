@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NIOCore
 import NIOEmbedded
 import NIOWebSocket
 import XCTest

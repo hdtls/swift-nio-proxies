@@ -13,9 +13,10 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
+import NEAppEssentials
 
 /// Basic settings object that defines behavior and polices for logging and proxy settings.
-public struct BasicSettings: Sendable {
+public struct BasicSettings: BasicSettingsRepresentation, Codable, Hashable, Sendable {
 
   /// Log level use for `Logging.Logger`.`
   public var logLevel: Logger.Level = .info
@@ -63,21 +64,47 @@ public struct BasicSettings: Sendable {
     self.excludeSimpleHostnames = excludeSimpleHostnames
   }
 
-  /// Initialize an instance of `BasicSettings`.
-  ///
-  /// Calling this method is equivalent to calling `init(logLevel:dnsServers:exceptions:httpListenAddress:httpListenPort:socksListenAddress:socksListenPort:excludeSimpleHostnames:)`
-  /// with `info` logLevel, `[]` dnsServers, `nil` exceptions, httpListenAddress, httpListenPort,
-  /// socksListenAddress, socksListenPort and `false` excludeSimpleHostnames.
+  /// Initialize an instance of `BasicSettings` with default values.
   public init() {
-    self.init(
-      logLevel: .info,
-      dnsServers: [],
-      exceptions: [],
-      httpListenAddress: nil,
-      httpListenPort: nil,
-      socksListenAddress: nil,
-      socksListenPort: nil,
-      excludeSimpleHostnames: false
+
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.logLevel = try container.decodeIfPresent(Logger.Level.self, forKey: .logLevel) ?? .info
+    self.dnsServers = try container.decodeIfPresent([String].self, forKey: .dnsServers) ?? []
+    self.exceptions = try container.decodeIfPresent([String].self, forKey: .exceptions) ?? []
+    self.httpListenAddress = try container.decodeIfPresent(String.self, forKey: .httpListenAddress)
+    self.httpListenPort = try container.decodeIfPresent(Int.self, forKey: .httpListenPort)
+    self.socksListenAddress = try container.decodeIfPresent(
+      String.self,
+      forKey: .socksListenAddress
     )
+    self.socksListenPort = try container.decodeIfPresent(Int.self, forKey: .socksListenPort)
+    self.excludeSimpleHostnames =
+      try container.decodeIfPresent(Bool.self, forKey: .excludeSimpleHostnames) ?? false
+  }
+
+  enum CodingKeys: CodingKey {
+    case logLevel
+    case dnsServers
+    case exceptions
+    case httpListenAddress
+    case httpListenPort
+    case socksListenAddress
+    case socksListenPort
+    case excludeSimpleHostnames
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(self.logLevel, forKey: .logLevel)
+    try container.encode(self.dnsServers, forKey: .dnsServers)
+    try container.encode(self.exceptions, forKey: .exceptions)
+    try container.encodeIfPresent(self.httpListenAddress, forKey: .httpListenAddress)
+    try container.encodeIfPresent(self.httpListenPort, forKey: .httpListenPort)
+    try container.encodeIfPresent(self.socksListenAddress, forKey: .socksListenAddress)
+    try container.encodeIfPresent(self.socksListenPort, forKey: .socksListenPort)
+    try container.encode(self.excludeSimpleHostnames, forKey: .excludeSimpleHostnames)
   }
 }

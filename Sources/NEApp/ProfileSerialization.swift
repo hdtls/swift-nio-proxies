@@ -14,6 +14,7 @@
 
 import Foundation
 import NEAppEssentials
+import NIOCore
 
 /// Errors that can be raised while parsing profile file.
 public enum ProfileSerializationError: Error {
@@ -55,7 +56,10 @@ public enum ProfileSerializationError: Error {
     case invalidExternalResources
 
     /// Error that failed to parse rule to specified type.
-    case failedToParseAs(RoutingRule.Type, butCanBeParsedAs: RoutingRule.Type)
+    case failedToParseAs(
+      any RoutingRuleRepresentation.Type,
+      butCanBeParsedAs: any RoutingRuleRepresentation.Type
+    )
 
     public var description: String {
       switch self {
@@ -198,7 +202,7 @@ final public class ProfileSerialization {
           }
 
           guard case .object(let j) = try serializePolicyGroup(o),
-            case .array(let policies) = j[AnyPolicyGroup.CodingKeys.policies.rawValue]
+            case .array(let policies) = j["policies"]
           else {
             throw ProfileSerializationError.dataCorrupted
           }
@@ -249,10 +253,7 @@ final public class ProfileSerialization {
     }
 
     try _rulesKeyedByLine.forEach { (cursor, line) in
-      let rawValue = line.split(separator: ",").first?.trimmingCharacters(in: .whitespaces) ?? ""
-      guard let factory = RuleSystem.factory(for: .init(rawValue: rawValue)),
-        let rule = factory.init(line)
-      else {
+      guard let rule = AnyRoutingRule.init(line) else {
         throw ProfileSerializationError.invalidFile(
           reason: .invalidLine(cursor: cursor, description: line)
         )
@@ -308,26 +309,26 @@ final public class ProfileSerialization {
 
       components.append(key.convertToKebabCase())
 
-      guard key != Profile.CodingKeys.policyGroups.rawValue else {
+      guard key != "policyGroups" else {
         guard let g = value as? [[String: Any]] else {
           throw ProfileSerializationError.dataCorrupted
         }
         components.append(
           contentsOf: try g.map {
-            guard let name = $0[AnyPolicyGroup.CodingKeys.name.rawValue] as? String else {
+            guard let name = $0["name"] as? String else {
               throw ProfileSerializationError.dataCorrupted
             }
-            guard let policies = $0[AnyPolicyGroup.CodingKeys.policies.rawValue] as? [String] else {
+            guard let policies = $0["policies"] as? [String] else {
               return "\(name) = "
             }
             return
-              "\(name) = \($0[AnyPolicyGroup.CodingKeys.type.rawValue] ?? "select"), policies = \(policies.joined(separator: ", "))"
+              "\(name) = \($0["type"] ?? "select"), policies = \(policies.joined(separator: ", "))"
           }
         )
         return
       }
 
-      guard key != Profile.CodingKeys.policies.rawValue else {
+      guard key != "policies" else {
         guard let policies = value as? [[String: Any]] else {
           throw ProfileSerializationError.dataCorrupted
         }
@@ -335,10 +336,8 @@ final public class ProfileSerialization {
         components.append(
           contentsOf: try policies.map {
             // Only proxy policy requires proxy configurations
-            let proxy = $0[AnyConnectionPolicy.CodingKeys.proxy.rawValue] as? [String: Any]
-            guard let name = $0[AnyConnectionPolicy.CodingKeys.name.rawValue],
-              let type = $0[AnyConnectionPolicy.CodingKeys.type.rawValue]
-            else {
+            let proxy = $0["proxy"] as? [String: Any]
+            guard let name = $0["name"], let type = $0["type"] else {
               throw ProfileSerializationError.dataCorrupted
             }
 
@@ -387,10 +386,7 @@ extension ProfileSerialization {
   private static func serializePolicy(_ o: (String, String)) throws -> JSONValue {
     // direct reject and reject-tinygif does not requires extra configurations
     if ["direct", "reject", "reject-tinygif"].contains(o.1) {
-      return .object([
-        AnyConnectionPolicy.CodingKeys.name.rawValue: .string(o.0),
-        AnyConnectionPolicy.CodingKeys.type.rawValue: .string(o.1),
-      ])
+      return .object(["name": .string(o.0), "type": .string(o.1)])
     } else {
       // Rebuild proxy configuration as json array.
       let components = o.1.split(separator: ",")
@@ -418,11 +414,7 @@ extension ProfileSerialization {
       )
       configuration["protocol"] = `protocol`
 
-      return .object([
-        AnyConnectionPolicy.CodingKeys.name.rawValue: .string(o.0),
-        AnyConnectionPolicy.CodingKeys.type.rawValue: `protocol`,
-        AnyConnectionPolicy.CodingKeys.proxy.rawValue: .object(configuration),
-      ])
+      return .object(["name": .string(o.0), "type": `protocol`, "proxy": .object(configuration)])
     }
   }
 
@@ -462,8 +454,8 @@ extension ProfileSerialization {
     guard case .object(var j) = json else {
       fatalError()
     }
-    j[AnyPolicyGroup.CodingKeys.name.rawValue] = .string(name)
-    j[AnyPolicyGroup.CodingKeys.type.rawValue] = .string(type)
+    j["name"] = .string(name)
+    j["type"] = .string(type)
     return .object(j)
   }
 

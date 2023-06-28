@@ -12,7 +12,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-import ArgumentParser
-import NEApp
+enum Proxy {
+  /// Proxy protocol definition.
+  enum `Protocol`: Sendable, CustomStringConvertible {
+    case http
+    case socks5
 
-extension OutboundMode: ExpressibleByArgument {}
+    var description: String {
+      switch self {
+      case .http: return "HTTP"
+      case .socks5: return "SOCKS5"
+      }
+    }
+  }
+}

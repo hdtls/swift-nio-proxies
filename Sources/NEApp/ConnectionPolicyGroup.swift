@@ -14,57 +14,45 @@
 
 import NEAppEssentials
 
-private enum AnyPolicyGroupType: CaseIterable, Sendable {
-  case selection
-}
+public struct AnyConnectionPolicyGroup: Codable, Hashable, Sendable {
 
-struct AnyPolicyGroup: ConnectionPolicyGroup, Codable {
-
-  fileprivate var type: AnyPolicyGroupType = .selection
-  var name: String { base.name }
-  var policies: [String] { base.policies }
-  var base: ConnectionPolicyGroup
-
-  enum CodingKeys: String, CodingKey {
-    case type
-    case name
-    case policies
+  public var name: String {
+    base.name
   }
 
-  init(_ base: ConnectionPolicyGroup) {
+  public var policies: [String] { base.policies }
+
+  public var base: any ConnectionPolicyGroupRepresentation
+
+  init(_ base: any ConnectionPolicyGroupRepresentation) {
     self.base = base
-    switch base {
-    case is ManuallySelectedPolicyGroup:
-      type = .selection
-    default:
-      fatalError()
-    }
   }
 
-  init(name: String, policies: [String]) {
-    self.base = ManuallySelectedPolicyGroup(name: name, policies: policies)
-  }
-
-  init(from decoder: Decoder) throws {
+  public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    let rawValue = try container.decode(String.self, forKey: .type)
     let name = try container.decode(String.self, forKey: .name)
     let policies = try container.decode([String].self, forKey: .policies)
-
+    let rawValue = try container.decode(String.self, forKey: .type)
     switch rawValue {
     case "select":
       base = ManuallySelectedPolicyGroup(name: name, policies: policies)
     default:
       throw DecodingError.dataCorrupted(
         DecodingError.Context(
-          codingPath: [CodingKeys.type],
-          debugDescription: "unsupported policy group type \(rawValue)"
+          codingPath: [],
+          debugDescription: "unknowned policy group type \(rawValue)"
         )
       )
     }
   }
 
-  func encode(to encoder: Encoder) throws {
+  enum CodingKeys: CodingKey {
+    case type
+    case name
+    case policies
+  }
+
+  public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     switch base {
     case is ManuallySelectedPolicyGroup:
@@ -74,16 +62,26 @@ struct AnyPolicyGroup: ConnectionPolicyGroup, Codable {
         base,
         EncodingError.Context(
           codingPath: [CodingKeys.type],
-          debugDescription: "unsupported policy group type"
+          debugDescription: "unknowned policy group type"
         )
       )
     }
     try container.encode(base.name, forKey: .name)
     try container.encode(base.policies, forKey: .policies)
   }
+
+  public static func == (lhs: AnyConnectionPolicyGroup, rhs: AnyConnectionPolicyGroup) -> Bool {
+    AnyHashable(lhs) == AnyHashable(rhs)
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(base)
+  }
 }
 
-public struct ManuallySelectedPolicyGroup: ConnectionPolicyGroup, Hashable {
+extension AnyConnectionPolicyGroup: ConnectionPolicyGroupRepresentation {}
+
+public struct ManuallySelectedPolicyGroup: ConnectionPolicyGroupRepresentation, Hashable {
 
   public let name: String
 

@@ -12,8 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NEAppEssentials
+
 /// Configuration for HTTPS traffic decraption with MitM attacks.
-public struct ManInTheMiddleSettings: Sendable {
+public struct ManInTheMiddleSettings: Codable, Hashable, Sendable {
 
   /// A boolean value determinse whether ssl should skip server cerfitication verification. Default is false.
   public var skipCertificateVerification: Bool = false
@@ -45,17 +47,37 @@ public struct ManInTheMiddleSettings: Sendable {
     self.base64EncodedP12String = base64EncodedP12String
   }
 
-  /// Initialize an instance of `ManInTheMiddleSettings`.
-  ///
-  /// Calling this method is equivalent to calling
-  /// `init(skipCertificateVerification:hostnames:base64EncodedP12String:passphrase:)`
-  /// with a default skipCertificateVerification, hostnames, base64EncodedP12String and passphrase values.
+  /// Initialize an instance of `ManInTheMiddleSettings` with default values.
   public init() {
-    self.init(
-      skipCertificateVerification: false,
-      hostnames: [],
-      base64EncodedP12String: nil,
-      passphrase: nil
+
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.skipCertificateVerification =
+      try container.decodeIfPresent(Bool.self, forKey: .skipCertificateVerification) ?? false
+    self.hostnames = try container.decodeIfPresent([String].self, forKey: .hostnames) ?? []
+    self.base64EncodedP12String = try container.decodeIfPresent(
+      String.self,
+      forKey: .base64EncodedP12String
     )
+    self.passphrase = try container.decodeIfPresent(String.self, forKey: .passphrase)
+  }
+
+  enum CodingKeys: CodingKey {
+    case skipCertificateVerification
+    case hostnames
+    case base64EncodedP12String
+    case passphrase
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(self.skipCertificateVerification, forKey: .skipCertificateVerification)
+    try container.encode(self.hostnames, forKey: .hostnames)
+    try container.encodeIfPresent(self.base64EncodedP12String, forKey: .base64EncodedP12String)
+    try container.encodeIfPresent(self.passphrase, forKey: .passphrase)
   }
 }
+
+extension ManInTheMiddleSettings: ManInTheMiddleSettingsRepresentation {}

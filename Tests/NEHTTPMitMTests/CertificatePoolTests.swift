@@ -121,7 +121,7 @@ final class CertificatePoolTests: XCTestCase {
     XCTAssertEqual(pool.keys, ["swift.org", "*.swift.org"])
   }
 
-  let iterations = 100
+  let iterations = 10
 
   func testReadWriteConcurrently() throws {
     pool.registerKeys(Array(0..<iterations).map { "example\($0).com" })

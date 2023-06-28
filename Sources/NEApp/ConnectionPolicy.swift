@@ -14,7 +14,9 @@
 
 import Foundation
 import Logging
+import NEAppEssentials
 import NEHTTP
+import NEMisc
 import NESOCKS
 import NESS
 import NEVMESS
@@ -27,23 +29,6 @@ import NIOWebSocket
 import Network
 import NIOTransportServices
 #endif
-
-/// Source of new connections for `ConnectionPool`.
-public protocol ConnectionPoolSource {
-
-  /// Creates a new connection.
-  func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel>
-}
-
-/// ConnectionPolicy protocol representation a policy object.
-public protocol ConnectionPolicy: ConnectionPoolSource, Sendable {
-
-  /// The name of the policy.
-  var name: String { get set }
-
-  /// Destination address.
-  var destinationAddress: NetAddress? { get set }
-}
 
 func makeUniversalClientTCPBootstrap(group: EventLoopGroup, serverHostname: String? = nil) throws
   -> NIOClientTCPBootstrap
@@ -68,54 +53,10 @@ func makeUniversalClientTCPBootstrap(group: EventLoopGroup, serverHostname: Stri
   #endif
 }
 
-/// DirectPolicy will tunnel connection derectly.
-public struct DirectPolicy: ConnectionPolicy {
-
-  public var name: String = "DIRECT"
-
-  public var destinationAddress: NetAddress?
-
-  public init(name: String, destinationAddress: NetAddress? = nil) {
-    self.name = name
-    self.destinationAddress = destinationAddress
-  }
-
-  public init(destinationAddress: NetAddress) {
-    self.destinationAddress = destinationAddress
-  }
-
-  public init() {}
-
-  public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
-    do {
-      guard case .domainPort(let serverHostname, let serverPort) = destinationAddress else {
-        throw SocketAddressError.unsupported
-      }
-      let bootstrap = try makeUniversalClientTCPBootstrap(group: eventLoop)
-
-      #if canImport(Network) && ENABLE_NIO_TRANSPORT_SERVICES
-      if let bootstrap = bootstrap.underlyingBootstrap as? NIOTSConnectionBootstrap {
-        let parameters = NWParameters.tcp
-        parameters.preferNoProxies = true
-        let host: NWEndpoint.Host = .init(serverHostname)
-        let port: NWEndpoint.Port = .init(rawValue: UInt16(serverPort))!
-        return bootstrap.withExistingNWConnection(.init(host: host, port: port, using: parameters))
-      } else {
-        return bootstrap.connect(host: serverHostname, port: serverPort)
-      }
-      #else
-      return bootstrap.connect(host: serverHostname, port: serverPort)
-      #endif
-    } catch {
-      return eventLoop.makeFailedFuture(error)
-    }
-  }
-}
-
 struct RejectByRuleError: Error {}
 
 /// RejectPolicy will reject connection to the destination.
-public struct RejectPolicy: ConnectionPolicy {
+public struct RejectPolicy: ConnectionPolicyRepresentation {
 
   public var name: String = "REJECT"
 
@@ -138,7 +79,7 @@ public struct RejectPolicy: ConnectionPolicy {
 }
 
 /// RejectTinyGifPolicy will reject connection and response a tiny gif.
-public struct RejectTinyGifPolicy: ConnectionPolicy {
+public struct RejectTinyGifPolicy: ConnectionPolicyRepresentation {
 
   public var name: String = "REJECT-TINYGIF"
 
@@ -160,7 +101,7 @@ public struct RejectTinyGifPolicy: ConnectionPolicy {
   }
 }
 
-public struct ProxyPolicy: ConnectionPolicy {
+public struct ProxyPolicy: ConnectionPolicyRepresentation {
 
   public var name: String
 
@@ -207,7 +148,7 @@ public struct ProxyPolicy: ConnectionPolicy {
           ]
           let upgrader = NIOWebSocketClientUpgrader(
             automaticErrorHandling: false
-          ) { channel, res in
+          ) { channel, _ in
             do {
               let handler = try channel.pipeline.syncOperations.handler(
                 type: NIOHTTPClientUpgradeHandler.self
@@ -361,5 +302,78 @@ extension ChannelPipeline.SynchronousOperations {
         destinationAddress: destinationAddress
       )
     }
+  }
+}
+
+/// ConnectionPolicyRepresentation coding wrapper.
+public struct AnyConnectionPolicy: Codable, Hashable, Sendable {
+
+  public var name: String {
+    base.name
+  }
+
+  public var destinationAddress: NetAddress?
+
+  /// The actual policy value.
+  public var base: any ConnectionPolicyRepresentation
+
+  /// Initialize an instance of `AnyConnectionPolicy` with specified base value.
+  init(_ base: any ConnectionPolicyRepresentation) {
+    self.base = base
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let name = try container.decode(String.self, forKey: .name)
+    let rawValue = try container.decode(String.self, forKey: .type)
+    switch rawValue {
+    case "direct":
+      base = DirectPolicy(name: name)
+    case "reject":
+      base = RejectPolicy(name: name)
+    case "reject-tinygif":
+      base = RejectTinyGifPolicy(name: name)
+    default:
+      let proxy = try container.decode(Proxy.self, forKey: .proxy)
+      base = ProxyPolicy(name: name, proxy: proxy)
+    }
+  }
+
+  enum CodingKeys: CodingKey {
+    case name
+    case type
+    case proxy
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(base.name, forKey: .name)
+    switch base {
+    case is DirectPolicy:
+      try container.encode("direct", forKey: .type)
+    case is RejectPolicy:
+      try container.encode("reject", forKey: .type)
+    case is RejectTinyGifPolicy:
+      try container.encode("reject-tinygif", forKey: .type)
+    case let policy as ProxyPolicy:
+      try container.encode(policy.proxy.protocol.rawValue, forKey: .type)
+      try container.encodeIfPresent(policy.proxy, forKey: .proxy)
+    default:
+      fatalError("Unsupported policy \(base).")
+    }
+  }
+
+  public static func == (lhs: AnyConnectionPolicy, rhs: AnyConnectionPolicy) -> Bool {
+    AnyHashable(lhs.base) == AnyHashable(rhs.base)
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(AnyHashable(base))
+  }
+}
+
+extension AnyConnectionPolicy: ConnectionPolicyRepresentation {
+  public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
+    base.makeConnection(logger: logger, on: eventLoop)
   }
 }

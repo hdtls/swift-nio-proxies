@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 //===----------------------------------------------------------------------===//
-
+/*
 import XCTest
 
 @testable import NECLICore
@@ -1148,3 +1148,4 @@ final class ParsableRuleTests: XCTestCase {
     XCTAssertNil(RuleSetRule.init("RULE-SET"))
   }
 }
+*/

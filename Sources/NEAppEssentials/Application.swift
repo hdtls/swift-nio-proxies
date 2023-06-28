@@ -39,7 +39,7 @@ typealias ServerBootstrap = NIOPosix.ServerBootstrap
 /// For current version we support start HTTP and SOCKS as local proxy servers if possible.
 final public class Netbot: @unchecked Sendable {
 
-  private let profile: Profile
+  private let profile: any ProfileRepresentation
 
   private let logger: Logger
 
@@ -89,7 +89,7 @@ final public class Netbot: @unchecked Sendable {
 
   @Protected private var mutableState: MutableState = MutableState()
 
-  private let ruleCache = LRUCache<String, RoutingRule>(capacity: 100)
+  private let ruleCache = LRUCache<String, any RoutingRuleRepresentation>(capacity: 100)
 
   private var certificatePool: CertificatePool {
     get throws {
@@ -109,10 +109,14 @@ final public class Netbot: @unchecked Sendable {
   /// Initialize an instance of `Netbot` with specified profile logger and outboundMode.
   ///
   /// - Parameters:
-  ///   - profile: The `Profile` object contains all settings for this process.
+  ///   - profile: The `ProfileRepresentation` object contains all settings for this process.
   ///   - logger: The `Logger` object used to log message.
   ///   - outboundMode: The connections outbound mode, default is `.direct`.
-  public init(profile: Profile, logger: Logger, outboundMode: OutboundMode = .direct) {
+  public init(
+    profile: any ProfileRepresentation,
+    logger: Logger,
+    outboundMode: OutboundMode = .direct
+  ) {
     self.profile = profile
     self.logger = logger
     #if canImport(Network) && ENABLE_NIO_TRANSPORT_SERVICES
@@ -229,8 +233,6 @@ final public class Netbot: @unchecked Sendable {
           return channel.pipeline.configureHTTPProxyServerPipeline(completion: completion)
         case .socks5:
           return channel.pipeline.configureSOCKSServerPipeline(completion: completion)
-        default:
-          preconditionFailure()
         }
       }
       .childChannelOption(ChannelOptions.tcpOption(.tcp_nodelay), value: 1)
@@ -255,7 +257,7 @@ final public class Netbot: @unchecked Sendable {
     forTarget address: NetAddress,
     eventLoop: EventLoop
   ) async throws -> Channel {
-    var fallback: ConnectionPolicy = DirectPolicy(destinationAddress: address)
+    var fallback: any ConnectionPolicyRepresentation = DirectPolicy(destinationAddress: address)
 
     guard outboundMode != .direct else {
       return try await fallback.makeConnection(logger: logger, on: eventLoop).get()
@@ -291,7 +293,7 @@ final public class Netbot: @unchecked Sendable {
 
     startTime = .now()
 
-    var savedFinalRule: RoutingRule!
+    var savedFinalRule: (any RoutingRuleRepresentation)!
     for pattern in patterns {
       if let value = ruleCache.value(forKey: pattern) {
         savedFinalRule = value
@@ -329,7 +331,7 @@ final public class Netbot: @unchecked Sendable {
     // Policy evaluating.
     var preferred: String?
 
-    // Check whether there is a `ConnectionPolicyGroup` with then same name as the rule's policy in
+    // Check whether there is a `ConnectionPolicyGroupRepresentation` with then same name as the rule's policy in
     // `policyGroups`, if group exists use group's `selected` as policy ID else use rule's
     // policy as ID.
     if let g = profile.policyGroups.first(where: { $0.name == savedFinalRule.policy }) {

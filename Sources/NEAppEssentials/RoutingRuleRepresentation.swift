@@ -12,9 +12,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-/// A `RoutingRule` statement consists of a set of conditions that are compared against the traffic that is being sent.
+/// A `RoutingRuleRepresentation` statement consists of a set of conditions that are compared against the traffic that is being sent.
 /// When a match is found, policy lookup stops and the traffic is assigned the actions that are associated with the rule.
-public protocol RoutingRule: LosslessStringConvertible, Sendable {
+public protocol RoutingRuleRepresentation: Hashable, LosslessStringConvertible, Sendable {
+
+  /// A boolean value determinse whether this rule is enabled or disabled.
+  var disabled: Bool { get }
 
   /// The expression fot this rule.
   ///
@@ -23,9 +26,6 @@ public protocol RoutingRule: LosslessStringConvertible, Sendable {
 
   /// The policy pointed to by the rule.
   var policy: String { get }
-
-  /// A boolean value determinse whether this rule is enabled or disabled.
-  var disabled: Bool { get }
 
   /// Rule evaluating function to determinse whether this rule match the given expression.
   /// - Returns: True if match else false.

@@ -14,44 +14,16 @@
 
 import Crypto
 import Foundation
-@_exported import MaxMindDB
+import MaxMindDB
 import NEAppEssentials
+import NEMisc
 
-protocol CheckedParsableRule: RoutingRule {
+/// A `ExternalResourcesRuleRepresentation` is an object protocol that contains external rule resources.
+public protocol ExternalResourcesRuleRepresentation: RoutingRuleRepresentation {
 
-  static var label: RuleSystem.Label { get }
+  associatedtype Resource
 
-  /// Validate whether given description can be parsed as `Self`.
-  /// - Parameter description: The value to validate.
-  static func validate(_ description: String) throws
-}
-
-extension CheckedParsableRule {
-
-  static func validate(_ description: String) throws {
-    let components = description.split(separator: ",").map {
-      $0.trimmingCharacters(in: .whitespaces)
-    }
-
-    guard components.first == label.rawValue else {
-      let label = RuleSystem.Label(rawValue: components.first ?? "")
-      guard RuleSystem.labels.contains(label), let canBeParsedAs = RuleSystem.factory(for: label)
-      else {
-        throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
-      }
-      throw ProfileSerializationError.failedToParseRule(
-        reason: .failedToParseAs(Self.self, butCanBeParsedAs: canBeParsedAs)
-      )
-    }
-
-    guard components.count >= 3 else {
-      throw ProfileSerializationError.failedToParseRule(reason: .missingField)
-    }
-  }
-}
-
-/// A `ExternalRuleResources` is an object protocol that contains external resources
-public protocol ExternalRuleResources {
+  var externalResources: [Resource] { get set }
 
   /// The external resources url.
   var externalResourcesURL: URL { get throws }
@@ -64,7 +36,7 @@ public protocol ExternalRuleResources {
   mutating func loadAllRules(from file: URL)
 }
 
-extension ExternalRuleResources where Self: RoutingRule {
+extension ExternalResourcesRuleRepresentation {
 
   public var externalResourcesURL: URL {
     get throws {
@@ -89,9 +61,7 @@ extension ExternalRuleResources where Self: RoutingRule {
   }
 }
 
-public struct DomainKeywordRule: RoutingRule, CheckedParsableRule {
-
-  static let label: RuleSystem.Label = .domainKeyword
+public struct DomainKeywordRule: RoutingRuleRepresentation {
 
   public var expression: String
 
@@ -144,9 +114,7 @@ public struct DomainKeywordRule: RoutingRule, CheckedParsableRule {
   }
 }
 
-public struct DomainRule: RoutingRule, CheckedParsableRule {
-
-  static let label: RuleSystem.Label = .domain
+public struct DomainRule: RoutingRuleRepresentation {
 
   public var expression: String
 
@@ -199,9 +167,7 @@ public struct DomainRule: RoutingRule, CheckedParsableRule {
   }
 }
 
-public struct DomainSetRule: ExternalRuleResources, RoutingRule, CheckedParsableRule {
-
-  static let label: RuleSystem.Label = .domainSet
+public struct DomainSetRule: ExternalResourcesRuleRepresentation {
 
   public var expression: String
 
@@ -209,7 +175,7 @@ public struct DomainSetRule: ExternalRuleResources, RoutingRule, CheckedParsable
 
   public var disabled: Bool = false
 
-  @Protected private var domains: [String] = []
+  @Protected public var externalResources: [String] = []
 
   public var description: String {
     let prefix = disabled ? "# DOMAIN-SET" : "DOMAIN-SET"
@@ -252,7 +218,7 @@ public struct DomainSetRule: ExternalRuleResources, RoutingRule, CheckedParsable
   }
 
   public func match(_ expression: String) -> Bool {
-    $domains.first(where: { $0 == expression || ".\(expression)".hasSuffix($0) }) != nil
+    $externalResources.first(where: { $0 == expression || ".\(expression)".hasSuffix($0) }) != nil
   }
 
   public mutating func loadAllRules(from file: URL) {
@@ -262,7 +228,7 @@ public struct DomainSetRule: ExternalRuleResources, RoutingRule, CheckedParsable
       return
     }
 
-    $domains.write {
+    $externalResources.write {
       $0 = file.split(separator: "\n")
         .compactMap {
           let literal = $0.trimmingCharacters(in: .whitespaces)
@@ -275,9 +241,7 @@ public struct DomainSetRule: ExternalRuleResources, RoutingRule, CheckedParsable
   }
 }
 
-public struct DomainSuffixRule: RoutingRule, CheckedParsableRule {
-
-  static let label: RuleSystem.Label = .domainSuffix
+public struct DomainSuffixRule: RoutingRuleRepresentation {
 
   public var expression: String
 
@@ -332,9 +296,7 @@ public struct DomainSuffixRule: RoutingRule, CheckedParsableRule {
   }
 }
 
-public struct GeoIPRule: RoutingRule, CheckedParsableRule, @unchecked Sendable {
-
-  static let label: RuleSystem.Label = .geoIp
+public struct GeoIPRule: RoutingRuleRepresentation, @unchecked Sendable {
 
   public var expression: String
 
@@ -394,9 +356,7 @@ public struct GeoIPRule: RoutingRule, CheckedParsableRule, @unchecked Sendable {
   }
 }
 
-public struct RuleSetRule: ExternalRuleResources, RoutingRule, CheckedParsableRule {
-
-  static let label: RuleSystem.Label = .ruleSet
+public struct RuleSetRule: ExternalResourcesRuleRepresentation {
 
   public var expression: String
 
@@ -409,7 +369,7 @@ public struct RuleSetRule: ExternalRuleResources, RoutingRule, CheckedParsableRu
     return prefix + ",\(expression),\(policy)"
   }
 
-  @Protected private var standardRules: [RoutingRule] = []
+  @Protected public var externalResources: [any RoutingRuleRepresentation] = []
 
   init() {
     expression = ""
@@ -446,8 +406,18 @@ public struct RuleSetRule: ExternalRuleResources, RoutingRule, CheckedParsableRu
     self = parseOutput
   }
 
+  public static func == (lhs: RuleSetRule, rhs: RuleSetRule) -> Bool {
+    lhs.disabled == rhs.disabled && lhs.expression == rhs.expression && lhs.policy == rhs.policy
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(disabled)
+    hasher.combine(expression)
+    hasher.combine(policy)
+  }
+
   public func match(_ expression: String) -> Bool {
-    $standardRules.first(where: { $0.match(expression) }) != nil
+    $externalResources.first(where: { $0.match(expression) }) != nil
   }
 
   public mutating func loadAllRules(from file: URL) {
@@ -457,25 +427,16 @@ public struct RuleSetRule: ExternalRuleResources, RoutingRule, CheckedParsableRu
       return
     }
 
-    $standardRules.write {
+    $externalResources.write {
       $0 = file.split(separator: "\n")
         .compactMap {
-          let literal = $0.trimmingCharacters(in: .whitespaces)
-          guard !literal.isEmpty, !literal.hasPrefix("#"), !literal.hasPrefix(";") else {
-            return nil
-          }
-          let label = String(literal.split(separator: ",").first ?? "")
-          let description = literal + ",\(policy)"
-          guard let factory = RuleSystem.factory(for: .init(rawValue: label)) else {
-            return nil
-          }
-          return factory.init(description)
+          AnyRoutingRule(String($0))
         }
     }
   }
 }
 
-public struct FinalRule: Hashable, RoutingRule, CheckedParsableRule {
+public struct FinalRule: Hashable, RoutingRuleRepresentation {
 
   public var expression: String
 
@@ -505,27 +466,87 @@ public struct FinalRule: Hashable, RoutingRule, CheckedParsableRule {
   public func match(_ pattern: String) -> Bool {
     true
   }
+}
 
-  static let label: RuleSystem.Label = .final
+public struct AnyRoutingRule: RoutingRuleRepresentation, Hashable, Sendable {
 
-  static func validate(_ description: String) throws {
-    let components = description.split(separator: ",").map {
-      $0.trimmingCharacters(in: .whitespaces)
-    }
+  public var disabled: Bool {
+    base.disabled
+  }
 
-    guard components.first == label.rawValue else {
-      let label = RuleSystem.Label(rawValue: components.first ?? "")
-      guard RuleSystem.labels.contains(label), let canBeParsedAs = RuleSystem.factory(for: label)
-      else {
-        throw ProfileSerializationError.failedToParseRule(reason: .unsupported)
+  public var expression: String {
+    base.expression
+  }
+
+  public var policy: String {
+    base.policy
+  }
+
+  public var description: String {
+    base.description
+  }
+
+  public var base: any RoutingRuleRepresentation
+
+  public init(_ base: any RoutingRuleRepresentation) {
+    self.base = base
+  }
+
+  public init?(_ description: String) {
+    var value = description.trimmingCharacters(in: .whitespaces)[...]
+    value = value.hasPrefix("#") ? value.dropFirst() : value
+    var components = value.split(separator: ",")
+    let type = components.removeFirst()
+    switch type {
+    case "DOMAIN-KEYWORD":
+      guard let parseOutput = DomainKeywordRule(description) else {
+        return nil
       }
-      throw ProfileSerializationError.failedToParseRule(
-        reason: .failedToParseAs(Self.self, butCanBeParsedAs: canBeParsedAs)
-      )
+      self = .init(parseOutput)
+    case "DOMAIN":
+      guard let parseOutput = DomainRule(description) else {
+        return nil
+      }
+      self = .init(parseOutput)
+    case "DOMAIN-SET":
+      guard let parseOutput = DomainSetRule(description) else {
+        return nil
+      }
+      self = .init(parseOutput)
+    case "DOMAIN-SUFFIX":
+      guard let parseOutput = DomainSuffixRule(description) else {
+        return nil
+      }
+      self = .init(parseOutput)
+    case "GEOIP":
+      guard let parseOutput = GeoIPRule(description) else {
+        return nil
+      }
+      self = .init(parseOutput)
+    case "RULE-SET":
+      guard let parseOutput = RuleSetRule(description) else {
+        return nil
+      }
+      self = .init(parseOutput)
+    case "FINAL":
+      guard let parseOutput = FinalRule(description) else {
+        return nil
+      }
+      self = .init(parseOutput)
+    default:
+      return nil
     }
+  }
 
-    guard components.count >= 2 else {
-      throw ProfileSerializationError.failedToParseRule(reason: .missingField)
-    }
+  public static func == (lhs: AnyRoutingRule, rhs: AnyRoutingRule) -> Bool {
+    AnyHashable(lhs.base) == AnyHashable(rhs.base)
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(AnyHashable(base))
+  }
+
+  public func match(_ expression: String) -> Bool {
+    base.match(expression)
   }
 }

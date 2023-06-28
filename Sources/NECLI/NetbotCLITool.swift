@@ -15,9 +15,8 @@
 import ArgumentParser
 import Foundation
 import Logging
-import NECLICore
-import NEAppEssentials
-
+import NEApp
+import MaxMindDB
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -111,7 +110,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
 
     var isLogged = false
     for (position, rule) in profile.routingRules.enumerated() {
-      guard var resources = rule as? ExternalRuleResources & RoutingRule else {
+      guard var resourcesRule = rule.base as? (any ExternalResourcesRuleRepresentation) else {
         continue
       }
 
@@ -119,12 +118,12 @@ public struct NetbotCLITool: AsyncParsableCommand {
       let fileURL: URL
       if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
         fileURL = URL.externalResourcesDirectory.appending(
-          path: resources.externalResourcesStorageName,
+          path: resourcesRule.externalResourcesStorageName,
           directoryHint: .notDirectory
         )
       } else {
         fileURL = URL.externalResourcesDirectory.appendingPathComponent(
-          resources.externalResourcesStorageName,
+          resourcesRule.externalResourcesStorageName,
           isDirectory: false
         )
       }
@@ -142,7 +141,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
           isLogged = true
         }
         // Downloading external resources...
-        let url = try resources.externalResourcesURL
+        let url = try resourcesRule.externalResourcesURL
         logger.trace("Downloading external resources from: \(url)")
         let (srcURL, _) = try await URLSession(configuration: .default).download(from: url)
 
@@ -153,9 +152,9 @@ public struct NetbotCLITool: AsyncParsableCommand {
         try FileManager.default.moveItem(at: srcURL, to: fileURL)
       }
 
-      resources.loadAllRules(from: fileURL)
+      resourcesRule.loadAllRules(from: fileURL)
 
-      profile.routingRules[position] = resources
+      profile.routingRules[position] = AnyRoutingRule(resourcesRule)
     }
 
     // Overrides settings with input options

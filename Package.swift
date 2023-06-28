@@ -37,10 +37,12 @@ let package = Package(
   platforms: [
     .macOS(.v10_15),
     .iOS(.v13),
+    .watchOS(.v6),
+    .tvOS(.v13),
   ],
   products: [
+    .library(name: "NEApp", targets: ["NEApp"]),
     .library(name: "NEAppEssentials", targets: ["NEAppEssentials"]),
-    .library(name: "NECLICore", targets: ["NECLICore"]),
     .library(name: "NEDNS", targets: ["NEDNS"]),
     .library(name: "NEHTTP", targets: ["NEHTTP"]),
     .library(name: "NEHTTPMitM", targets: ["NEHTTPMitM"]),
@@ -66,8 +68,12 @@ let package = Package(
     .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0"),
   ],
   targets: [
-    .executableTarget(name: "NECLI", dependencies: ["NECLICore", swiftLog, swiftArgumentParser]),
+    .executableTarget(name: "NECLI", dependencies: ["NEApp", swiftLog, swiftArgumentParser]),
     .target(name: "CNESHAKE128"),
+    .target(
+      name: "NEApp",
+      dependencies: ["NEAppEssentials", swiftLog, .product(name: "MaxMindDB", package: "swift-maxminddb")]
+    ),
     .target(
       name: "NEAppEssentials",
       dependencies: [
@@ -91,10 +97,6 @@ let package = Package(
         .product(name: "NIOWebSocket", package: "swift-nio"),
       ]
     ),
-    .target(
-      name: "NECLICore",
-      dependencies: ["NEAppEssentials", swiftLog, .product(name: "MaxMindDB", package: "swift-maxminddb")]
-    ),
     .target(name: "NEDNS", dependencies: [swiftNIOCore, swiftNIOPosix]),
     .target(name: "NEHTTP", dependencies: ["NEMisc", swiftNIOCore, swiftNIOHTTP1]),
     .target(
@@ -117,9 +119,9 @@ let package = Package(
       ]
     ),
     .testTarget(
-      name: "NECLICoreTests",
+      name: "NEAppTests",
       dependencies: [
-        "NECLICore",
+        "NEApp",
         swiftNIOCore,
         swiftNIOEmbedded,
       ],

@@ -12,12 +12,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-/// Selectable policy group object that defines policy group and current selected policy.
-public protocol ConnectionPolicyGroup: Sendable {
+public protocol ManInTheMiddleSettingsRepresentation: Hashable, Sendable {
 
-  /// The name for this PolicyGroup.
-  var name: String { get }
+  /// A boolean value determinse whether ssl should skip server cerfitication verification. Default is false.
+  var skipCertificateVerification: Bool { get }
 
-  /// Policies included in this policy group.
-  var policies: [String] { get }
+  /// Hostnames that should perform MitM.
+  var hostnames: [String] { get }
+
+  /// Base64 encoded CA P12 bundle.
+  var base64EncodedP12String: String? { get }
+
+  /// Passphrase for P12 bundle.
+  var passphrase: String? { get }
 }

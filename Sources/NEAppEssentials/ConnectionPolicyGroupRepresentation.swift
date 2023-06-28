@@ -2,7 +2,7 @@
 //
 // This source file is part of the Netbot open source project
 //
-// Copyright (c) 2022 Junfeng Zhang and the Netbot project authors
+// Copyright (c) 2023 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
 // See LICENSE for license information
@@ -12,7 +12,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-import ArgumentParser
-import NEApp
+/// Selectable policy group object that defines policy group and current selected policy.
+public protocol ConnectionPolicyGroupRepresentation: Hashable, Sendable {
 
-extension OutboundMode: ExpressibleByArgument {}
+  /// The name for this PolicyGroup.
+  var name: String { get }
+
+  /// Policies included in this policy group.
+  var policies: [String] { get }
+}
