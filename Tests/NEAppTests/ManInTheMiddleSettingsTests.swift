@@ -15,7 +15,7 @@
 import NEHTTPMitM
 import XCTest
 
-@testable import NECLICore
+@testable import NEApp
 
 final class ManInTheMiddleSettingsTests: XCTestCase {
 

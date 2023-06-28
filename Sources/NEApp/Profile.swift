@@ -19,7 +19,7 @@ import NEAppEssentials
 public struct Profile: ProfileRepresentation, Codable, Hashable, Sendable {
 
   /// The rules contains in this configuration.
-  public var routingRules: [AnyRoutingRule] = []
+  public var routingRules: [AnyRoutingRuleRepresentation] = []
 
   /// A setting object that provides HTTP MitM settings for this process.
   public var manInTheMiddleSettings: ManInTheMiddleSettings = .init()
@@ -28,19 +28,19 @@ public struct Profile: ProfileRepresentation, Codable, Hashable, Sendable {
   public var basicSettings: BasicSettings = .init()
 
   /// All proxy policy object contains in this configuration object.
-  public var policies: [AnyConnectionPolicy] = []
+  public var policies: [AnyConnectionPolicyRepresentation] = []
 
   /// All selectable policy groups contains in this configuration object.
-  public var policyGroups: [AnyConnectionPolicyGroup] = []
+  public var policyGroups: [AnyConnectionPolicyGroupRepresentation] = []
 
   /// Initialize an instance of `Profile` with the specified basicSettings, replicat, routingRules, manInTheMiddleSettings,
   /// polcies and policyGroups.
   public init(
     basicSettings: BasicSettings,
-    routingRules: [AnyRoutingRule],
+    routingRules: [AnyRoutingRuleRepresentation],
     manInTheMiddleSettings: ManInTheMiddleSettings,
-    policies: [AnyConnectionPolicy],
-    policyGroups: [AnyConnectionPolicyGroup]
+    policies: [AnyConnectionPolicyRepresentation],
+    policyGroups: [AnyConnectionPolicyGroupRepresentation]
   ) {
     self.basicSettings = basicSettings
     self.routingRules = routingRules
@@ -67,26 +67,30 @@ public struct Profile: ProfileRepresentation, Codable, Hashable, Sendable {
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     let ruleLiterals = try container.decodeIfPresent([String].self, forKey: .routingRules) ?? []
-    let rules = ruleLiterals.compactMap { AnyRoutingRule($0) }
+    let rules = ruleLiterals.compactMap { AnyRoutingRuleRepresentation($0) }
     let manInTheMiddleSettings = try container.decodeIfPresent(
       ManInTheMiddleSettings.self,
       forKey: .manInTheMiddleSettings
     )
     let basicSettings = try container.decodeIfPresent(BasicSettings.self, forKey: .basicSettings)
     var policies =
-      try container.decodeIfPresent([AnyConnectionPolicy].self, forKey: .policies) ?? []
+      try container.decodeIfPresent([AnyConnectionPolicyRepresentation].self, forKey: .policies)
+      ?? []
     // If the built-in policies do not exist, insert them at the beginning of the array
     if !policies.contains(where: { $0.name == "REJECT-TINYGIF" }) {
-      policies.insert(AnyConnectionPolicy(RejectTinyGifPolicy()), at: 0)
+      policies.insert(AnyConnectionPolicyRepresentation(RejectTinyGifPolicy()), at: 0)
     }
     if !policies.contains(where: { $0.name == "REJECT" }) {
-      policies.insert(AnyConnectionPolicy(RejectPolicy()), at: 0)
+      policies.insert(AnyConnectionPolicyRepresentation(RejectPolicy()), at: 0)
     }
     if !policies.contains(where: { $0.name == "DIRECT" }) {
-      policies.insert(AnyConnectionPolicy(DirectPolicy()), at: 0)
+      policies.insert(AnyConnectionPolicyRepresentation(DirectPolicy()), at: 0)
     }
     let policyGroups =
-      try container.decodeIfPresent([AnyConnectionPolicyGroup].self, forKey: .policyGroups) ?? []
+      try container.decodeIfPresent(
+        [AnyConnectionPolicyGroupRepresentation].self,
+        forKey: .policyGroups
+      ) ?? []
 
     self.init(
       basicSettings: basicSettings ?? .init(),

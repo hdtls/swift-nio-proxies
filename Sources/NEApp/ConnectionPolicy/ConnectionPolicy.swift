@@ -305,8 +305,8 @@ extension ChannelPipeline.SynchronousOperations {
   }
 }
 
-/// ConnectionPolicyRepresentation coding wrapper.
-public struct AnyConnectionPolicy: Codable, Hashable, Sendable {
+/// A type-earsed connection policy representation value.
+public struct AnyConnectionPolicyRepresentation: Codable, Hashable, Sendable {
 
   public var name: String {
     base.name
@@ -314,12 +314,19 @@ public struct AnyConnectionPolicy: Codable, Hashable, Sendable {
 
   public var destinationAddress: NetAddress?
 
-  /// The actual policy value.
+  /// The value wrapped by this instance.
   public var base: any ConnectionPolicyRepresentation
 
-  /// Initialize an instance of `AnyConnectionPolicy` with specified base value.
+  /// Creates a type-earsed connection policy representation value that wraps the given instance.
+  ///
+  /// - Parameter base: A connection policy representation value to wrap.
   init(_ base: any ConnectionPolicyRepresentation) {
-    self.base = base
+    // Remove nested wrapping
+    if let base = base as? AnyConnectionPolicyRepresentation {
+      self = base
+    } else {
+      self.base = base
+    }
   }
 
   public init(from decoder: Decoder) throws {
@@ -363,16 +370,19 @@ public struct AnyConnectionPolicy: Codable, Hashable, Sendable {
     }
   }
 
-  public static func == (lhs: AnyConnectionPolicy, rhs: AnyConnectionPolicy) -> Bool {
-    AnyHashable(lhs.base) == AnyHashable(rhs.base)
+  public static func == (
+    lhs: AnyConnectionPolicyRepresentation,
+    rhs: AnyConnectionPolicyRepresentation
+  ) -> Bool {
+    type(of: lhs.base) == type(of: rhs.base) && AnyHashable(lhs.base) == AnyHashable(rhs.base)
   }
 
   public func hash(into hasher: inout Hasher) {
-    hasher.combine(AnyHashable(base))
+    hasher.combine(base)
   }
 }
 
-extension AnyConnectionPolicy: ConnectionPolicyRepresentation {
+extension AnyConnectionPolicyRepresentation: ConnectionPolicyRepresentation {
   public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
     base.makeConnection(logger: logger, on: eventLoop)
   }

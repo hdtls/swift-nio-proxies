@@ -14,7 +14,8 @@
 
 import NEAppEssentials
 
-public struct AnyConnectionPolicyGroup: Codable, Hashable, Sendable {
+/// A type-erased connetion policy group representation value.
+public struct AnyConnectionPolicyGroupRepresentation: Codable, Hashable, Sendable {
 
   public var name: String {
     base.name
@@ -22,10 +23,19 @@ public struct AnyConnectionPolicyGroup: Codable, Hashable, Sendable {
 
   public var policies: [String] { base.policies }
 
+  /// The value wrapped by this instance.
   public var base: any ConnectionPolicyGroupRepresentation
 
-  init(_ base: any ConnectionPolicyGroupRepresentation) {
-    self.base = base
+  /// Creates a type-earsed connection policy group representation value that wraps the given instance.
+  ///
+  /// - Parameter base: A connection policy group representation value to wrap.
+  public init(_ base: any ConnectionPolicyGroupRepresentation) {
+    // Remove nested wrapping
+    if let base = base as? AnyConnectionPolicyGroupRepresentation {
+      self = base
+    } else {
+      self.base = base
+    }
   }
 
   public init(from decoder: Decoder) throws {
@@ -70,8 +80,11 @@ public struct AnyConnectionPolicyGroup: Codable, Hashable, Sendable {
     try container.encode(base.policies, forKey: .policies)
   }
 
-  public static func == (lhs: AnyConnectionPolicyGroup, rhs: AnyConnectionPolicyGroup) -> Bool {
-    AnyHashable(lhs) == AnyHashable(rhs)
+  public static func == (
+    lhs: AnyConnectionPolicyGroupRepresentation,
+    rhs: AnyConnectionPolicyGroupRepresentation
+  ) -> Bool {
+    type(of: lhs.base) == type(of: rhs.base) && AnyHashable(lhs) == AnyHashable(rhs)
   }
 
   public func hash(into hasher: inout Hasher) {
@@ -79,9 +92,10 @@ public struct AnyConnectionPolicyGroup: Codable, Hashable, Sendable {
   }
 }
 
-extension AnyConnectionPolicyGroup: ConnectionPolicyGroupRepresentation {}
+extension AnyConnectionPolicyGroupRepresentation: ConnectionPolicyGroupRepresentation {}
 
-public struct ManuallySelectedPolicyGroup: ConnectionPolicyGroupRepresentation, Hashable {
+/// One type of policy group, perform manully select policy as active policy.
+public struct ManuallySelectedPolicyGroup: ConnectionPolicyGroupRepresentation {
 
   public let name: String
 

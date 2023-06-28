@@ -16,7 +16,7 @@ import NEAppEssentials
 import NEHTTPMitM
 import XCTest
 
-@testable import NECLICore
+@testable import NEApp
 
 final class ProfileTests: XCTestCase {
 
@@ -35,7 +35,7 @@ final class ProfileTests: XCTestCase {
       FinalRule("FINAL,PROXY")!,
       DomainRule("DOMAIN,www.example.com,PROXY")!,
       DomainSuffixRule("DOMAIN-SUFFIX,ad.com,BLOCK")!,
-    ].map(AnyRoutingRule.init(_:)),
+    ].map(AnyRoutingRuleRepresentation.init(_:)),
     manInTheMiddleSettings: ManInTheMiddleSettings(
       skipCertificateVerification: true,
       hostnames: ["*.example.com"],
@@ -67,11 +67,11 @@ final class ProfileTests: XCTestCase {
           overTls: false
         )
       ),
-    ].map(AnyConnectionPolicy.init(_:)),
+    ].map(AnyConnectionPolicyRepresentation.init(_:)),
     policyGroups: [
       ManuallySelectedPolicyGroup(name: "PROXY", policies: ["DIRECT", "HTTP"]),
       ManuallySelectedPolicyGroup(name: "BLOCK", policies: ["DIRECT", "REJECT", "REJECT-TINYGIF"]),
-    ].map(AnyConnectionPolicyGroup.init(_:))
+    ].map(AnyConnectionPolicyGroupRepresentation.init(_:))
   )
 
   func testDecodeProfileFromJson() throws {

@@ -14,7 +14,7 @@
 
 import XCTest
 
-@testable import NECLICore
+@testable import NEApp
 
 final class ProfileSerializationTests: XCTestCase {
 

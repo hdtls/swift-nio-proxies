@@ -15,7 +15,7 @@
 import NEAppEssentials
 import XCTest
 
-@testable import NECLICore
+@testable import NEApp
 
 final class ProxyTests: XCTestCase {
 

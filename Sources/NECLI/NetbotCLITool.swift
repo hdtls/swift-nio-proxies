@@ -129,7 +129,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
       }
       #else
       let fileURL = URL.externalResourcesDirectory.appendingPathComponent(
-        resources.externalResourcesStorageName,
+        resourcesRule.externalResourcesStorageName,
         isDirectory: false
       )
       #endif
@@ -154,7 +154,7 @@ public struct NetbotCLITool: AsyncParsableCommand {
 
       resourcesRule.loadAllRules(from: fileURL)
 
-      profile.routingRules[position] = AnyRoutingRule(resourcesRule)
+      profile.routingRules[position] = AnyRoutingRuleRepresentation(resourcesRule)
     }
 
     // Overrides settings with input options

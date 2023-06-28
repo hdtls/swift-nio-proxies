@@ -253,7 +253,7 @@ final public class ProfileSerialization {
     }
 
     try _rulesKeyedByLine.forEach { (cursor, line) in
-      guard let rule = AnyRoutingRule.init(line) else {
+      guard let rule = AnyRoutingRuleRepresentation(line) else {
         throw ProfileSerializationError.invalidFile(
           reason: .invalidLine(cursor: cursor, description: line)
         )
