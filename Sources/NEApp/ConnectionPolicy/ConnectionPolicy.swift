@@ -53,54 +53,6 @@ func makeUniversalClientTCPBootstrap(group: EventLoopGroup, serverHostname: Stri
   #endif
 }
 
-struct RejectByRuleError: Error {}
-
-/// RejectPolicy will reject connection to the destination.
-public struct RejectPolicy: ConnectionPolicyRepresentation {
-
-  public var name: String = "REJECT"
-
-  public var destinationAddress: NetAddress?
-
-  public init(name: String, destinationAddress: NetAddress? = nil) {
-    self.name = name
-    self.destinationAddress = destinationAddress
-  }
-
-  public init(destinationAddress: NetAddress) {
-    self.destinationAddress = destinationAddress
-  }
-
-  public init() {}
-
-  public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
-    eventLoop.makeFailedFuture(RejectByRuleError())
-  }
-}
-
-/// RejectTinyGifPolicy will reject connection and response a tiny gif.
-public struct RejectTinyGifPolicy: ConnectionPolicyRepresentation {
-
-  public var name: String = "REJECT-TINYGIF"
-
-  public var destinationAddress: NetAddress?
-
-  public init(name: String, destinationAddress: NetAddress? = nil) {
-    self.name = name
-    self.destinationAddress = destinationAddress
-  }
-
-  public init(destinationAddress: NetAddress) {
-    self.destinationAddress = destinationAddress
-  }
-
-  public init() {}
-
-  public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
-    eventLoop.makeFailedFuture(RejectByRuleError())
-  }
-}
-
 public struct ProxyPolicy: ConnectionPolicyRepresentation {
 
   public var name: String
@@ -320,7 +272,7 @@ public struct AnyConnectionPolicyRepresentation: Codable, Hashable, Sendable {
   /// Creates a type-earsed connection policy representation value that wraps the given instance.
   ///
   /// - Parameter base: A connection policy representation value to wrap.
-  init(_ base: any ConnectionPolicyRepresentation) {
+  public init(_ base: any ConnectionPolicyRepresentation) {
     // Remove nested wrapping
     if let base = base as? AnyConnectionPolicyRepresentation {
       self = base

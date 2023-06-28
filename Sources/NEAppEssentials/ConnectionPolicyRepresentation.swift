@@ -106,3 +106,51 @@ public struct DirectPolicy: ConnectionPolicyRepresentation {
     }
   }
 }
+
+struct RejectByRuleError: Error {}
+
+/// RejectPolicy will reject connection to the destination.
+public struct RejectPolicy: ConnectionPolicyRepresentation {
+
+  public var name: String = "REJECT"
+
+  public var destinationAddress: NetAddress?
+
+  public init(name: String, destinationAddress: NetAddress? = nil) {
+    self.name = name
+    self.destinationAddress = destinationAddress
+  }
+
+  public init(destinationAddress: NetAddress) {
+    self.destinationAddress = destinationAddress
+  }
+
+  public init() {}
+
+  public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
+    eventLoop.makeFailedFuture(RejectByRuleError())
+  }
+}
+
+/// RejectTinyGifPolicy will reject connection and response a tiny gif.
+public struct RejectTinyGifPolicy: ConnectionPolicyRepresentation {
+
+  public var name: String = "REJECT-TINYGIF"
+
+  public var destinationAddress: NetAddress?
+
+  public init(name: String, destinationAddress: NetAddress? = nil) {
+    self.name = name
+    self.destinationAddress = destinationAddress
+  }
+
+  public init(destinationAddress: NetAddress) {
+    self.destinationAddress = destinationAddress
+  }
+
+  public init() {}
+
+  public func makeConnection(logger: Logger, on eventLoop: EventLoop) -> EventLoopFuture<Channel> {
+    eventLoop.makeFailedFuture(RejectByRuleError())
+  }
+}
