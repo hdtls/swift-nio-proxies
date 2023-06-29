@@ -84,7 +84,7 @@ public struct AnyConnectionPolicyGroupRepresentation: Codable, Hashable, Sendabl
     lhs: AnyConnectionPolicyGroupRepresentation,
     rhs: AnyConnectionPolicyGroupRepresentation
   ) -> Bool {
-    type(of: lhs.base) == type(of: rhs.base) && AnyHashable(lhs) == AnyHashable(rhs)
+    type(of: lhs.base) == type(of: rhs.base) && AnyHashable(lhs.base) == AnyHashable(rhs.base)
   }
 
   public func hash(into hasher: inout Hasher) {

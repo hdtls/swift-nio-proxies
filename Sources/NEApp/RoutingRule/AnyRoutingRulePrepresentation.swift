@@ -50,7 +50,9 @@ public struct AnyRoutingRuleRepresentation: RoutingRuleRepresentation, Hashable,
 
   public init?(_ description: String) {
     var value = description.trimmingCharacters(in: .whitespaces)[...]
-    value = value.hasPrefix("#") ? value.dropFirst() : value
+    if value.hasPrefix("#") {
+      value = Substring(value.dropFirst().trimmingCharacters(in: .whitespaces))
+    }
     var components = value.split(separator: ",")
 
     switch components.removeFirst() {
@@ -90,6 +92,7 @@ public struct AnyRoutingRuleRepresentation: RoutingRuleRepresentation, Hashable,
       }
       self = .init(parseOutput)
     default:
+      assertionFailure("unknown rule")
       return nil
     }
   }
