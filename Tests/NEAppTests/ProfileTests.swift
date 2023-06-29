@@ -21,6 +21,7 @@ import XCTest
 final class ProfileTests: XCTestCase {
 
   let profile = Profile(
+    version: "1.0",
     basicSettings: BasicSettings(
       logLevel: .trace,
       dnsServers: ["8.8.8.8", "192.168.0.1"],
@@ -76,7 +77,7 @@ final class ProfileTests: XCTestCase {
 
   func testDecodeProfileFromJson() throws {
     let profileString =
-      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"password\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"]}"
+      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"password\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"],\"version\":\"1.0\"}"
 
     let profile = try JSONDecoder().decode(
       Profile.self,
@@ -86,13 +87,13 @@ final class ProfileTests: XCTestCase {
     XCTAssertEqual(profile.basicSettings, self.profile.basicSettings)
     XCTAssertEqual(profile.manInTheMiddleSettings, self.profile.manInTheMiddleSettings)
     XCTAssertEqual(profile.routingRules.count, 3)
-    XCTAssertEqual(profile.policies.count, 5)
+    XCTAssertEqual(profile.policies.count, 2)
     XCTAssertEqual(profile.policyGroups.count, 2)
   }
 
   func testDecodeProfileFromJsonThatDoesNotContainsBasicSettings() throws {
     let profileString =
-      "{\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"password\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"]}"
+      "{\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"password\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"],\"version\":\"1.0\"}"
 
     let profile = try JSONDecoder().decode(
       Profile.self,
@@ -104,13 +105,13 @@ final class ProfileTests: XCTestCase {
     XCTAssertEqual(profile.basicSettings, expectedBasicSettings)
     XCTAssertEqual(profile.manInTheMiddleSettings, self.profile.manInTheMiddleSettings)
     XCTAssertEqual(profile.routingRules.count, 3)
-    XCTAssertEqual(profile.policies.count, 5)
+    XCTAssertEqual(profile.policies.count, 2)
     XCTAssertEqual(profile.policyGroups.count, 2)
   }
 
   func testDecodeProfileFromJsonThatDoesNotContainsRules() throws {
     let profileString =
-      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"password\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}]}"
+      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"password\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"version\":\"1.0\"}"
 
     let profile = try JSONDecoder().decode(
       Profile.self,
@@ -120,13 +121,13 @@ final class ProfileTests: XCTestCase {
     XCTAssertEqual(profile.basicSettings, self.profile.basicSettings)
     XCTAssertEqual(profile.manInTheMiddleSettings, self.profile.manInTheMiddleSettings)
     XCTAssertEqual(profile.routingRules.count, 0)
-    XCTAssertEqual(profile.policies.count, 5)
+    XCTAssertEqual(profile.policies.count, 2)
     XCTAssertEqual(profile.policyGroups.count, 2)
   }
 
   func testDecodeProfileFromJsonThatContainsUnknownedRule() throws {
     let profileString =
-      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"password\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"]}"
+      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"password\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"],\"version\":\"1.0\"}"
 
     XCTAssertNoThrow(
       try JSONDecoder().decode(Profile.self, from: profileString.data(using: .utf8)!)
@@ -135,7 +136,7 @@ final class ProfileTests: XCTestCase {
 
   func testDecodeProfileFromJsonThatDoesNotContainsPolicies() throws {
     let profileString =
-      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"]}"
+      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"],\"version\":\"1.0\"}"
 
     let profile = try JSONDecoder().decode(
       Profile.self,
@@ -145,13 +146,13 @@ final class ProfileTests: XCTestCase {
     XCTAssertEqual(profile.basicSettings, self.profile.basicSettings)
     XCTAssertEqual(profile.manInTheMiddleSettings, self.profile.manInTheMiddleSettings)
     XCTAssertEqual(profile.routingRules.count, 3)
-    XCTAssertEqual(profile.policies.count, 3)
+    XCTAssertEqual(profile.policies.count, 0)
     XCTAssertEqual(profile.policyGroups.count, 2)
   }
 
   func testDecodeProfileFromJsonThatDoesNotContainsPolicyGroups() throws {
     let profileString =
-      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"password\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"routingRules\":[\"FINAL,SOCKS5\",\"DOMAIN,www.example.com,HTTP\",\"DOMAIN-SUFFIX,ad.com,REJECT\"]}"
+      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"password\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"routingRules\":[\"FINAL,SOCKS5\",\"DOMAIN,www.example.com,HTTP\",\"DOMAIN-SUFFIX,ad.com,REJECT\"],\"version\":\"1.0\"}"
 
     let profile = try JSONDecoder().decode(
       Profile.self,
@@ -161,13 +162,13 @@ final class ProfileTests: XCTestCase {
     XCTAssertEqual(profile.basicSettings, self.profile.basicSettings)
     XCTAssertEqual(profile.manInTheMiddleSettings, self.profile.manInTheMiddleSettings)
     XCTAssertEqual(profile.routingRules.count, 3)
-    XCTAssertEqual(profile.policies.count, 5)
+    XCTAssertEqual(profile.policies.count, 2)
     XCTAssertEqual(profile.policyGroups.count, 0)
   }
 
   func testDecodeProfileFromJsonThatDoesNotContainsManInTheMiddleSettings() throws {
     let profileString =
-      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"password\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"]}"
+      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"password\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"],\"version\":\"1.0\"}"
 
     let profile = try JSONDecoder().decode(
       Profile.self,
@@ -179,12 +180,12 @@ final class ProfileTests: XCTestCase {
     XCTAssertEqual(profile.basicSettings, self.profile.basicSettings)
     XCTAssertEqual(profile.manInTheMiddleSettings, expectedManInTheMiddleSettings)
     XCTAssertEqual(profile.routingRules.count, 3)
-    XCTAssertEqual(profile.policies.count, 5)
+    XCTAssertEqual(profile.policies.count, 2)
     XCTAssertEqual(profile.policyGroups.count, 2)
   }
 
   func testDecodeProfileFromEmptyJsonObject() throws {
-    let profileString = "{}"
+    let profileString = "{\"version\":\"1.0\"}"
 
     let profile = try JSONDecoder().decode(
       Profile.self,
@@ -193,13 +194,13 @@ final class ProfileTests: XCTestCase {
 
     XCTAssertEqual(profile.basicSettings, .init())
     XCTAssertEqual(profile.manInTheMiddleSettings, .init())
-    XCTAssertEqual(profile.policies.count, 3)
+    XCTAssertEqual(profile.policies.count, 0)
     XCTAssertTrue(profile.policyGroups.isEmpty)
   }
 
   func testEncodeProfileToJson() throws {
     let expectedProfileString =
-      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"},{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"passwordReference\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"]}"
+      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"},{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"passwordReference\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"],\"version\":\"1.0\"}"
 
     let encoder = JSONEncoder()
     encoder.outputFormatting = .sortedKeys
@@ -211,15 +212,9 @@ final class ProfileTests: XCTestCase {
 
   func testEncodeProfileContainingMostlyDefaultValue() throws {
     let expectedProfileString =
-      "{\"basicSettings\":{\"dnsServers\":[],\"exceptions\":[],\"excludeSimpleHostnames\":false,\"logLevel\":\"info\"},\"manInTheMiddleSettings\":{\"hostnames\":[],\"skipCertificateVerification\":false},\"policies\":[],\"policyGroups\":[],\"routingRules\":[]}"
+      "{\"basicSettings\":{\"dnsServers\":[],\"exceptions\":[],\"excludeSimpleHostnames\":false,\"logLevel\":\"info\"},\"manInTheMiddleSettings\":{\"hostnames\":[],\"skipCertificateVerification\":false},\"policies\":[],\"policyGroups\":[],\"routingRules\":[],\"version\":\"1.0\"}"
 
-    let profile = Profile(
-      basicSettings: BasicSettings(),
-      routingRules: [],
-      manInTheMiddleSettings: ManInTheMiddleSettings(),
-      policies: [],
-      policyGroups: []
-    )
+    let profile = Profile()
 
     let encoder = JSONEncoder()
     encoder.outputFormatting = .sortedKeys
@@ -231,7 +226,7 @@ final class ProfileTests: XCTestCase {
 
   func testEncodeProfileContainingDefaultBasicSettings() throws {
     let expectedProfileString =
-      "{\"basicSettings\":{\"dnsServers\":[],\"exceptions\":[],\"excludeSimpleHostnames\":false,\"logLevel\":\"info\"},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"},{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"passwordReference\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"]}"
+      "{\"basicSettings\":{\"dnsServers\":[],\"exceptions\":[],\"excludeSimpleHostnames\":false,\"logLevel\":\"info\"},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"},{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"passwordReference\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"],\"version\":\"1.0\"}"
 
     let encoder = JSONEncoder()
     encoder.outputFormatting = .sortedKeys
@@ -246,7 +241,7 @@ final class ProfileTests: XCTestCase {
 
   func testEncodeProfileWhichRulesIsEmpty() throws {
     let expectedProfileString =
-      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"},{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"passwordReference\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[]}"
+      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"},{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"passwordReference\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[],\"version\":\"1.0\"}"
 
     var profile = self.profile
     profile.routingRules = []
@@ -261,7 +256,7 @@ final class ProfileTests: XCTestCase {
 
   func testEncodeProfileWhichPoliciesIsEmpty() throws {
     let expectedProfileString =
-      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"]}"
+      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"],\"version\":\"1.0\"}"
 
     var profile = self.profile
     profile.policies = []
@@ -276,7 +271,7 @@ final class ProfileTests: XCTestCase {
 
   func testEncodeProfileWhichPolicyGroupIsEmpty() throws {
     let expectedProfileString =
-      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"},{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"passwordReference\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"]}"
+      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"},{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"passwordReference\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"],\"version\":\"1.0\"}"
 
     var profile = self.profile
     profile.policyGroups = []
@@ -291,7 +286,7 @@ final class ProfileTests: XCTestCase {
 
   func testEncodeProfileContainingDefaultManInTheMiddleSettings() throws {
     let expectedProfileString =
-      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"hostnames\":[],\"skipCertificateVerification\":false},\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"},{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"passwordReference\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"]}"
+      "{\"basicSettings\":{\"dnsServers\":[\"8.8.8.8\",\"192.168.0.1\"],\"exceptions\":[\"127.0.0.1\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"manInTheMiddleSettings\":{\"hostnames\":[],\"skipCertificateVerification\":false},\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"},{\"name\":\"HTTP\",\"proxy\":{\"port\":6152,\"protocol\":\"http\",\"serverAddress\":\"192.168.1.2\"},\"type\":\"http\"},{\"name\":\"SOCKS5\",\"proxy\":{\"authenticationRequired\":true,\"passwordReference\":\"RldkIdlSo\",\"port\":6153,\"protocol\":\"socks5\",\"serverAddress\":\"192.168.1.2\",\"username\":\"socks\"},\"type\":\"socks5\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"DIRECT\",\"HTTP\"],\"type\":\"select\"},{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"}],\"routingRules\":[\"FINAL,PROXY\",\"DOMAIN,www.example.com,PROXY\",\"DOMAIN-SUFFIX,ad.com,BLOCK\"],\"version\":\"1.0\"}"
 
     var profile = self.profile
     profile.manInTheMiddleSettings = .init()

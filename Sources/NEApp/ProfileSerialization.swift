@@ -101,7 +101,7 @@ final public class ProfileSerialization {
     case array([JSONValue])
     case object([String: JSONValue])
 
-    static func convertFromString(_ string: String) -> JSONValue {
+    static func convertTrueFalseStringToBool(_ string: String) -> JSONValue {
       switch string {
       case "true":
         return .bool(true)
@@ -117,12 +117,12 @@ final public class ProfileSerialization {
       case "dns-servers", "exceptions", "hostnames":
         return .array(
           string.split(separator: ",")
-            .map { .convertFromString($0.trimmingCharacters(in: .whitespaces)) }
+            .map { .convertTrueFalseStringToBool($0.trimmingCharacters(in: .whitespaces)) }
         )
       case _ where key.hasSuffix("port"):
         return .number(string)
       default:
-        return .convertFromString(string)
+        return .convertTrueFalseStringToBool(string)
       }
     }
   }
@@ -135,97 +135,111 @@ final public class ProfileSerialization {
     var _groupKeyedByLine: [Int: [String: [String]]] = [:]
     var _policies: [String] = []
 
-    /// Line number being parsed.
-    var cursor: Int = 0
+    var json: [String: JSONValue] = [:]
 
-    var json: JSONValue = .object([:])
-    var parser = ProfileParser.init(byteBuffer: data)
+    var currentGroup: String!
 
-    var currentGroup: String?
-
-    try parser.parse().forEach { next in
-      cursor += 1
-
-      guard case .object(var _json) = json else {
-        throw ProfileSerializationError.dataCorrupted
+    let contents = String(buffer: data).split(separator: "\n", omittingEmptySubsequences: false)
+      .enumerated()
+    try contents.forEach { cursor, content in
+      var parseInput = content.trimmingCharacters(in: .whitespaces)
+      if cursor == 0 {
+        guard let upperBound = parseInput.range(of: "profile-tools-version:")?.upperBound else {
+          throw ProfileSerializationError.invalidFile(
+            reason: .invalidLine(cursor: 0, description: "profile tools version is missing")
+          )
+        }
+        json["version"] = .string(parseInput[upperBound...].trimmingWhitespaces())
+        return
       }
 
-      switch next {
-      // Ignore comment and black line.
-      case .comment, .blank:
+      if parseInput.hasPrefix("[") && parseInput.hasSuffix("]") {
+        currentGroup = parseInput
         return
+      }
 
-      case .section(let g):
-        currentGroup = g
+      // Skip blank line.
+      if parseInput.trimmingCharacters(in: .whitespaces).isEmpty {
+        return
+      }
 
-      case .string(let l):
-        guard let currentGroup, case .array(var array) = _json[currentGroup] ?? .array([]) else {
-          throw ProfileSerializationError.dataCorrupted
+      guard let currentGroup else {
+        guard !parseInput.trimmingCharacters(in: .whitespaces).hasPrefix("#") else {
+          // Skip comment line.
+          return
         }
-        if currentGroup == "[Rule]" {
-          _rulesKeyedByLine[cursor] = l
+        throw ProfileSerializationError.invalidFile(reason: .dataCorrupted)
+      }
+
+      switch currentGroup {
+      case "[General]", "[MitM]":
+        let jsonValue = json[currentGroup] ?? .object([:])
+        guard case .object(var object) = jsonValue else {
+          fatalError()
         }
-        array.append(.convertFromString(l))
-        _json[currentGroup] = .array(array)
-        json = .object(_json)
-
-      case .object(let o):
-        guard let currentGroup else {
-          throw ProfileSerializationError.dataCorrupted
+        guard let range = parseInput.range(of: "=") else {
+          return
         }
-
-        var jsonValue: JSONValue
-
-        switch currentGroup {
-        case "[Policies]":
-          if ["DIRECT", "REJECT", "REJECT-TINYGIF"].contains(o.0) && o.0.lowercased() != o.1 {
-            throw ProfileSerializationError.invalidFile(
-              reason: .invalidLine(
-                cursor: cursor,
-                description:
-                  "\(o.0) is used as builtin policy types, consider use another name instead."
-              )
-            )
-          }
-          // Policies should serialized to json array.
-          guard case .array(var array) = _json[currentGroup] ?? .array([]) else {
-            throw ProfileSerializationError.dataCorrupted
-          }
-          _policies.append(o.0)
-          array.append(try serializePolicy(o))
-          jsonValue = .array(array)
-
-        case "[Policy Group]":
-          // Policy gorup should serialized to json array.
-          guard case .array(var array) = _json[currentGroup] ?? .array([]) else {
-            throw ProfileSerializationError.dataCorrupted
-          }
-
-          guard case .object(let j) = try serializePolicyGroup(o),
-            case .array(let policies) = j["policies"]
-          else {
-            throw ProfileSerializationError.dataCorrupted
-          }
-          _groupKeyedByLine[cursor] = [
-            o.0: policies.compactMap({
-              guard case .string(let p) = $0 else {
-                return nil
-              }
-              return p
-            })
-          ]
-          array.append(try serializePolicyGroup(o))
-          jsonValue = .array(array)
-        default:
-          guard case .object(var dictionary) = _json[currentGroup] ?? .object([:]) else {
-            throw ProfileSerializationError.dataCorrupted
-          }
-          dictionary[o.0] = .convertFromString(o.1, forKey: o.0)
-          jsonValue = .object(dictionary)
+        let label = parseInput[..<range.lowerBound].trimmingWhitespaces()
+        parseInput = parseInput[parseInput.index(after: range.upperBound)...].trimmingWhitespaces()
+        object[label] = .convertFromString(parseInput, forKey: label)
+        json[currentGroup] = .object(object)
+      case "[Policies]":
+        let jsonValue = json[currentGroup] ?? .array([])
+        guard case .array(var policies) = jsonValue else {
+          fatalError()
         }
+        guard let range = parseInput.range(of: "=") else {
+          return
+        }
+        let label = parseInput[..<range.lowerBound].trimmingCharacters(in: .whitespaces)
+        parseInput = parseInput[parseInput.index(after: range.upperBound)...].trimmingWhitespaces()
+        policies.append(try serializePolicy((cursor, (label, parseInput))))
+        json[currentGroup] = .array(policies)
 
-        _json[currentGroup] = jsonValue
-        json = .object(_json)
+        _policies.append(label)
+      case "[Policy Group]":
+        let jsonValue = json[currentGroup] ?? .array([])
+        guard case .array(var policyGroups) = jsonValue else {
+          fatalError()
+        }
+        guard let range = parseInput.range(of: "=") else {
+          return
+        }
+        let label = parseInput[..<range.lowerBound].trimmingCharacters(in: .whitespaces)
+        parseInput = parseInput[parseInput.index(after: range.upperBound)...].trimmingWhitespaces()
+        let parseOutput = try serializePolicyGroup((label, parseInput))
+        policyGroups.append(parseOutput)
+        json[currentGroup] = .array(policyGroups)
+
+        guard case .object(let json) = parseOutput, case .array(let policies) = json["policies"]
+        else {
+          return
+        }
+        _groupKeyedByLine[cursor] = [
+          label: policies.compactMap({
+            guard case .string(let p) = $0 else {
+              return nil
+            }
+            return p
+          })
+        ]
+      case "[Rule]":
+        let jsonValue = json[currentGroup] ?? .array([])
+        guard case .array(var routingRules) = jsonValue else {
+          fatalError()
+        }
+        routingRules.append(try serializeRule(parseInput))
+        json[currentGroup] = .array(routingRules)
+        _rulesKeyedByLine[cursor] = parseInput
+      default:
+        let jsonValue = json[currentGroup] ?? .array([])
+        guard case .array(var unknown) = jsonValue else {
+          fatalError()
+        }
+        unknown.append(.string(parseInput))
+        json[currentGroup] = .array(unknown)
+        return
       }
     }
 
@@ -278,7 +292,7 @@ final public class ProfileSerialization {
       }
     }
 
-    return try json.toObjcRepresentation()
+    return try JSONValue.object(json).toObjcRepresentation()
   }
 
   /// Create a Foundation object from configuration file data.
@@ -293,12 +307,17 @@ final public class ProfileSerialization {
   /// - Parameter obj: Foundation NSDictionary object.
   /// - Returns: Generated configuration file data.
   public class func data(withJSONObject obj: Any) throws -> Data {
-    guard let json = obj as? [String: Any] else {
+    guard var json = obj as? [String: Any] else {
       throw ProfileSerializationError.dataCorrupted
     }
 
     var components: [String] = []
     let newLine = "\n"
+    guard let value = json.removeValue(forKey: "version") else {
+      throw ProfileSerializationError.dataCorrupted
+    }
+    components.append("# profile-tools-version: \(value)")
+    components.append(newLine)
 
     try json.keys.sorted().forEach { key in
       let value = json[key]
@@ -383,13 +402,33 @@ final public class ProfileSerialization {
 
 extension ProfileSerialization {
 
-  private static func serializePolicy(_ o: (String, String)) throws -> JSONValue {
+  private static func serializeRule(_ parseInput: String) throws -> JSONValue {
+    return .convertTrueFalseStringToBool(parseInput)
+  }
+
+  private static func serializePolicy(_ parseInput: (cursor: Int, value: (String, String))) throws
+    -> JSONValue
+  {
+    if ["DIRECT", "REJECT", "REJECT-TINYGIF"].contains(parseInput.value.0)
+      && parseInput.value.0.lowercased() != parseInput.value.1
+    {
+      throw ProfileSerializationError.invalidFile(
+        reason: .invalidLine(
+          cursor: parseInput.cursor,
+          description:
+            "\(parseInput.value.0) is used as builtin policy types, consider use another name instead."
+        )
+      )
+    }
+
+    let policy: JSONValue
+
     // direct reject and reject-tinygif does not requires extra configurations
-    if ["direct", "reject", "reject-tinygif"].contains(o.1) {
-      return .object(["name": .string(o.0), "type": .string(o.1)])
+    if ["direct", "reject", "reject-tinygif"].contains(parseInput.value.1) {
+      policy = .object(["name": .string(parseInput.value.0), "type": .string(parseInput.value.1)])
     } else {
       // Rebuild proxy configuration as json array.
-      let components = o.1.split(separator: ",")
+      let components = parseInput.value.1.split(separator: ",")
 
       var configuration: [String: JSONValue] = [:]
 
@@ -414,21 +453,28 @@ extension ProfileSerialization {
       )
       configuration["protocol"] = `protocol`
 
-      return .object(["name": .string(o.0), "type": `protocol`, "proxy": .object(configuration)])
+      policy = .object([
+        "name": .string(parseInput.value.0), "type": `protocol`, "proxy": .object(configuration),
+      ])
     }
+
+    return policy
   }
 
-  private static func serializePolicyGroup(_ o: (String, String)) throws -> JSONValue {
+  private static func serializePolicyGroup(_ parseInput: (String, String)) throws -> JSONValue {
+    var pg: [String: JSONValue] = [:]
+
     // Rebuild proxy configuration as json array.
-    let name = o.0.trimmingWhitespaces()
-    var expression = o.1
+    pg["name"] = .string(parseInput.0.trimmingWhitespaces())
+
+    var expression = parseInput.1
 
     guard let maxLength = expression.firstIndex(of: ",") else {
       throw ProfileSerializationError.dataCorrupted
     }
 
     var startIndex = expression.startIndex
-    let type = expression[startIndex..<maxLength].trimmingWhitespaces()
+    pg["type"] = .string(expression[startIndex..<maxLength].trimmingWhitespaces())
 
     // Remove type
     startIndex = expression.index(after: maxLength)
@@ -436,27 +482,16 @@ extension ProfileSerialization {
 
     var components = expression.split(separator: "=")
 
-    var json = JSONValue.object([:])
-
     while !components.isEmpty {
       let key = components.removeFirst()
       var values = components.removeFirst().split(separator: ",")
       if !components.isEmpty {
         components.insert(values.removeLast(), at: 0)
       }
-      guard case .object(var j) = json else {
-        fatalError()
-      }
-      j[key.trimmingWhitespaces()] = .array(values.map({ .string($0.trimmingWhitespaces()) }))
-      json = .object(j)
+      pg[key.trimmingWhitespaces()] = .array(values.map({ .string($0.trimmingWhitespaces()) }))
     }
 
-    guard case .object(var j) = json else {
-      fatalError()
-    }
-    j["name"] = .string(name)
-    j["type"] = .string(type)
-    return .object(j)
+    return .object(pg)
   }
 
   private static func serialize(_ obj: Any) throws -> String {
@@ -678,5 +713,12 @@ extension String {
           $0.isUppercase ? "-\($0.lowercased())" : "\($0)"
         }.joined()
     }
+  }
+}
+
+extension StringProtocol {
+
+  func trimmingWhitespaces() -> String {
+    self.trimmingCharacters(in: .whitespaces)
   }
 }

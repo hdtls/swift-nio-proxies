@@ -335,6 +335,7 @@ final public class Netbot: @unchecked Sendable {
     // `policyGroups`, if group exists use group's `selected` as policy ID else use rule's
     // policy as ID.
     if let g = profile.policyGroups.first(where: { $0.name == savedFinalRule.policy }) {
+      // TODO: Policy selection
       preferred = g.policies.first
     } else {
       preferred = savedFinalRule.policy
@@ -342,8 +343,11 @@ final public class Netbot: @unchecked Sendable {
 
     // The user may not have preferred policy, so if not
     // we should fallback.
-    if let preferred, let first = profile.policies.first(where: { $0.name == preferred }) {
-      fallback = first
+    if let preferred {
+      let policies = profile.policies + [DirectPolicy(), RejectPolicy(), RejectTinyGifPolicy()]
+      if let first = policies.first(where: { $0.name == preferred }) {
+        fallback = first
+      }
     }
 
     logger.info("Policy evaluating - \(fallback.name)", metadata: ["Request": "\(address)"])

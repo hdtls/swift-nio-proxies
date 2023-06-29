@@ -20,9 +20,11 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializeBasicSettings() throws {
     let expectedBasicSettingsJsonString =
-      "{\"basicSettings\":{\"dnsServers\":[\"223.5.5.5\",\"114.114.114.114\",\"system\"],\"exceptions\":[\"localhost\",\"*.local\",\"255.255.255.255\\/32\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153}}"
+      "{\"basicSettings\":{\"dnsServers\":[\"223.5.5.5\",\"114.114.114.114\",\"system\"],\"exceptions\":[\"localhost\",\"*.local\",\"255.255.255.255\\/32\"],\"excludeSimpleHostnames\":true,\"httpListenAddress\":\"127.0.0.1\",\"httpListenPort\":6152,\"logLevel\":\"trace\",\"socksListenAddress\":\"127.0.0.1\",\"socksListenPort\":6153},\"version\":\"1.0\"}"
 
     let basicSettingsString = """
+      # profile-tools-version: 1.0
+
       [General]
       dns-servers = 223.5.5.5, 114.114.114.114, system
       exceptions = localhost, *.local, 255.255.255.255/32
@@ -48,9 +50,11 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializePolicies() throws {
     let expectedPoliciesString =
-      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"},{\"name\":\"SOCKS\",\"proxy\":{\"password\":\"password\",\"port\":8320,\"protocol\":\"socks5\",\"serverAddress\":\"127.0.0.1\",\"username\":\"Netbot\"},\"type\":\"socks5\"},{\"name\":\"SHADOWSOCKS\",\"proxy\":{\"algorithm\":\"chacha20-poly1305\",\"password\":\"password\",\"port\":8330,\"protocol\":\"ss\",\"serverAddress\":\"127.0.0.1\",\"tfo\":true},\"type\":\"ss\"},{\"name\":\"VMESS\",\"proxy\":{\"port\":8390,\"protocol\":\"vmess\",\"serverAddress\":\"127.0.0.1\",\"username\":\"2EB5690D-225B-4B49-997F-697D5A36CD9D\"},\"type\":\"vmess\"}]}"
+      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"},{\"name\":\"SOCKS\",\"proxy\":{\"password\":\"password\",\"port\":8320,\"protocol\":\"socks5\",\"serverAddress\":\"127.0.0.1\",\"username\":\"Netbot\"},\"type\":\"socks5\"},{\"name\":\"SHADOWSOCKS\",\"proxy\":{\"algorithm\":\"chacha20-poly1305\",\"password\":\"password\",\"port\":8330,\"protocol\":\"ss\",\"serverAddress\":\"127.0.0.1\",\"tfo\":true},\"type\":\"ss\"},{\"name\":\"VMESS\",\"proxy\":{\"port\":8390,\"protocol\":\"vmess\",\"serverAddress\":\"127.0.0.1\",\"username\":\"2EB5690D-225B-4B49-997F-697D5A36CD9D\"},\"type\":\"vmess\"}],\"version\":\"1.0\"}"
 
     let policiesString = """
+      # profile-tools-version: 1.0
+
       [Policies]
       HTTP = http, port = 8310, protocol = http, server-address = 127.0.0.1
       SOCKS = socks5, password = password, port = 8320, protocol = socks5, server-address = 127.0.0.1, username = Netbot
@@ -72,9 +76,11 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializeBuiltinPolicies() throws {
     let expectedPoliciesString =
-      "{\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"}]}"
+      "{\"policies\":[{\"name\":\"DIRECT\",\"type\":\"direct\"},{\"name\":\"REJECT\",\"type\":\"reject\"},{\"name\":\"REJECT-TINYGIF\",\"type\":\"reject-tinygif\"}],\"version\":\"1.0\"}"
 
     let policiesString = """
+      # profile-tools-version: 1.0
+
       [Policies]
       DIRECT = direct
       REJECT = reject
@@ -94,6 +100,8 @@ final class ProfileSerializationTests: XCTestCase {
 
     // Test serialize policy with builtin policy name must have specified type
     var errorPolicyString = """
+      # profile-tools-version: 1.0
+
       [Policies]
       DIRECT = reject
       """
@@ -104,6 +112,8 @@ final class ProfileSerializationTests: XCTestCase {
     )
 
     errorPolicyString = """
+      # profile-tools-version: 1.0
+
       [Policies]
       REJECT = reject-tinygif
       """
@@ -114,6 +124,8 @@ final class ProfileSerializationTests: XCTestCase {
     )
 
     errorPolicyString = """
+      # profile-tools-version: 1.0
+
       [Policies]
       REJECT-TINYGIF = reject
       """
@@ -126,9 +138,11 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializePolicyGroups() throws {
     let expectedPolicyGroupsJsonString =
-      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"},{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}]}"
+      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"},{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}],\"version\":\"1.0\"}"
 
     let policyGroupsString = """
+      # profile-tools-version: 1.0
+
       [Policies]
       HTTP = http, port = 8310, protocol = http, server-address = 127.0.0.1
 
@@ -151,6 +165,8 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializePolicyGroupsWithUnknownPolicy() {
     let policyGroupsString = """
+      # profile-tools-version: 1.0
+
       [Policy Group]
       PROXY = select, policies = HTTP
       """
@@ -162,9 +178,11 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializeRules() throws {
     let expectedRulesJsonString =
-      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"},{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}],\"routingRules\":[\"DOMAIN-SUFFIX,example.com,DIRECT\",\"RULE-SET,SYSTEM,DIRECT\",\"GEOIP,CN,DIRECT\",\"FINAL,PROXY\"]}"
+      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"BLOCK\",\"policies\":[\"DIRECT\",\"REJECT\",\"REJECT-TINYGIF\"],\"type\":\"select\"},{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}],\"routingRules\":[\"DOMAIN-SUFFIX,example.com,DIRECT\",\"RULE-SET,SYSTEM,DIRECT\",\"GEOIP,CN,DIRECT\",\"FINAL,PROXY\"],\"version\":\"1.0\"}"
 
     let rulesString = """
+      # profile-tools-version: 1.0
+
       [Policies]
       HTTP = http, port = 8310, protocol = http, server-address = 127.0.0.1
 
@@ -191,6 +209,8 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializeRulesWithUnknownPolicyOrPolicyGroup() {
     let rulesString = """
+      # profile-tools-version: 1.0
+
       [Rule]
       FINAL,PROXY
       """
@@ -202,9 +222,11 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializeRulesThatDefineWithPolicy() throws {
     let expectedRulesJsonString =
-      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"routingRules\":[\"DOMAIN-SUFFIX,example.com,DIRECT\",\"RULE-SET,SYSTEM,DIRECT\",\"GEOIP,CN,DIRECT\",\"FINAL,HTTP\"]}"
+      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"routingRules\":[\"DOMAIN-SUFFIX,example.com,DIRECT\",\"RULE-SET,SYSTEM,DIRECT\",\"GEOIP,CN,DIRECT\",\"FINAL,HTTP\"],\"version\":\"1.0\"}"
 
     let rulesString = """
+      # profile-tools-version: 1.0
+
       [Policies]
       HTTP = http, port = 8310, protocol = http, server-address = 127.0.0.1
 
@@ -228,9 +250,11 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializeRulesThatDefineWithPolicyGroup() throws {
     let expectedRulesJsonString =
-      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}],\"routingRules\":[\"DOMAIN-SUFFIX,example.com,PROXY\",\"RULE-SET,SYSTEM,PROXY\",\"GEOIP,CN,PROXY\",\"FINAL,PROXY\"]}"
+      "{\"policies\":[{\"name\":\"HTTP\",\"proxy\":{\"port\":8310,\"protocol\":\"http\",\"serverAddress\":\"127.0.0.1\"},\"type\":\"http\"}],\"policyGroups\":[{\"name\":\"PROXY\",\"policies\":[\"HTTP\"],\"type\":\"select\"}],\"routingRules\":[\"DOMAIN-SUFFIX,example.com,PROXY\",\"RULE-SET,SYSTEM,PROXY\",\"GEOIP,CN,PROXY\",\"FINAL,PROXY\"],\"version\":\"1.0\"}"
 
     let rulesString = """
+      # profile-tools-version: 1.0
+
       [Policies]
       HTTP = http, port = 8310, protocol = http, server-address = 127.0.0.1
 
@@ -256,9 +280,11 @@ final class ProfileSerializationTests: XCTestCase {
 
   func testSerializeManInTheMiddleSettings() throws {
     let expectedManInTheMiddleSettingsJsonString =
-      "{\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true}}"
+      "{\"manInTheMiddleSettings\":{\"base64EncodedP12String\":\"MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc\",\"hostnames\":[\"*.example.com\"],\"passphrase\":\"CS2UNBDR\",\"skipCertificateVerification\":true},\"version\":\"1.0\"}"
 
     let manInTheMiddleSettingsString = """
+      # profile-tools-version: 1.0
+
       [MitM]
       base64-encoded-p12-string = MIIKPwIBAzCCCgYGCSqGSIb3DQEHAaCCCfc
       hostnames = *.example.com

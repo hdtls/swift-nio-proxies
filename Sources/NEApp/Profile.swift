@@ -18,6 +18,8 @@ import NEAppEssentials
 /// A profile object that defines behavior and policies for a Netbot process.
 public struct Profile: ProfileRepresentation, Codable, Hashable, Sendable {
 
+  public var version: String = "1.0"
+
   /// The rules contains in this configuration.
   public var routingRules: [AnyRoutingRuleRepresentation] = []
 
@@ -36,12 +38,14 @@ public struct Profile: ProfileRepresentation, Codable, Hashable, Sendable {
   /// Initialize an instance of `Profile` with the specified basicSettings, replicat, routingRules, manInTheMiddleSettings,
   /// polcies and policyGroups.
   public init(
+    version: String,
     basicSettings: BasicSettings,
     routingRules: [AnyRoutingRuleRepresentation],
     manInTheMiddleSettings: ManInTheMiddleSettings,
     policies: [AnyConnectionPolicyRepresentation],
     policyGroups: [AnyConnectionPolicyGroupRepresentation]
   ) {
+    self.version = version
     self.basicSettings = basicSettings
     self.routingRules = routingRules
     self.manInTheMiddleSettings = manInTheMiddleSettings
@@ -66,6 +70,7 @@ public struct Profile: ProfileRepresentation, Codable, Hashable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
+    let version = try container.decode(String.self, forKey: .version)
     let ruleLiterals = try container.decodeIfPresent([String].self, forKey: .routingRules) ?? []
     let rules = ruleLiterals.compactMap { AnyRoutingRuleRepresentation($0) }
     let manInTheMiddleSettings = try container.decodeIfPresent(
@@ -73,19 +78,9 @@ public struct Profile: ProfileRepresentation, Codable, Hashable, Sendable {
       forKey: .manInTheMiddleSettings
     )
     let basicSettings = try container.decodeIfPresent(BasicSettings.self, forKey: .basicSettings)
-    var policies =
+    let policies =
       try container.decodeIfPresent([AnyConnectionPolicyRepresentation].self, forKey: .policies)
       ?? []
-    // If the built-in policies do not exist, insert them at the beginning of the array
-    if !policies.contains(where: { $0.name == "REJECT-TINYGIF" }) {
-      policies.insert(AnyConnectionPolicyRepresentation(RejectTinyGifPolicy()), at: 0)
-    }
-    if !policies.contains(where: { $0.name == "REJECT" }) {
-      policies.insert(AnyConnectionPolicyRepresentation(RejectPolicy()), at: 0)
-    }
-    if !policies.contains(where: { $0.name == "DIRECT" }) {
-      policies.insert(AnyConnectionPolicyRepresentation(DirectPolicy()), at: 0)
-    }
     let policyGroups =
       try container.decodeIfPresent(
         [AnyConnectionPolicyGroupRepresentation].self,
@@ -93,6 +88,7 @@ public struct Profile: ProfileRepresentation, Codable, Hashable, Sendable {
       ) ?? []
 
     self.init(
+      version: version,
       basicSettings: basicSettings ?? .init(),
       routingRules: rules,
       manInTheMiddleSettings: manInTheMiddleSettings ?? .init(),
@@ -102,6 +98,7 @@ public struct Profile: ProfileRepresentation, Codable, Hashable, Sendable {
   }
 
   enum CodingKeys: CodingKey {
+    case version
     case routingRules
     case manInTheMiddleSettings
     case basicSettings
@@ -111,6 +108,7 @@ public struct Profile: ProfileRepresentation, Codable, Hashable, Sendable {
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(version, forKey: .version)
     try container.encode(routingRules.map { $0.description }, forKey: .routingRules)
     try container.encode(manInTheMiddleSettings, forKey: .manInTheMiddleSettings)
     try container.encode(basicSettings, forKey: .basicSettings)
