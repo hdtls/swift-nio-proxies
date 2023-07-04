@@ -181,7 +181,11 @@ final public class ProfileSerialization {
           return
         }
         let label = parseInput[..<range.lowerBound].trimmingWhitespaces()
-        parseInput = parseInput[parseInput.index(after: range.upperBound)...].trimmingWhitespaces()
+        if parseInput.endIndex == range.upperBound {
+          parseInput = ""
+        } else {
+          parseInput = parseInput[parseInput.index(after: range.upperBound)...].trimmingWhitespaces()
+        }
         object[label] = .convertFromString(parseInput, forKey: label)
         json[currentGroup] = .object(object)
       case "[Policies]":
@@ -193,7 +197,11 @@ final public class ProfileSerialization {
           return
         }
         let label = parseInput[..<range.lowerBound].trimmingCharacters(in: .whitespaces)
-        parseInput = parseInput[parseInput.index(after: range.upperBound)...].trimmingWhitespaces()
+        if parseInput.endIndex == range.upperBound {
+          parseInput = ""
+        } else {
+          parseInput = parseInput[parseInput.index(after: range.upperBound)...].trimmingWhitespaces()
+        }
         policies.append(try serializePolicy((cursor, (label, parseInput))))
         json[currentGroup] = .array(policies)
 
@@ -207,7 +215,11 @@ final public class ProfileSerialization {
           return
         }
         let label = parseInput[..<range.lowerBound].trimmingCharacters(in: .whitespaces)
-        parseInput = parseInput[parseInput.index(after: range.upperBound)...].trimmingWhitespaces()
+        if parseInput.endIndex == range.upperBound {
+          parseInput = ""
+        } else {
+          parseInput = parseInput[parseInput.index(after: range.upperBound)...].trimmingWhitespaces()
+        }
         let parseOutput = try serializePolicyGroup((label, parseInput))
         policyGroups.append(parseOutput)
         json[currentGroup] = .array(policyGroups)
