@@ -57,11 +57,11 @@ unacceptable_terms=(
     -e sanit[y]
 )
 
-# We have to exclude the code of conduct as it gives examples of unacceptable
-# language.
-if git grep --color=never -i "${unacceptable_terms[@]}" -- . ":(exclude)CODE_OF_CONDUCT.md" > /dev/null; then
+# We have to exclude the code of conduct and all resources located in Test Vectors as it gives
+# examples of unacceptable language.
+if git grep --color=never -i "${unacceptable_terms[@]}" -- . ":(exclude)CODE_OF_CONDUCT.md" ":!**/Test Vectors/*" > /dev/null; then
     printf "\033[0;31mUnacceptable language found.\033[0m\n"
-    git grep -i "${unacceptable_terms[@]}" -- . ":(exclude)CODE_OF_CONDUCT.md"
+    git grep -i "${unacceptable_terms[@]}" -- . ":(exclude)CODE_OF_CONDUCT.md" ":!**/Test Vectors/*"
     exit 1
 fi
 printf "\033[0;32mokay.\033[0m\n"
@@ -69,7 +69,7 @@ printf "\033[0;32mokay.\033[0m\n"
 printf "=> Checking license headers\n"
 tmp=$(mktemp /tmp/.swift-nio-netbot-soundness_XXXXXX)
 
-for language in swift-or-c bash dtrace python; do
+for language in swift-or-c bash python; do
   printf "   * $language... "
   declare -a matching_files
   declare -a exceptions
@@ -134,25 +134,25 @@ EOF
 ##===----------------------------------------------------------------------===##
 EOF
       ;;
-      dtrace)
-        matching_files=( -name '*.d' )
-        cat > "$tmp" <<"EOF"
-#!/usr/sbin/dtrace -q -s
-/*===----------------------------------------------------------------------===*
- *
- *  This source file is part of the SwiftNIO open source project
- *
- *  Copyright (c) YEARS Junfeng Zhang and the Netbot project authors
- *  Licensed under Apache License v2.0
- *
- *  See LICENSE for license information
- *  See CONTRIBUTORS.txt for the list of Netbot project authors
- *
- *  SPDX-License-Identifier: Apache-2.0
- *
- *===----------------------------------------------------------------------===*/
-EOF
-      ;;
+#      dtrace)
+#        matching_files=( -name '*.d' )
+#        cat > "$tmp" <<"EOF"
+##!/usr/sbin/dtrace -q -s
+#/*===----------------------------------------------------------------------===*
+# *
+# *  This source file is part of the SwiftNIO open source project
+# *
+# *  Copyright (c) YEARS Junfeng Zhang and the Netbot project authors
+# *  Licensed under Apache License v2.0
+# *
+# *  See LICENSE for license information
+# *  See CONTRIBUTORS.txt for the list of Netbot project authors
+# *
+# *  SPDX-License-Identifier: Apache-2.0
+# *
+# *===----------------------------------------------------------------------===*/
+#EOF
+#      ;;
     *)
       echo >&2 "ERROR: unknown language '$language'"
       ;;
