@@ -72,7 +72,15 @@ let package = Package(
     .target(name: "CNESHAKE128"),
     .target(
       name: "NEApp",
-      dependencies: ["NEAppEssentials", swiftLog, .product(name: "MaxMindDB", package: "swift-maxminddb")]
+      dependencies: [
+        "NEAppEssentials",
+        swiftLog,
+        .product(
+          name: "MaxMindDB",
+          package: "swift-maxminddb"
+        ),
+      ],
+      exclude: ["Int128.swift.gyb"]
     ),
     .target(
       name: "NEAppEssentials",
@@ -115,7 +123,7 @@ let package = Package(
         "NEPrettyBytes",
         "NESHAKE128",
         swiftCrypto,
-        swiftNIOCore
+        swiftNIOCore,
       ]
     ),
     .testTarget(
