@@ -62,7 +62,8 @@ public struct Ruleset: ExternalResourcesRuleRepresentation, ParsableRuleRepresen
     $externalResources.write {
       $0 = file.split(separator: "\n")
         .compactMap {
-          AnyRoutingRuleRepresentation(String($0))
+          let description = "\($0),\(policy)"
+          return AnyRoutingRuleRepresentation(description)
         }
     }
   }

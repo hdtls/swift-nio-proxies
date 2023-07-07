@@ -49,7 +49,14 @@ public struct DomainSetRule: ExternalResourcesRuleRepresentation, ParsableRuleRe
   }
 
   public func match(_ expression: String) -> Bool {
-    $externalResources.first(where: { $0 == expression || ".\(expression)".hasSuffix($0) }) != nil
+    $externalResources.first {
+      if $0.hasPrefix(".") {
+        // Match domain and all sub-domains.
+        return $0 == String($0[$0.index(after: $0.startIndex)...]) || ".\(expression)".hasSuffix($0)
+      } else {
+        return $0 == expression
+      }
+    } != nil
   }
 
   public mutating func loadAllRules(from file: URL) {
