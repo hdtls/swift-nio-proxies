@@ -91,6 +91,11 @@ public struct AnyRoutingRuleRepresentation: RoutingRuleRepresentation, Hashable,
         return nil
       }
       self = .init(parseOutput)
+    case IPCIDRRule.identifier.rawValue:
+      guard let parseOutput = IPCIDRRule(description) else {
+        return nil
+      }
+      self = .init(parseOutput)
     default:
       assertionFailure("unknown rule")
       return nil

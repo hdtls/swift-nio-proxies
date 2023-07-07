@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NIOCore
 import XCTest
 
 @testable import NEApp
@@ -23,28 +24,21 @@ import XCTest
 ///
 %{
   class Rule:
-    def __init__(self, tag, className, expression="example.com", policy="DIRECT", externalResources=None):
+    def __init__(self, tag, className, expression="example.com", policy="DIRECT"):
       self.tag = tag
       self.className = className
       self.expression = expression
       self.policy = policy
-      self.externalResources = externalResources
 
   pythonRules = [
-    Rule("DOMAIN-KEYWORD", "DomainKeywordRule"),
+    Rule("DOMAIN-KEYWORD", "DomainKeywordRule", "example"),
     Rule("DOMAIN", "DomainRule"),
-    Rule("DOMAIN-SET", "DomainSetRule", "http://domainset.com", externalResources=[
-      "example1.com",
-      ".example2.com"
-    ]),
+    Rule("DOMAIN-SET", "DomainSetRule", "http://domainset.com"),
     Rule("DOMAIN-SUFFIX", "DomainSuffixRule"),
-    Rule("FINAL", "FinalRule"),
-    Rule("GEOIP", "GeoIPRule"),
-    Rule("RULE-SET", "Ruleset", "http://ruleset.com", externalResources=[
-      "DOMAIN,www.example.com",
-      "DOMAIN-SUFFIX,example.com",
-      "DOMAIN-KEYWORD,example"
-    ]),
+    Rule("FINAL", "FinalRule", ""),
+    Rule("GEOIP", "GeoIPRule", "CN"),
+    Rule("IP-CIDR", "IPCIDRRule", "192.168.0.1/20"),
+    Rule("RULE-SET", "Ruleset", "http://ruleset.com"),
   ]
 }%
 
@@ -117,18 +111,16 @@ final class ParsableRuleRepresentationTests: XCTestCase {
 
   func testParsing${rule.className}WithTypeMissmatchDescriptionString() {
     %if rule.tag == "FINAL":
-    var description = "invalidSchema,DIRECT"
+    XCTAssertNil(${rule.className}("invalidSchema,DIRECT"))
     %else:
-    var description = "invalidSchema,${rule.expression},DIRECT"
+    XCTAssertNil(${rule.className}("invalidSchema,${rule.expression},DIRECT"))
     %end
-    XCTAssertNil(${rule.className}(description))
     %for other in filter(lambda e: e != rule, pythonRules):
     %if rule.tag == "FINAL":
-    description = "${rule.tag},DIRECT"
+    XCTAssertNil(${rule.className}("${other.tag},DIRECT"))
     %else:
-    description = "${rule.tag},${rule.expression},DIRECT"
+    XCTAssertNil(${rule.className}("${other.tag},${other.expression},DIRECT"))
     %end
-    XCTAssertNil(${other.className}(description))
     %end
   }
   %end
@@ -141,6 +133,7 @@ final class ParsableRuleRepresentationTests: XCTestCase {
       ("example", true),
       ("pexample.com", true),
       ("example1.com", true),
+      ("ex.ample.com", false),
     ]
     testVectors.forEach { pattern, expected in
       XCTAssertEqual(rule.match(pattern), expected)
@@ -169,5 +162,255 @@ final class ParsableRuleRepresentationTests: XCTestCase {
     testVectors.forEach { pattern, expected in
       XCTAssertEqual(rule.match(pattern), expected)
     }
+  }
+
+  func testDomainSetRuleMatchEvaluating() {
+    var rule = DomainSetRule("DOMAIN-SET,http://domainset.com,DIRECT")!
+    let url = Bundle.module.url(forResource: "domainset_test", withExtension: nil)!
+    rule.loadAllRules(from: url)
+    let testVectors = [
+      ("example.com", true),
+      ("example2.com", true),
+      ("www.example2.com", true),
+      ("www.example.com", false),
+      ("example", false),
+    ]
+    testVectors.forEach { pattern, expected in
+      XCTAssertEqual(rule.match(pattern), expected)
+    }
+  }
+
+  func testFinalRuleMatchEvaluating() {
+    let rule = FinalRule("FINAL,DIRECT")!
+    // Final rule match anything.
+    XCTAssertTrue(rule.match("any"))
+  }
+
+  func testGEOIPRuleMatchEvaluating() {
+
+  }
+
+  func testCreateIPCIDRRuleWithInvalidIPCIDRString() {
+    let testVectors = [
+      "192.168/21",
+      "192.168.0.1",
+      "192.168.0.1/33",
+      "192.168.0.1/",
+      "192.168.0.1/x",
+      "/var/tmp/20",
+      "var/20",
+      "2001:4860:4860::8888",
+      "2001:4860:4860::8888/129",
+      "2001:4860:4860::8888/",
+      "2001:4860:4860::8888/x",
+    ]
+
+    testVectors.forEach {
+      XCTAssertNil(IPCIDRRule("IP-CIDR,\($0),DIRECT"))
+    }
+  }
+
+  func testIPCIDRRuleMatchEvaluating() {
+    var rule = IPCIDRRule("IP-CIDR,192.168.0.1/20,DIRECT")!
+    var testVectors = [
+      ("192.168.0.9", true),
+      ("192.168.16.1", false),
+      ("2001:4860:4860::8888", false),
+      ("2001:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF", false),
+    ]
+    testVectors.forEach { pattern, expected in
+      XCTAssertEqual(rule.match(pattern), expected)
+    }
+
+    rule = IPCIDRRule("IP-CIDR,2001:4860:4860::8888/32,DIRECT")!
+    testVectors = [
+      ("192.168.0.9", false),
+      ("192.168.16.1", false),
+      ("2001:4860:4860::8888", true),
+      ("2001:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF", false),
+    ]
+    testVectors.forEach { pattern, expected in
+      XCTAssertEqual(rule.match(pattern), expected)
+    }
+  }
+
+  func testRulesetMatchEvaluating() {
+    var rule = Ruleset("RULE-SET,http://ruleset.com,DIRECT")!
+    let url = Bundle.module.url(forResource: "ruleset_test", withExtension: nil)!
+    rule.loadAllRules(from: url)
+    let testVectors = [
+      ("example.com", false),
+      ("line.me", true),
+      ("www.example2.com", false),
+      ("nowtv100.com", true),
+      ("103.2.28.1", true),
+    ]
+    testVectors.forEach { pattern, expected in
+      XCTAssertEqual(rule.match(pattern), expected)
+    }
+  }
+
+  func testCreateAddressesWithIPCIDRString() throws {
+    let testVectors = [
+      ("192.168.0.1/20", ("192.168.0.0", "192.168.15.255")),
+      ("192.168.0.1/0", ("0.0.0.0", "255.255.255.255")),
+      ("192.168.0.1/32", ("192.168.0.1", "192.168.0.1")),
+      (
+        "2001:4860:4860::8888/32",
+        ("2001:4860:0000:0000:0000:0000:0000:0000", "2001:4860:ffff:ffff:ffff:ffff:ffff:ffff")
+      ),
+      (
+        "2001:4860:4860::8888/0",
+        ("0000:0000:0000:0000:0000:0000:0000:0000", "FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF")
+      ),
+      (
+        "2001:4860:4860::8888/128",
+        ("2001:4860:4860::8888", "2001:4860:4860::8888")
+      ),
+    ]
+
+    try testVectors.forEach {
+      let addresses = try IPCIDRRule.Addresses(cidr: $0.0)
+      var expected = try SocketAddress(ipAddress: $0.1.0, port: 0)
+      XCTAssertEqual(addresses.lowerBound, expected)
+
+      expected = try SocketAddress(ipAddress: $0.1.1, port: 0)
+      XCTAssertEqual(addresses.upperBound, expected)
+    }
+  }
+
+  func testCreateAddressesWithInvalidIPCIDRString() throws {
+    let testVectors = [
+      "192.168/21",
+      "192.168.0.1",
+      "192.168.0.1/33",
+      "192.168.0.1/",
+      "192.168.0.1/x",
+      "/var/tmp/20",
+      "var/20",
+      "2001:4860:4860::8888",
+      "2001:4860:4860::8888/129",
+      "2001:4860:4860::8888/",
+      "2001:4860:4860::8888/x",
+    ]
+
+    try testVectors.forEach {
+      XCTAssertThrowsError(try IPCIDRRule.Addresses(cidr: $0))
+    }
+  }
+
+  func testCreateAddressesWithSocketAddressAndPrefix() throws {
+    let testVectors = [
+      (("192.168.0.1", 20), ("192.168.0.0", "192.168.15.255")),
+      (("192.168.0.1", 0), ("0.0.0.0", "255.255.255.255")),
+      (("192.168.0.1", 32), ("192.168.0.1", "192.168.0.1")),
+      (
+        ("2001:4860:4860::8888", 32),
+        ("2001:4860:0000:0000:0000:0000:0000:0000", "2001:4860:ffff:ffff:ffff:ffff:ffff:ffff")
+      ),
+      (
+        ("2001:4860:4860::8888", 0),
+        ("0000:0000:0000:0000:0000:0000:0000:0000", "FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF")
+      ),
+      (
+        ("2001:4860:4860::8888", 128),
+        ("2001:4860:4860::8888", "2001:4860:4860::8888")
+      ),
+    ]
+
+    try testVectors.forEach {
+      let addresses = try IPCIDRRule.Addresses(
+        address: SocketAddress(ipAddress: $0.0.0, port: 0),
+        maskBits: $0.0.1
+      )
+      var expected = try SocketAddress(ipAddress: $0.1.0, port: 0)
+      XCTAssertEqual(addresses.lowerBound, expected)
+
+      expected = try SocketAddress(ipAddress: $0.1.1, port: 0)
+      XCTAssertEqual(addresses.upperBound, expected)
+    }
+  }
+
+  func testCreateAddressesWithUnixDomainSocket() throws {
+    let address = try SocketAddress(unixDomainSocketPath: "/var/tmp")
+    XCTAssertThrowsError(try IPCIDRRule.Addresses(address: address, maskBits: 12))
+  }
+
+  func testIPv4AddressesContainsIPv4Address() throws {
+    let addresses = IPCIDRRule.Addresses(
+      lowerBound: try SocketAddress(ipAddress: "127.0.0.1", port: 0),
+      upperBound: try SocketAddress(ipAddress: "127.0.1.0", port: 0)
+    )
+    var address = try SocketAddress(ipAddress: "127.0.0.0", port: 0)
+    XCTAssertFalse(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "127.0.0.1", port: 0)
+    XCTAssertTrue(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "127.0.0.2", port: 0)
+    XCTAssertTrue(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "127.0.1.0", port: 0)
+    XCTAssertTrue(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "127.0.1.1", port: 0)
+    XCTAssertFalse(addresses.contains(address))
+  }
+
+  func testIPv4AddressesContainsUnixDomainSocket() throws {
+    let addresses = IPCIDRRule.Addresses(
+      lowerBound: try SocketAddress(ipAddress: "127.0.0.1", port: 0),
+      upperBound: try SocketAddress(ipAddress: "127.0.1.0", port: 0)
+    )
+    let address = try SocketAddress(unixDomainSocketPath: "/var/tmp")
+    XCTAssertFalse(addresses.contains(address))
+  }
+
+  func testIPv6AddressesContainsIPv6Address() throws {
+    let addresses = IPCIDRRule.Addresses(
+      lowerBound: try SocketAddress(ipAddress: "::7f00:0001", port: 0),
+      upperBound: try SocketAddress(ipAddress: "::7f00:0100", port: 0)
+    )
+    var address = try SocketAddress(ipAddress: "::7f00:0000", port: 0)
+    XCTAssertFalse(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "::7f00:0001", port: 0)
+    XCTAssertTrue(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "::7f00:0002", port: 0)
+    XCTAssertTrue(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "::7f00:0100", port: 0)
+    XCTAssertTrue(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "::7f00:0101", port: 0)
+    XCTAssertFalse(addresses.contains(address))
+  }
+
+  func testIPv6AddressesContainsUnixDomainSocket() throws {
+    let addresses = IPCIDRRule.Addresses(
+      lowerBound: try SocketAddress(ipAddress: "::7f00:0001", port: 0),
+      upperBound: try SocketAddress(ipAddress: "::7f00:0100", port: 0)
+    )
+    let address = try SocketAddress(unixDomainSocketPath: "/var/tmp")
+    XCTAssertFalse(addresses.contains(address))
+  }
+
+  func testIPv4AddressesContainsIPv6Address() throws {
+    let addresses = IPCIDRRule.Addresses(
+      lowerBound: try SocketAddress(ipAddress: "127.0.0.1", port: 0),
+      upperBound: try SocketAddress(ipAddress: "127.0.1.0", port: 0)
+    )
+    let address = try SocketAddress(ipAddress: "::7f00:0000", port: 0)
+    XCTAssertFalse(addresses.contains(address))
+  }
+
+  func testIPv6AddressesContainsIPv4Address() throws {
+    let addresses = IPCIDRRule.Addresses(
+      lowerBound: try SocketAddress(ipAddress: "::7f00:0001", port: 0),
+      upperBound: try SocketAddress(ipAddress: "::7f00:0100", port: 0)
+    )
+    let address = try SocketAddress(ipAddress: "127.0.0.1", port: 0)
+    XCTAssertFalse(addresses.contains(address))
   }
 }

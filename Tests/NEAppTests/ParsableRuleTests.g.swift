@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NIOCore
 import XCTest
 
 @testable import NEApp
@@ -25,29 +26,29 @@ import XCTest
 final class ParsableRuleRepresentationTests: XCTestCase {
 
   func testParsingDomainKeywordRule() throws {
-    let description = "DOMAIN-KEYWORD,example.com,DIRECT"
+    let description = "DOMAIN-KEYWORD,example,DIRECT"
     let standardRule = try XCTUnwrap(DomainKeywordRule(description))
     XCTAssertFalse(standardRule.disabled)
-    XCTAssertEqual(standardRule.expression, "example.com")
+    XCTAssertEqual(standardRule.expression, "example")
     XCTAssertEqual(standardRule.policy, "DIRECT")
     XCTAssertEqual(standardRule.description, description)
   }
 
   func testParsingDomainKeywordRuleThatContainComments() throws {
-    let description = "DOMAIN-KEYWORD,example.com,DIRECT // comments"
+    let description = "DOMAIN-KEYWORD,example,DIRECT // comments"
     let standardRule = try XCTUnwrap(DomainKeywordRule(description))
     XCTAssertFalse(standardRule.disabled)
-    XCTAssertEqual(standardRule.expression, "example.com")
+    XCTAssertEqual(standardRule.expression, "example")
     XCTAssertEqual(standardRule.policy, "DIRECT")
     XCTAssertEqual(standardRule.comment, "comments")
     XCTAssertEqual(standardRule.description, description)
   }
 
   func testParsingDisabledDomainKeywordRule() throws {
-    let description = "# DOMAIN-KEYWORD,example.com,DIRECT"
+    let description = "# DOMAIN-KEYWORD,example,DIRECT"
     let standardRule = try XCTUnwrap(DomainKeywordRule(description))
     XCTAssertTrue(standardRule.disabled)
-    XCTAssertEqual(standardRule.expression, "example.com")
+    XCTAssertEqual(standardRule.expression, "example")
     XCTAssertEqual(standardRule.policy, "DIRECT")
     XCTAssertEqual(standardRule.description, description)
   }
@@ -60,20 +61,14 @@ final class ParsableRuleRepresentationTests: XCTestCase {
   }
 
   func testParsingDomainKeywordRuleWithTypeMissmatchDescriptionString() {
-    var description = "invalidSchema,example.com,DIRECT"
-    XCTAssertNil(DomainKeywordRule(description))
-    description = "DOMAIN-KEYWORD,example.com,DIRECT"
-    XCTAssertNil(DomainRule(description))
-    description = "DOMAIN-KEYWORD,example.com,DIRECT"
-    XCTAssertNil(DomainSetRule(description))
-    description = "DOMAIN-KEYWORD,example.com,DIRECT"
-    XCTAssertNil(DomainSuffixRule(description))
-    description = "DOMAIN-KEYWORD,example.com,DIRECT"
-    XCTAssertNil(FinalRule(description))
-    description = "DOMAIN-KEYWORD,example.com,DIRECT"
-    XCTAssertNil(GeoIPRule(description))
-    description = "DOMAIN-KEYWORD,example.com,DIRECT"
-    XCTAssertNil(Ruleset(description))
+    XCTAssertNil(DomainKeywordRule("invalidSchema,example,DIRECT"))
+    XCTAssertNil(DomainKeywordRule("DOMAIN,example.com,DIRECT"))
+    XCTAssertNil(DomainKeywordRule("DOMAIN-SET,http://domainset.com,DIRECT"))
+    XCTAssertNil(DomainKeywordRule("DOMAIN-SUFFIX,example.com,DIRECT"))
+    XCTAssertNil(DomainKeywordRule("FINAL,,DIRECT"))
+    XCTAssertNil(DomainKeywordRule("GEOIP,CN,DIRECT"))
+    XCTAssertNil(DomainKeywordRule("IP-CIDR,192.168.0.1/20,DIRECT"))
+    XCTAssertNil(DomainKeywordRule("RULE-SET,http://ruleset.com,DIRECT"))
   }
 
   func testParsingDomainRule() throws {
@@ -112,20 +107,14 @@ final class ParsableRuleRepresentationTests: XCTestCase {
   }
 
   func testParsingDomainRuleWithTypeMissmatchDescriptionString() {
-    var description = "invalidSchema,example.com,DIRECT"
-    XCTAssertNil(DomainRule(description))
-    description = "DOMAIN,example.com,DIRECT"
-    XCTAssertNil(DomainKeywordRule(description))
-    description = "DOMAIN,example.com,DIRECT"
-    XCTAssertNil(DomainSetRule(description))
-    description = "DOMAIN,example.com,DIRECT"
-    XCTAssertNil(DomainSuffixRule(description))
-    description = "DOMAIN,example.com,DIRECT"
-    XCTAssertNil(FinalRule(description))
-    description = "DOMAIN,example.com,DIRECT"
-    XCTAssertNil(GeoIPRule(description))
-    description = "DOMAIN,example.com,DIRECT"
-    XCTAssertNil(Ruleset(description))
+    XCTAssertNil(DomainRule("invalidSchema,example.com,DIRECT"))
+    XCTAssertNil(DomainRule("DOMAIN-KEYWORD,example,DIRECT"))
+    XCTAssertNil(DomainRule("DOMAIN-SET,http://domainset.com,DIRECT"))
+    XCTAssertNil(DomainRule("DOMAIN-SUFFIX,example.com,DIRECT"))
+    XCTAssertNil(DomainRule("FINAL,,DIRECT"))
+    XCTAssertNil(DomainRule("GEOIP,CN,DIRECT"))
+    XCTAssertNil(DomainRule("IP-CIDR,192.168.0.1/20,DIRECT"))
+    XCTAssertNil(DomainRule("RULE-SET,http://ruleset.com,DIRECT"))
   }
 
   func testParsingDomainSetRule() throws {
@@ -164,20 +153,14 @@ final class ParsableRuleRepresentationTests: XCTestCase {
   }
 
   func testParsingDomainSetRuleWithTypeMissmatchDescriptionString() {
-    var description = "invalidSchema,http://domainset.com,DIRECT"
-    XCTAssertNil(DomainSetRule(description))
-    description = "DOMAIN-SET,http://domainset.com,DIRECT"
-    XCTAssertNil(DomainKeywordRule(description))
-    description = "DOMAIN-SET,http://domainset.com,DIRECT"
-    XCTAssertNil(DomainRule(description))
-    description = "DOMAIN-SET,http://domainset.com,DIRECT"
-    XCTAssertNil(DomainSuffixRule(description))
-    description = "DOMAIN-SET,http://domainset.com,DIRECT"
-    XCTAssertNil(FinalRule(description))
-    description = "DOMAIN-SET,http://domainset.com,DIRECT"
-    XCTAssertNil(GeoIPRule(description))
-    description = "DOMAIN-SET,http://domainset.com,DIRECT"
-    XCTAssertNil(Ruleset(description))
+    XCTAssertNil(DomainSetRule("invalidSchema,http://domainset.com,DIRECT"))
+    XCTAssertNil(DomainSetRule("DOMAIN-KEYWORD,example,DIRECT"))
+    XCTAssertNil(DomainSetRule("DOMAIN,example.com,DIRECT"))
+    XCTAssertNil(DomainSetRule("DOMAIN-SUFFIX,example.com,DIRECT"))
+    XCTAssertNil(DomainSetRule("FINAL,,DIRECT"))
+    XCTAssertNil(DomainSetRule("GEOIP,CN,DIRECT"))
+    XCTAssertNil(DomainSetRule("IP-CIDR,192.168.0.1/20,DIRECT"))
+    XCTAssertNil(DomainSetRule("RULE-SET,http://ruleset.com,DIRECT"))
   }
 
   func testParsingDomainSuffixRule() throws {
@@ -216,20 +199,14 @@ final class ParsableRuleRepresentationTests: XCTestCase {
   }
 
   func testParsingDomainSuffixRuleWithTypeMissmatchDescriptionString() {
-    var description = "invalidSchema,example.com,DIRECT"
-    XCTAssertNil(DomainSuffixRule(description))
-    description = "DOMAIN-SUFFIX,example.com,DIRECT"
-    XCTAssertNil(DomainKeywordRule(description))
-    description = "DOMAIN-SUFFIX,example.com,DIRECT"
-    XCTAssertNil(DomainRule(description))
-    description = "DOMAIN-SUFFIX,example.com,DIRECT"
-    XCTAssertNil(DomainSetRule(description))
-    description = "DOMAIN-SUFFIX,example.com,DIRECT"
-    XCTAssertNil(FinalRule(description))
-    description = "DOMAIN-SUFFIX,example.com,DIRECT"
-    XCTAssertNil(GeoIPRule(description))
-    description = "DOMAIN-SUFFIX,example.com,DIRECT"
-    XCTAssertNil(Ruleset(description))
+    XCTAssertNil(DomainSuffixRule("invalidSchema,example.com,DIRECT"))
+    XCTAssertNil(DomainSuffixRule("DOMAIN-KEYWORD,example,DIRECT"))
+    XCTAssertNil(DomainSuffixRule("DOMAIN,example.com,DIRECT"))
+    XCTAssertNil(DomainSuffixRule("DOMAIN-SET,http://domainset.com,DIRECT"))
+    XCTAssertNil(DomainSuffixRule("FINAL,,DIRECT"))
+    XCTAssertNil(DomainSuffixRule("GEOIP,CN,DIRECT"))
+    XCTAssertNil(DomainSuffixRule("IP-CIDR,192.168.0.1/20,DIRECT"))
+    XCTAssertNil(DomainSuffixRule("RULE-SET,http://ruleset.com,DIRECT"))
   }
 
   func testParsingFinalRule() throws {
@@ -266,46 +243,40 @@ final class ParsableRuleRepresentationTests: XCTestCase {
   }
 
   func testParsingFinalRuleWithTypeMissmatchDescriptionString() {
-    var description = "invalidSchema,DIRECT"
-    XCTAssertNil(FinalRule(description))
-    description = "FINAL,DIRECT"
-    XCTAssertNil(DomainKeywordRule(description))
-    description = "FINAL,DIRECT"
-    XCTAssertNil(DomainRule(description))
-    description = "FINAL,DIRECT"
-    XCTAssertNil(DomainSetRule(description))
-    description = "FINAL,DIRECT"
-    XCTAssertNil(DomainSuffixRule(description))
-    description = "FINAL,DIRECT"
-    XCTAssertNil(GeoIPRule(description))
-    description = "FINAL,DIRECT"
-    XCTAssertNil(Ruleset(description))
+    XCTAssertNil(FinalRule("invalidSchema,DIRECT"))
+    XCTAssertNil(FinalRule("DOMAIN-KEYWORD,DIRECT"))
+    XCTAssertNil(FinalRule("DOMAIN,DIRECT"))
+    XCTAssertNil(FinalRule("DOMAIN-SET,DIRECT"))
+    XCTAssertNil(FinalRule("DOMAIN-SUFFIX,DIRECT"))
+    XCTAssertNil(FinalRule("GEOIP,DIRECT"))
+    XCTAssertNil(FinalRule("IP-CIDR,DIRECT"))
+    XCTAssertNil(FinalRule("RULE-SET,DIRECT"))
   }
 
   func testParsingGeoIPRule() throws {
-    let description = "GEOIP,example.com,DIRECT"
+    let description = "GEOIP,CN,DIRECT"
     let standardRule = try XCTUnwrap(GeoIPRule(description))
     XCTAssertFalse(standardRule.disabled)
-    XCTAssertEqual(standardRule.expression, "example.com")
+    XCTAssertEqual(standardRule.expression, "CN")
     XCTAssertEqual(standardRule.policy, "DIRECT")
     XCTAssertEqual(standardRule.description, description)
   }
 
   func testParsingGeoIPRuleThatContainComments() throws {
-    let description = "GEOIP,example.com,DIRECT // comments"
+    let description = "GEOIP,CN,DIRECT // comments"
     let standardRule = try XCTUnwrap(GeoIPRule(description))
     XCTAssertFalse(standardRule.disabled)
-    XCTAssertEqual(standardRule.expression, "example.com")
+    XCTAssertEqual(standardRule.expression, "CN")
     XCTAssertEqual(standardRule.policy, "DIRECT")
     XCTAssertEqual(standardRule.comment, "comments")
     XCTAssertEqual(standardRule.description, description)
   }
 
   func testParsingDisabledGeoIPRule() throws {
-    let description = "# GEOIP,example.com,DIRECT"
+    let description = "# GEOIP,CN,DIRECT"
     let standardRule = try XCTUnwrap(GeoIPRule(description))
     XCTAssertTrue(standardRule.disabled)
-    XCTAssertEqual(standardRule.expression, "example.com")
+    XCTAssertEqual(standardRule.expression, "CN")
     XCTAssertEqual(standardRule.policy, "DIRECT")
     XCTAssertEqual(standardRule.description, description)
   }
@@ -318,20 +289,60 @@ final class ParsableRuleRepresentationTests: XCTestCase {
   }
 
   func testParsingGeoIPRuleWithTypeMissmatchDescriptionString() {
-    var description = "invalidSchema,example.com,DIRECT"
-    XCTAssertNil(GeoIPRule(description))
-    description = "GEOIP,example.com,DIRECT"
-    XCTAssertNil(DomainKeywordRule(description))
-    description = "GEOIP,example.com,DIRECT"
-    XCTAssertNil(DomainRule(description))
-    description = "GEOIP,example.com,DIRECT"
-    XCTAssertNil(DomainSetRule(description))
-    description = "GEOIP,example.com,DIRECT"
-    XCTAssertNil(DomainSuffixRule(description))
-    description = "GEOIP,example.com,DIRECT"
-    XCTAssertNil(FinalRule(description))
-    description = "GEOIP,example.com,DIRECT"
-    XCTAssertNil(Ruleset(description))
+    XCTAssertNil(GeoIPRule("invalidSchema,CN,DIRECT"))
+    XCTAssertNil(GeoIPRule("DOMAIN-KEYWORD,example,DIRECT"))
+    XCTAssertNil(GeoIPRule("DOMAIN,example.com,DIRECT"))
+    XCTAssertNil(GeoIPRule("DOMAIN-SET,http://domainset.com,DIRECT"))
+    XCTAssertNil(GeoIPRule("DOMAIN-SUFFIX,example.com,DIRECT"))
+    XCTAssertNil(GeoIPRule("FINAL,,DIRECT"))
+    XCTAssertNil(GeoIPRule("IP-CIDR,192.168.0.1/20,DIRECT"))
+    XCTAssertNil(GeoIPRule("RULE-SET,http://ruleset.com,DIRECT"))
+  }
+
+  func testParsingIPCIDRRule() throws {
+    let description = "IP-CIDR,192.168.0.1/20,DIRECT"
+    let standardRule = try XCTUnwrap(IPCIDRRule(description))
+    XCTAssertFalse(standardRule.disabled)
+    XCTAssertEqual(standardRule.expression, "192.168.0.1/20")
+    XCTAssertEqual(standardRule.policy, "DIRECT")
+    XCTAssertEqual(standardRule.description, description)
+  }
+
+  func testParsingIPCIDRRuleThatContainComments() throws {
+    let description = "IP-CIDR,192.168.0.1/20,DIRECT // comments"
+    let standardRule = try XCTUnwrap(IPCIDRRule(description))
+    XCTAssertFalse(standardRule.disabled)
+    XCTAssertEqual(standardRule.expression, "192.168.0.1/20")
+    XCTAssertEqual(standardRule.policy, "DIRECT")
+    XCTAssertEqual(standardRule.comment, "comments")
+    XCTAssertEqual(standardRule.description, description)
+  }
+
+  func testParsingDisabledIPCIDRRule() throws {
+    let description = "# IP-CIDR,192.168.0.1/20,DIRECT"
+    let standardRule = try XCTUnwrap(IPCIDRRule(description))
+    XCTAssertTrue(standardRule.disabled)
+    XCTAssertEqual(standardRule.expression, "192.168.0.1/20")
+    XCTAssertEqual(standardRule.policy, "DIRECT")
+    XCTAssertEqual(standardRule.description, description)
+  }
+
+  func testParsingIPCIDRRuleWithIncompleteDescriptionString() {
+    var description = "IP-CIDR"
+    XCTAssertNil(IPCIDRRule(description))
+    description = "IP-CIDR,DIRECT"
+    XCTAssertNil(IPCIDRRule(description))
+  }
+
+  func testParsingIPCIDRRuleWithTypeMissmatchDescriptionString() {
+    XCTAssertNil(IPCIDRRule("invalidSchema,192.168.0.1/20,DIRECT"))
+    XCTAssertNil(IPCIDRRule("DOMAIN-KEYWORD,example,DIRECT"))
+    XCTAssertNil(IPCIDRRule("DOMAIN,example.com,DIRECT"))
+    XCTAssertNil(IPCIDRRule("DOMAIN-SET,http://domainset.com,DIRECT"))
+    XCTAssertNil(IPCIDRRule("DOMAIN-SUFFIX,example.com,DIRECT"))
+    XCTAssertNil(IPCIDRRule("FINAL,,DIRECT"))
+    XCTAssertNil(IPCIDRRule("GEOIP,CN,DIRECT"))
+    XCTAssertNil(IPCIDRRule("RULE-SET,http://ruleset.com,DIRECT"))
   }
 
   func testParsingRuleset() throws {
@@ -370,20 +381,14 @@ final class ParsableRuleRepresentationTests: XCTestCase {
   }
 
   func testParsingRulesetWithTypeMissmatchDescriptionString() {
-    var description = "invalidSchema,http://ruleset.com,DIRECT"
-    XCTAssertNil(Ruleset(description))
-    description = "RULE-SET,http://ruleset.com,DIRECT"
-    XCTAssertNil(DomainKeywordRule(description))
-    description = "RULE-SET,http://ruleset.com,DIRECT"
-    XCTAssertNil(DomainRule(description))
-    description = "RULE-SET,http://ruleset.com,DIRECT"
-    XCTAssertNil(DomainSetRule(description))
-    description = "RULE-SET,http://ruleset.com,DIRECT"
-    XCTAssertNil(DomainSuffixRule(description))
-    description = "RULE-SET,http://ruleset.com,DIRECT"
-    XCTAssertNil(FinalRule(description))
-    description = "RULE-SET,http://ruleset.com,DIRECT"
-    XCTAssertNil(GeoIPRule(description))
+    XCTAssertNil(Ruleset("invalidSchema,http://ruleset.com,DIRECT"))
+    XCTAssertNil(Ruleset("DOMAIN-KEYWORD,example,DIRECT"))
+    XCTAssertNil(Ruleset("DOMAIN,example.com,DIRECT"))
+    XCTAssertNil(Ruleset("DOMAIN-SET,http://domainset.com,DIRECT"))
+    XCTAssertNil(Ruleset("DOMAIN-SUFFIX,example.com,DIRECT"))
+    XCTAssertNil(Ruleset("FINAL,,DIRECT"))
+    XCTAssertNil(Ruleset("GEOIP,CN,DIRECT"))
+    XCTAssertNil(Ruleset("IP-CIDR,192.168.0.1/20,DIRECT"))
   }
 
   func testDomainKeywordRuleMatchEvaluating() {
@@ -394,6 +399,7 @@ final class ParsableRuleRepresentationTests: XCTestCase {
       ("example", true),
       ("pexample.com", true),
       ("example1.com", true),
+      ("ex.ample.com", false),
     ]
     testVectors.forEach { pattern, expected in
       XCTAssertEqual(rule.match(pattern), expected)
@@ -422,5 +428,255 @@ final class ParsableRuleRepresentationTests: XCTestCase {
     testVectors.forEach { pattern, expected in
       XCTAssertEqual(rule.match(pattern), expected)
     }
+  }
+
+  func testDomainSetRuleMatchEvaluating() {
+    var rule = DomainSetRule("DOMAIN-SET,http://domainset.com,DIRECT")!
+    let url = Bundle.module.url(forResource: "domainset_test", withExtension: nil)!
+    rule.loadAllRules(from: url)
+    let testVectors = [
+      ("example.com", true),
+      ("example2.com", true),
+      ("www.example2.com", true),
+      ("www.example.com", false),
+      ("example", false),
+    ]
+    testVectors.forEach { pattern, expected in
+      XCTAssertEqual(rule.match(pattern), expected)
+    }
+  }
+
+  func testFinalRuleMatchEvaluating() {
+    let rule = FinalRule("FINAL,DIRECT")!
+    // Final rule match anything.
+    XCTAssertTrue(rule.match("any"))
+  }
+
+  func testGEOIPRuleMatchEvaluating() {
+
+  }
+
+  func testCreateIPCIDRRuleWithInvalidIPCIDRString() {
+    let testVectors = [
+      "192.168/21",
+      "192.168.0.1",
+      "192.168.0.1/33",
+      "192.168.0.1/",
+      "192.168.0.1/x",
+      "/var/tmp/20",
+      "var/20",
+      "2001:4860:4860::8888",
+      "2001:4860:4860::8888/129",
+      "2001:4860:4860::8888/",
+      "2001:4860:4860::8888/x",
+    ]
+
+    testVectors.forEach {
+      XCTAssertNil(IPCIDRRule("IP-CIDR,\($0),DIRECT"))
+    }
+  }
+
+  func testIPCIDRRuleMatchEvaluating() {
+    var rule = IPCIDRRule("IP-CIDR,192.168.0.1/20,DIRECT")!
+    var testVectors = [
+      ("192.168.0.9", true),
+      ("192.168.16.1", false),
+      ("2001:4860:4860::8888", false),
+      ("2001:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF", false),
+    ]
+    testVectors.forEach { pattern, expected in
+      XCTAssertEqual(rule.match(pattern), expected)
+    }
+
+    rule = IPCIDRRule("IP-CIDR,2001:4860:4860::8888/32,DIRECT")!
+    testVectors = [
+      ("192.168.0.9", false),
+      ("192.168.16.1", false),
+      ("2001:4860:4860::8888", true),
+      ("2001:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF", false),
+    ]
+    testVectors.forEach { pattern, expected in
+      XCTAssertEqual(rule.match(pattern), expected)
+    }
+  }
+
+  func testRulesetMatchEvaluating() {
+    var rule = Ruleset("RULE-SET,http://ruleset.com,DIRECT")!
+    let url = Bundle.module.url(forResource: "ruleset_test", withExtension: nil)!
+    rule.loadAllRules(from: url)
+    let testVectors = [
+      ("example.com", false),
+      ("line.me", true),
+      ("www.example2.com", false),
+      ("nowtv100.com", true),
+      ("103.2.28.1", true),
+    ]
+    testVectors.forEach { pattern, expected in
+      XCTAssertEqual(rule.match(pattern), expected)
+    }
+  }
+
+  func testCreateAddressesWithIPCIDRString() throws {
+    let testVectors = [
+      ("192.168.0.1/20", ("192.168.0.0", "192.168.15.255")),
+      ("192.168.0.1/0", ("0.0.0.0", "255.255.255.255")),
+      ("192.168.0.1/32", ("192.168.0.1", "192.168.0.1")),
+      (
+        "2001:4860:4860::8888/32",
+        ("2001:4860:0000:0000:0000:0000:0000:0000", "2001:4860:ffff:ffff:ffff:ffff:ffff:ffff")
+      ),
+      (
+        "2001:4860:4860::8888/0",
+        ("0000:0000:0000:0000:0000:0000:0000:0000", "FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF")
+      ),
+      (
+        "2001:4860:4860::8888/128",
+        ("2001:4860:4860::8888", "2001:4860:4860::8888")
+      ),
+    ]
+
+    try testVectors.forEach {
+      let addresses = try IPCIDRRule.Addresses(cidr: $0.0)
+      var expected = try SocketAddress(ipAddress: $0.1.0, port: 0)
+      XCTAssertEqual(addresses.lowerBound, expected)
+
+      expected = try SocketAddress(ipAddress: $0.1.1, port: 0)
+      XCTAssertEqual(addresses.upperBound, expected)
+    }
+  }
+
+  func testCreateAddressesWithInvalidIPCIDRString() throws {
+    let testVectors = [
+      "192.168/21",
+      "192.168.0.1",
+      "192.168.0.1/33",
+      "192.168.0.1/",
+      "192.168.0.1/x",
+      "/var/tmp/20",
+      "var/20",
+      "2001:4860:4860::8888",
+      "2001:4860:4860::8888/129",
+      "2001:4860:4860::8888/",
+      "2001:4860:4860::8888/x",
+    ]
+
+    try testVectors.forEach {
+      XCTAssertThrowsError(try IPCIDRRule.Addresses(cidr: $0))
+    }
+  }
+
+  func testCreateAddressesWithSocketAddressAndPrefix() throws {
+    let testVectors = [
+      (("192.168.0.1", 20), ("192.168.0.0", "192.168.15.255")),
+      (("192.168.0.1", 0), ("0.0.0.0", "255.255.255.255")),
+      (("192.168.0.1", 32), ("192.168.0.1", "192.168.0.1")),
+      (
+        ("2001:4860:4860::8888", 32),
+        ("2001:4860:0000:0000:0000:0000:0000:0000", "2001:4860:ffff:ffff:ffff:ffff:ffff:ffff")
+      ),
+      (
+        ("2001:4860:4860::8888", 0),
+        ("0000:0000:0000:0000:0000:0000:0000:0000", "FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF")
+      ),
+      (
+        ("2001:4860:4860::8888", 128),
+        ("2001:4860:4860::8888", "2001:4860:4860::8888")
+      ),
+    ]
+
+    try testVectors.forEach {
+      let addresses = try IPCIDRRule.Addresses(
+        address: SocketAddress(ipAddress: $0.0.0, port: 0),
+        maskBits: $0.0.1
+      )
+      var expected = try SocketAddress(ipAddress: $0.1.0, port: 0)
+      XCTAssertEqual(addresses.lowerBound, expected)
+
+      expected = try SocketAddress(ipAddress: $0.1.1, port: 0)
+      XCTAssertEqual(addresses.upperBound, expected)
+    }
+  }
+
+  func testCreateAddressesWithUnixDomainSocket() throws {
+    let address = try SocketAddress(unixDomainSocketPath: "/var/tmp")
+    XCTAssertThrowsError(try IPCIDRRule.Addresses(address: address, maskBits: 12))
+  }
+
+  func testIPv4AddressesContainsIPv4Address() throws {
+    let addresses = IPCIDRRule.Addresses(
+      lowerBound: try SocketAddress(ipAddress: "127.0.0.1", port: 0),
+      upperBound: try SocketAddress(ipAddress: "127.0.1.0", port: 0)
+    )
+    var address = try SocketAddress(ipAddress: "127.0.0.0", port: 0)
+    XCTAssertFalse(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "127.0.0.1", port: 0)
+    XCTAssertTrue(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "127.0.0.2", port: 0)
+    XCTAssertTrue(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "127.0.1.0", port: 0)
+    XCTAssertTrue(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "127.0.1.1", port: 0)
+    XCTAssertFalse(addresses.contains(address))
+  }
+
+  func testIPv4AddressesContainsUnixDomainSocket() throws {
+    let addresses = IPCIDRRule.Addresses(
+      lowerBound: try SocketAddress(ipAddress: "127.0.0.1", port: 0),
+      upperBound: try SocketAddress(ipAddress: "127.0.1.0", port: 0)
+    )
+    let address = try SocketAddress(unixDomainSocketPath: "/var/tmp")
+    XCTAssertFalse(addresses.contains(address))
+  }
+
+  func testIPv6AddressesContainsIPv6Address() throws {
+    let addresses = IPCIDRRule.Addresses(
+      lowerBound: try SocketAddress(ipAddress: "::7f00:0001", port: 0),
+      upperBound: try SocketAddress(ipAddress: "::7f00:0100", port: 0)
+    )
+    var address = try SocketAddress(ipAddress: "::7f00:0000", port: 0)
+    XCTAssertFalse(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "::7f00:0001", port: 0)
+    XCTAssertTrue(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "::7f00:0002", port: 0)
+    XCTAssertTrue(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "::7f00:0100", port: 0)
+    XCTAssertTrue(addresses.contains(address))
+
+    address = try SocketAddress(ipAddress: "::7f00:0101", port: 0)
+    XCTAssertFalse(addresses.contains(address))
+  }
+
+  func testIPv6AddressesContainsUnixDomainSocket() throws {
+    let addresses = IPCIDRRule.Addresses(
+      lowerBound: try SocketAddress(ipAddress: "::7f00:0001", port: 0),
+      upperBound: try SocketAddress(ipAddress: "::7f00:0100", port: 0)
+    )
+    let address = try SocketAddress(unixDomainSocketPath: "/var/tmp")
+    XCTAssertFalse(addresses.contains(address))
+  }
+
+  func testIPv4AddressesContainsIPv6Address() throws {
+    let addresses = IPCIDRRule.Addresses(
+      lowerBound: try SocketAddress(ipAddress: "127.0.0.1", port: 0),
+      upperBound: try SocketAddress(ipAddress: "127.0.1.0", port: 0)
+    )
+    let address = try SocketAddress(ipAddress: "::7f00:0000", port: 0)
+    XCTAssertFalse(addresses.contains(address))
+  }
+
+  func testIPv6AddressesContainsIPv4Address() throws {
+    let addresses = IPCIDRRule.Addresses(
+      lowerBound: try SocketAddress(ipAddress: "::7f00:0001", port: 0),
+      upperBound: try SocketAddress(ipAddress: "::7f00:0100", port: 0)
+    )
+    let address = try SocketAddress(ipAddress: "127.0.0.1", port: 0)
+    XCTAssertFalse(addresses.contains(address))
   }
 }

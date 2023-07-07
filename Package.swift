@@ -133,7 +133,8 @@ let package = Package(
         swiftNIOCore,
         swiftNIOEmbedded,
       ],
-      exclude: ["ParsableRuleTests.g.swift.gyb"]
+      exclude: ["ParsableRuleTests.g.swift.gyb"],
+      resources: [.process("Test Vectors")]
     ),
     .testTarget(
       name: "NEAppEssentialsTests",
