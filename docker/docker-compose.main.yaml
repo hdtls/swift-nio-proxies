@@ -19,4 +19,3 @@ services:
 
   shell:
     image: swift-netbot-core:nightly-main-jammy
-

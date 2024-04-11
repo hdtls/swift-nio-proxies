@@ -7,8 +7,7 @@ services:
     build:
       args:
         ubuntu_version: "jammy"
-        swift_repo: "swiftlang/swift"
-        swift_version: "nightly-5.9"
+        swift_version: "5.9"
 
   test:
     image: swift-netbot-core:5.9-jammy

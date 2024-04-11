@@ -1,5 +1,5 @@
 ARG swift_repo=swift
-ARG swift_version=5.8
+ARG swift_version=5.10
 ARG ubuntu_version=jammy
 ARG base=$swift_repo:$swift_version-$ubuntu_version
 FROM $base

@@ -3,18 +3,18 @@ version: "3"
 services:
 
   runtime-setup:
-    image: swift-netbot-core:5.8-jammy
+    image: swift-netbot-core:5.10-jammy
     build:
       args:
         ubuntu_version: "jammy"
-        swift_version: "5.8"
+        swift_version: "5.10"
 
   test:
-    image: swift-netbot-core:5.8-jammy
+    image: swift-netbot-core:5.10-jammy
     environment:
       - WARN_AS_ERROR_ARG=-Xswiftc -warnings-as-errors
 #      - SANITIZER_ARG=--sanitize=thread
       - IMPORT_CHECK_ARG=--explicit-target-dependency-import-check error
 
   shell:
-    image: swift-netbot-core:5.8-jammy
+    image: swift-netbot-core:5.10-jammy

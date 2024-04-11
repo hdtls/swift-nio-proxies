@@ -3,14 +3,14 @@ version: "3"
 services:
 
   runtime-setup:
-    image: swift-netbot-core:5.8-jammy
+    image: swift-netbot-core:default
     build:
       context: .
       dockerfile: Dockerfile
 
   common:
     &common
-    image: swift-netbot-core:5.8-jammy
+    image: swift-netbot-core:default
     depends_on: [ runtime-setup ]
     volumes:
       - ..:/code:z
