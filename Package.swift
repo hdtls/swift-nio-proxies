@@ -1,4 +1,4 @@
-// swift-tools-version:5.7
+// swift-tools-version:5.9
 //===----------------------------------------------------------------------===//
 //
 // This source file is part of the Netbot open source project
@@ -56,13 +56,12 @@ let package = Package(
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.0.1"),
-    .package(url: "https://github.com/apple/swift-crypto.git", "2.5.0" ..< "4.0.0"),
+    .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
     .package(url: "https://github.com/apple/swift-log.git", from: "1.4.2"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
     .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
     .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
     .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.11.0"),
-    .package(url: "https://github.com/apple/swift-format.git", from: "509.0.0"),
     .package(url: "https://github.com/apple/swift-certificates.git", from: "1.0.1"),
     .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.2.0"),
     .package(url: "https://github.com/hdtls/swift-maxminddb.git", from: "1.0.0"),
