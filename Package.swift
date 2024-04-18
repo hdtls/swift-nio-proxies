@@ -42,7 +42,6 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
     .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.22.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.0.3"),
-    .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.2.0"),
   ],
   targets: [
     .target(name: "CNESHAKE128"),
