@@ -40,11 +40,21 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
     .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
+    .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.22.0"),
+    .package(url: "https://github.com/apple/swift-http-types.git", from: "1.0.3"),
     .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.2.0"),
   ],
   targets: [
     .target(name: "CNESHAKE128"),
-    .target(name: "NEHTTP", dependencies: ["NEMisc", swiftNIOCore, swiftNIOHTTP1]),
+    .target(
+      name: "NEHTTP",
+      dependencies: [
+        "NEMisc", swiftNIOCore, swiftNIOHTTP1,
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "NIOHTTPTypes", package: "swift-nio-extras"),
+        .product(name: "NIOHTTPTypesHTTP1", package: "swift-nio-extras"),
+      ]
+    ),
     .target(name: "NEMisc", dependencies: [swiftNIOCore, swiftNIOPosix]),
     .target(name: "NEPrettyBytes"),
     .target(name: "NESHAKE128", dependencies: ["CNESHAKE128", "NEPrettyBytes", swiftCrypto]),
@@ -63,7 +73,10 @@ let package = Package(
     ),
     .testTarget(
       name: "NEHTTPTests",
-      dependencies: ["NEHTTP", swiftNIOCore, swiftNIOEmbedded, swiftNIOHTTP1, swiftNIOSSL]
+      dependencies: [
+        "NEHTTP", swiftNIOCore, swiftNIOEmbedded, swiftNIOHTTP1, swiftNIOSSL,
+        .product(name: "NIOHTTPTypes", package: "swift-nio-extras"),
+      ]
     ),
     .testTarget(name: "NEMiscTests", dependencies: ["NEMisc", swiftNIOCore, swiftNIOEmbedded]),
     .testTarget(name: "NESHAKE128Tests", dependencies: ["NESHAKE128"]),

@@ -12,18 +12,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NEMisc
+import HTTPTypes
 import NIOCore
 import NIOHTTP1
+import NIOHTTPTypes
+import NIOHTTPTypesHTTP1
 
 /// A channel handler that wraps a channel for HTTP proxy.
 /// This handler can be used in channels that are acting as the server in the HTTP proxy dialog.
 final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChannelHandler {
-
   public typealias InboundIn = HTTPServerRequestPart
-
   public typealias InboundOut = HTTPServerRequestPart
-
   public typealias OutboundOut = HTTPServerResponsePart
 
   private enum EventBuffer {
@@ -39,8 +38,10 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
 
   private var progress: Progress = .waitingForData
 
+  private var httpVersion: HTTPVersion = .http1_1
+
   /// The task request head part. this value is updated after `head` part received.
-  private var headPart: HTTPRequestHead!
+  private var httpRequest: HTTPRequest!
 
   /// The usename used to authenticate this proxy connection.
   private let username: String
@@ -56,7 +57,7 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
   private var eventBuffer: CircularBuffer<EventBuffer> = .init(initialCapacity: 2)
 
   /// The completion handler when proxy connection established.
-  private let completion: @Sendable (RequestInfo) -> EventLoopFuture<Void>
+  private let completion: @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<Void>
 
   /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
   ///
@@ -69,7 +70,7 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     username: String,
     passwordReference: String,
     authenticationRequired: Bool,
-    completion: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Void>
+    completion: @escaping @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<Void>
   ) {
     self.username = username
     self.passwordReference = passwordReference
@@ -90,18 +91,25 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
 
     switch unwrapInboundIn(data) {
     case .head(let head) where progress == .waitingForData:
-      headPart = head
-      guard head.method != .CONNECT else {
-        return
+      do {
+        httpRequest = try HTTPRequest(head, secure: head.method == .CONNECT, splitCookie: true)
+        httpVersion = head.version
+        guard httpRequest.method != .connect else {
+          return
+        }
+        // Strip hop-by-hop header based on rfc2616.
+        httpRequest.headerFields.trimmingHopByHopFields()
+        var head = try HTTPRequestHead.init(httpRequest)
+        head.version = httpVersion
+        eventBuffer.append(.channelRead(data: wrapInboundOut(.head(head))))
+      } catch {
+        context.fireErrorCaught(error)
       }
-      // Strip hop-by-hop header based on rfc2616.
-      headPart.headers = headPart.headers.trimmingFieldsInHopByHop()
-      eventBuffer.append(.channelRead(data: wrapInboundOut(.head(headPart))))
-    case .body where headPart != nil && headPart.method != .CONNECT:
+    case .body where httpRequest != nil && httpRequest.method != .connect:
       eventBuffer.append(.channelRead(data: data))
-    case .end where headPart != nil:
+    case .end where httpRequest != nil:
       progress = .waitingForComplete
-      if headPart.method != .CONNECT {
+      if httpRequest.method != .connect {
         eventBuffer.append(.channelRead(data: data))
       }
       setupHTTPProxyPipeline(context: context)
@@ -126,39 +134,18 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     }
   }
 
-  private func authorize(message: HTTPHeaders.BasicAuthorization?, context: ChannelHandlerContext) {
-    // Proxy Authorization
-    if authenticationRequired {
-      guard let authorization = message else {
-        channelClose(
-          context: context,
-          reason: HTTPProxyError.unacceptableStatusCode(.proxyAuthenticationRequired)
-        )
-        return
-      }
-
-      guard username == authorization.username, passwordReference == authorization.password
-      else {
-        channelClose(
-          context: context,
-          reason: HTTPProxyError.unacceptableStatusCode(.unauthorized)
-        )
-        return
-      }
-    }
-  }
-
   private func setupHTTPProxyPipeline(context: ChannelHandlerContext) {
-    guard let headPart else {
+    guard let httpRequest else {
       channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
       return
     }
 
-    authorize(message: headPart.headers.proxyBasicAuthorization, context: context)
+    // TODO: Proxy Authentication
+    //    authorize(message: headPart.headers.proxyBasicAuthorization, context: context)
 
     let promise = context.eventLoop.makePromise(of: Void.self)
 
-    if headPart.method == .CONNECT {
+    if httpRequest.method == .connect {
       context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
         .flatMap {
           context.pipeline.removeHandler($0)
@@ -175,19 +162,19 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
 
     promise.futureResult
       .flatMap {
-        self.completion(RequestInfo(address: .domainPort(host: headPart.host, port: headPart.port)))
+        self.completion(self.httpVersion, httpRequest)
       }
       .flatMap {
         let promise = context.eventLoop.makePromise(of: Void.self)
         // Only CONNECT tunnel need established response and remove default http server pipelines.
-        if headPart.method == .CONNECT {
+        if httpRequest.method == .connect {
           // Ok, upgrade has completed! We now need to begin the upgrade process.
           // First, send the 200 connection established message.
           // This content-length header is MUST NOT, but we need to workaround NIO's insistence that
           // we set one.
           var headers = HTTPHeaders()
-          headers.add(name: .contentLength, value: "0")
-          let head = HTTPResponseHead(version: .http1_1, status: .ok, headers: headers)
+          headers.add(name: "Content-Length", value: "0")
+          let head = HTTPResponseHead(version: self.httpVersion, status: .ok, headers: headers)
           context.write(self.wrapOutboundOut(.head(head)), promise: nil)
           context.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: promise)
         } else {
@@ -223,9 +210,9 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     if let err = reason as? HTTPProxyError {
       switch err {
       case .invalidHTTPOrdering:
-        head = HTTPResponseHead.init(version: .http1_1, status: .badRequest)
+        head = HTTPResponseHead(version: httpVersion, status: .badRequest)
       case .unacceptableStatusCode(let code):
-        head = HTTPResponseHead.init(version: .http1_1, status: code)
+        head = HTTPResponseHead(version: httpVersion, status: code)
       case .connectionTimedOut:
         break
       }

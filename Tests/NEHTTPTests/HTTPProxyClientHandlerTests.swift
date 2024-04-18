@@ -138,7 +138,7 @@ class HTTPProxyClientHandlerTests: XCTestCase {
       try channel.readOutbound(),
       ByteBuffer(
         string:
-          "CONNECT swift.org:443 HTTP/1.1\r\nproxy-authorization: Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=\r\n\r\n"
+          "CONNECT swift.org:443 HTTP/1.1\r\nProxy-Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=\r\n\r\n"
       )
     )
     try channel.writeInbound(ByteBuffer(string: "HTTP/1.1 200 OK\r\n\r\n"))
@@ -170,7 +170,7 @@ class HTTPProxyClientHandlerTests: XCTestCase {
       try channel.readOutbound(),
       ByteBuffer(
         string:
-          "CONNECT swift.org:443 HTTP/1.1\r\nproxy-authorization: Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=\r\n\r\n"
+          "CONNECT swift.org:443 HTTP/1.1\r\nProxy-Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=\r\n\r\n"
       )
     )
     XCTAssertThrowsError(

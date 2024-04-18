@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import HTTPTypes
 import XCTest
 
 @testable import NEHTTP
@@ -19,10 +20,10 @@ import XCTest
 final class HTTPTypesTests: XCTestCase {
 
   func testTrimmingHopByHop() {
-    var headers = HTTPHeaders()
-    headers.add(name: .proxyAuthorization, value: "Bearer <token>")
-    headers = headers.trimmingFieldsInHopByHop()
-    XCTAssertFalse(headers.contains(name: .proxyAuthorization))
+    var httpFields = HTTPFields()
+    httpFields.append(HTTPField(name: .proxyAuthorization, value: "Bearer <token>"))
+    httpFields.trimmingHopByHopFields()
+    XCTAssertFalse(httpFields.contains(.proxyAuthorization))
   }
 
   func testParseBasicAuthorizationFromHTTPHeadersWithoutAuthorizationField() {
@@ -32,22 +33,22 @@ final class HTTPTypesTests: XCTestCase {
 
   func testParseBasicAuthorizationFromHTTPHeadersWitchAuthorizationFieldIsNotBasicAuthorization() {
     var headers = HTTPHeaders()
-    headers.add(name: .proxyAuthorization, value: "Bearer <token>")
+    headers.add(name: "Proxy-Authorization", value: "Bearer <token>")
     XCTAssertNil(headers.proxyBasicAuthorization)
   }
 
   func testParseBasicAuthorizationFromHTTPHeadersWitchAuthorizationFieldIsInvalid() {
     var headers = HTTPHeaders()
-    headers.add(name: .proxyAuthorization, value: "Basic <token>")
+    headers.add(name: "Proxy-Authorization", value: "Basic <token>")
     XCTAssertNil(headers.proxyBasicAuthorization)
 
-    headers.replaceOrAdd(name: .proxyAuthorization, value: "Basic cGFzc3dvcmQ=")
+    headers.replaceOrAdd(name: "Proxy-Authorization", value: "Basic cGFzc3dvcmQ=")
     XCTAssertNil(headers.proxyBasicAuthorization)
   }
 
   func testParseBasicAuthorization() {
     var headers = HTTPHeaders()
-    headers.add(name: .proxyAuthorization, value: "Basic dGVzdDpwYXNzd29yZA==")
+    headers.add(name: "Proxy-Authorization", value: "Basic dGVzdDpwYXNzd29yZA==")
 
     XCTAssertNotNil(headers.proxyBasicAuthorization)
 
@@ -58,16 +59,16 @@ final class HTTPTypesTests: XCTestCase {
   func testSetBasicAuthorizationForHTTPHeaders() {
     var headers = HTTPHeaders()
     headers.proxyBasicAuthorization = .init(username: "test", password: "password")
-    XCTAssertEqual(headers.first(name: .proxyAuthorization), "Basic dGVzdDpwYXNzd29yZA==")
+    XCTAssertEqual(headers.first(name: "Proxy-Authorization"), "Basic dGVzdDpwYXNzd29yZA==")
 
     headers.proxyBasicAuthorization = .init(username: "replacePreviouse", password: "password")
     XCTAssertEqual(
-      headers.first(name: .proxyAuthorization),
+      headers.first(name: "Proxy-Authorization"),
       "Basic cmVwbGFjZVByZXZpb3VzZTpwYXNzd29yZA=="
     )
 
     headers.proxyBasicAuthorization = nil
-    XCTAssertFalse(headers.contains(name: .proxyAuthorization))
+    XCTAssertFalse(headers.contains(name: "Proxy-Authorization"))
   }
 
   func testGetTheHostAndPortFromTheRequestHeadWhoseHostFieldContainsBothHostnameAndPort() {

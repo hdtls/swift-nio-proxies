@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import HTTPTypes
 import NEMisc
 import NIOCore
 import NIOHTTP1
@@ -75,7 +76,7 @@ extension ChannelPipeline {
     username: String = "",
     passwordReference: String = "",
     authenticationRequired: Bool = false,
-    completion: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Void>
+    completion: @escaping @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<Void>
   ) -> EventLoopFuture<Void> {
 
     guard eventLoop.inEventLoop else {
@@ -149,7 +150,7 @@ extension ChannelPipeline.SynchronousOperations {
     username: String = "",
     passwordReference: String = "",
     authenticationRequired: Bool = false,
-    completion: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Void>
+    completion: @escaping @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<Void>
   ) throws {
     self.eventLoop.assertInEventLoop()
 
