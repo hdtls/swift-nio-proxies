@@ -25,7 +25,6 @@ class HTTPProxyClientHandlerTests: XCTestCase {
     XCTAssertNil(self.channel)
 
     self.handler = .init(
-      username: "username",
       passwordReference: "passwordReference",
       authenticationRequired: false,
       preferHTTPTunneling: true,
@@ -118,8 +117,7 @@ class HTTPProxyClientHandlerTests: XCTestCase {
     try channel.close().wait()
 
     handler = .init(
-      username: "username",
-      passwordReference: "passwordReference",
+      passwordReference: "Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=",
       authenticationRequired: true,
       preferHTTPTunneling: true,
       destinationAddress: .domainPort(host: "swift.org", port: 443)
@@ -153,7 +151,6 @@ class HTTPProxyClientHandlerTests: XCTestCase {
     try channel.close().wait()
 
     handler = .init(
-      username: "username",
       passwordReference: "passwordReference",
       authenticationRequired: true,
       preferHTTPTunneling: true,
@@ -170,7 +167,7 @@ class HTTPProxyClientHandlerTests: XCTestCase {
       try channel.readOutbound(),
       ByteBuffer(
         string:
-          "CONNECT swift.org:443 HTTP/1.1\r\nProxy-Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=\r\n\r\n"
+          "CONNECT swift.org:443 HTTP/1.1\r\nProxy-Authorization: passwordReference\r\n\r\n"
       )
     )
     XCTAssertThrowsError(

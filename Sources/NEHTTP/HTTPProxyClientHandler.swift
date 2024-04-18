@@ -12,22 +12,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import NEMisc
-@_exported import NIOCore
-@_exported import NIOHTTP1
+import NEMisc
+import NIOCore
+import NIOHTTP1
 
 /// A channel handler that wraps a channel in HTTP CONNECT tunnel.
 /// This handler can be used in channels that are acting as the client in the HTTP CONNECT tunnel proxy dialog.
 final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChannelHandler {
-
   public typealias InboundIn = HTTPClientResponsePart
-
   public typealias OutboundIn = NIOAny
 
-  /// The usename used to authenticate this proxy connection.
-  private let username: String
-
-  /// The password used to authenticate this proxy connection.
+  /// The credentials used to authenticate this proxy connection.
   private let passwordReference: String
 
   /// A boolean value deterinse whether client should perform proxy authentication.
@@ -61,21 +56,18 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
   /// Initialize an instance of `HTTP1ClientCONNECTTunnelHandler` with specified parameters.
   ///
   /// - Parameters:
-  ///   - username: Username for proxy authentication.
-  ///   - passwordReference: Password for proxy authentication.
+  ///   - passwordReference: Credentials for proxy authentication.
   ///   - authenticationRequired: A boolean value deterinse whether client should perform proxy authentication.
   ///   - preferHTTPTunneling: A boolean value determinse whether client should use HTTP CONNECT tunnel to proxy connection.
   ///   - destinationAddress: The destination for this proxy connection.
-  ///   - timeout: A TimeAmount use to calculate deadline for handshaking timeout. The default timeout interval is 60 seconds.
+  ///   - timeoutInterval: A TimeAmount use to calculate deadline for handshaking timeout. The default timeout interval is 60 seconds.
   public init(
-    username: String,
     passwordReference: String,
     authenticationRequired: Bool,
     preferHTTPTunneling: Bool,
     destinationAddress: NetAddress,
     timeoutInterval: TimeAmount = .seconds(60)
   ) {
-    self.username = username
     self.passwordReference = passwordReference
     self.authenticationRequired = authenticationRequired
     self.preferHTTPTunneling = preferHTTPTunneling
@@ -199,10 +191,7 @@ extension HTTPProxyClientHandler {
 
     var head: HTTPRequestHead = .init(version: .http1_1, method: .CONNECT, uri: uri)
     if authenticationRequired {
-      head.headers.proxyBasicAuthorization = .init(
-        username: username,
-        password: passwordReference
-      )
+      head.headers.replaceOrAdd(name: "Proxy-Authorization", value: passwordReference)
     }
 
     context.write(NIOAny(HTTPClientRequestPart.head(head)), promise: nil)

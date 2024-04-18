@@ -26,51 +26,6 @@ final class HTTPTypesTests: XCTestCase {
     XCTAssertFalse(httpFields.contains(.proxyAuthorization))
   }
 
-  func testParseBasicAuthorizationFromHTTPHeadersWithoutAuthorizationField() {
-    let headers = HTTPHeaders()
-    XCTAssertNil(headers.proxyBasicAuthorization)
-  }
-
-  func testParseBasicAuthorizationFromHTTPHeadersWitchAuthorizationFieldIsNotBasicAuthorization() {
-    var headers = HTTPHeaders()
-    headers.add(name: "Proxy-Authorization", value: "Bearer <token>")
-    XCTAssertNil(headers.proxyBasicAuthorization)
-  }
-
-  func testParseBasicAuthorizationFromHTTPHeadersWitchAuthorizationFieldIsInvalid() {
-    var headers = HTTPHeaders()
-    headers.add(name: "Proxy-Authorization", value: "Basic <token>")
-    XCTAssertNil(headers.proxyBasicAuthorization)
-
-    headers.replaceOrAdd(name: "Proxy-Authorization", value: "Basic cGFzc3dvcmQ=")
-    XCTAssertNil(headers.proxyBasicAuthorization)
-  }
-
-  func testParseBasicAuthorization() {
-    var headers = HTTPHeaders()
-    headers.add(name: "Proxy-Authorization", value: "Basic dGVzdDpwYXNzd29yZA==")
-
-    XCTAssertNotNil(headers.proxyBasicAuthorization)
-
-    XCTAssertEqual(headers.proxyBasicAuthorization?.username, "test")
-    XCTAssertEqual(headers.proxyBasicAuthorization?.password, "password")
-  }
-
-  func testSetBasicAuthorizationForHTTPHeaders() {
-    var headers = HTTPHeaders()
-    headers.proxyBasicAuthorization = .init(username: "test", password: "password")
-    XCTAssertEqual(headers.first(name: "Proxy-Authorization"), "Basic dGVzdDpwYXNzd29yZA==")
-
-    headers.proxyBasicAuthorization = .init(username: "replacePreviouse", password: "password")
-    XCTAssertEqual(
-      headers.first(name: "Proxy-Authorization"),
-      "Basic cmVwbGFjZVByZXZpb3VzZTpwYXNzd29yZA=="
-    )
-
-    headers.proxyBasicAuthorization = nil
-    XCTAssertFalse(headers.contains(name: "Proxy-Authorization"))
-  }
-
   func testGetTheHostAndPortFromTheRequestHeadWhoseHostFieldContainsBothHostnameAndPort() {
     let head = HTTPRequestHead(
       version: .http1_1,

@@ -17,20 +17,22 @@ import XCTest
 
 @testable import NEHTTP
 
-final class HTTPProxyServerHandlerTests: XCTestCase {
+final class HTTPProxyRecipientHandlerTests: XCTestCase {
 
   private var eventLoop: EmbeddedEventLoop!
   private var channel: EmbeddedChannel!
-  private var handler: HTTPProxyServerHandler!
+  private var handler: HTTPProxyRecipientHandelr!
+  private var passwordReference: String {
+    "Basic \(Data("username:password".utf8).base64EncodedString())"
+  }
 
   override func setUp() {
     XCTAssertNil(channel)
 
     eventLoop = EmbeddedEventLoop()
 
-    handler = HTTPProxyServerHandler(
-      username: "username",
-      passwordReference: "passwordReference",
+    handler = HTTPProxyRecipientHandelr(
+      passwordReference: passwordReference,
       authenticationRequired: false
     ) { _, _ in
       self.eventLoop.makeSucceededVoidFuture()
@@ -54,12 +56,9 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     XCTAssertThrowsError(try channel.finish())
   }
 
-  // TODO: Proxy Authentication
-  /*
   func testProxyAuthenticationRequire() async throws {
-    handler = HTTPProxyServerHandler(
-      username: "username",
-      passwordReference: "passwordReference",
+    handler = HTTPProxyRecipientHandelr(
+      passwordReference: passwordReference,
       authenticationRequired: true
     ) { _,_  in
       self.eventLoop.makeSucceededVoidFuture()
@@ -79,9 +78,8 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
   }
 
   func testProxyAuthenticationWithInvalidUsernameOrPassword() async throws {
-    handler = HTTPProxyServerHandler(
-      username: "username",
-      passwordReference: "passwordReference",
+    handler = HTTPProxyRecipientHandelr(
+      passwordReference: passwordReference,
       authenticationRequired: true
     ) { _,_  in
       self.eventLoop.makeSucceededVoidFuture()
@@ -89,7 +87,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
 
     var headers = HTTPHeaders()
-    headers.proxyBasicAuthorization = .init(username: "username", password: "wrong password")
+    headers.replaceOrAdd(name: "Proxy-Authentication", value: "Basic xxxx")
     let head = HTTPRequestHead(
       version: .http1_1,
       method: .CONNECT,
@@ -105,7 +103,6 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     }
     XCTAssertThrowsError(try channel.finish())
   }
-   */
 
   func testHTTPConnectProxyWorkflow() async throws {
     let head = HTTPRequestHead.init(version: .http1_1, method: .CONNECT, uri: "example.com")
@@ -118,7 +115,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     headers.add(name: "Content-Length", value: "0")
     XCTAssertEqual(headPart, .head(.init(version: .http1_1, status: .ok, headers: headers)))
 
-    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyServerHandler.self).wait()) {
+    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyRecipientHandelr.self).wait()) {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
     XCTAssertNoThrow(try channel.finish())
@@ -142,7 +139,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
     XCTAssertThrowsError(
-      try channel.pipeline.syncOperations.handler(type: HTTPProxyServerHandler.self)
+      try channel.pipeline.syncOperations.handler(type: HTTPProxyRecipientHandelr.self)
     ) {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
@@ -152,8 +149,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
   func testBufferingBeforePipelineSetupSuccess() async throws {
     let deferPromise = eventLoop.makePromise(of: Void.self)
 
-    handler = HTTPProxyServerHandler(
-      username: "username",
+    handler = HTTPProxyRecipientHandelr(
       passwordReference: "passwordReference",
       authenticationRequired: false
     ) { _, _ in
@@ -180,7 +176,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     try channel.writeInbound(HTTPServerRequestPart.head(head))
     try channel.writeInbound(HTTPServerRequestPart.end(nil))
 
-    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyServerHandler.self).wait()) {
+    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyRecipientHandelr.self).wait()) {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
     XCTAssertNoThrow(try channel.finish())

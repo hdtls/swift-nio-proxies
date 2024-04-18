@@ -42,55 +42,6 @@ import NIOHTTP1
 
 let crlf: StaticString = "\r\n"
 
-extension HTTPHeaders {
-
-  /// A basic username and password.
-  struct BasicAuthorization: Equatable {
-    /// The username, sometimes an email address
-    let username: String
-
-    /// The plaintext password
-    let password: String
-  }
-
-  var proxyBasicAuthorization: BasicAuthorization? {
-    set {
-      if let basic = newValue {
-        let credentials = "\(basic.username):\(basic.password)"
-        let encoded = Data(credentials.utf8).base64EncodedString()
-        replaceOrAdd(name: "Proxy-Authorization", value: "Basic \(encoded)")
-      } else {
-        remove(name: "Proxy-Authorization")
-      }
-    }
-    get {
-      guard let string = self.first(name: "Proxy-Authorization") else {
-        return nil
-      }
-
-      let headerParts = string.components(separatedBy: "Basic ")
-      guard headerParts.count == 2 else {
-        return nil
-      }
-
-      guard let data = Data(base64Encoded: headerParts[1]) else {
-        return nil
-      }
-
-      let parts = String(decoding: data, as: UTF8.self).split(
-        separator: ":",
-        maxSplits: 1
-      )
-
-      guard parts.count == 2 else {
-        return nil
-      }
-
-      return .init(username: .init(parts[0]), password: .init(parts[1]))
-    }
-  }
-}
-
 extension HTTPRequestHead {
 
   var host: String {

@@ -20,7 +20,7 @@ import NIOHTTPTypesHTTP1
 
 /// A channel handler that wraps a channel for HTTP proxy.
 /// This handler can be used in channels that are acting as the server in the HTTP proxy dialog.
-final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChannelHandler {
+final public class HTTPProxyRecipientHandelr: ChannelInboundHandler, RemovableChannelHandler {
   public typealias InboundIn = HTTPServerRequestPart
   public typealias InboundOut = HTTPServerRequestPart
   public typealias OutboundOut = HTTPServerResponsePart
@@ -43,10 +43,7 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
   /// The task request head part. this value is updated after `head` part received.
   private var httpRequest: HTTPRequest!
 
-  /// The usename used to authenticate this proxy connection.
-  private let username: String
-
-  /// The password used to authenticate this proxy connection.
+  /// The credentials used to authenticate this proxy connection.
   private let passwordReference: String
 
   /// A boolean value deterinse whether server should evaluate proxy authentication request.
@@ -59,20 +56,18 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
   /// The completion handler when proxy connection established.
   private let completion: @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<Void>
 
-  /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
+  /// Initialize an instance of `HTTPProxyRecipientHandelr` with specified parameters.
   ///
   /// - Parameters:
   ///   - username: Username for proxy authentication.
-  ///   - passwordReference: Password for proxy authentication.
+  ///   - passwordReference: Credentials for proxy authentication.
   ///   - authenticationRequired: A boolean value deterinse whether server should evaluate proxy authentication request.
   ///   - completion: The completion handler when proxy connection established, returns `EventLoopFuture<Void>` using given request info.
   public init(
-    username: String,
     passwordReference: String,
     authenticationRequired: Bool,
     completion: @escaping @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<Void>
   ) {
-    self.username = username
     self.passwordReference = passwordReference
     self.authenticationRequired = authenticationRequired
     self.completion = completion
@@ -99,7 +94,7 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
         }
         // Strip hop-by-hop header based on rfc2616.
         httpRequest.headerFields.trimmingHopByHopFields()
-        var head = try HTTPRequestHead.init(httpRequest)
+        var head = try HTTPRequestHead(httpRequest)
         head.version = httpVersion
         eventBuffer.append(.channelRead(data: wrapInboundOut(.head(head))))
       } catch {
@@ -134,14 +129,31 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     }
   }
 
+  private func authenticate(connection: HTTPRequest) throws {
+    guard authenticationRequired else {
+      return
+    }
+
+    guard !passwordReference.isEmpty else {
+      throw HTTPProxyError.unacceptableStatusCode(.proxyAuthenticationRequired)
+    }
+
+    if !connection.headerFields[values: .proxyAuthorization].contains(passwordReference) {
+      throw HTTPProxyError.unacceptableStatusCode(.proxyAuthenticationRequired)
+    }
+  }
+
   private func setupHTTPProxyPipeline(context: ChannelHandlerContext) {
     guard let httpRequest else {
       channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
       return
     }
 
-    // TODO: Proxy Authentication
-    //    authorize(message: headPart.headers.proxyBasicAuthorization, context: context)
+    do {
+      try authenticate(connection: httpRequest)
+    } catch {
+      channelClose(context: context, reason: error)
+    }
 
     let promise = context.eventLoop.makePromise(of: Void.self)
 
@@ -229,4 +241,4 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
 }
 
 @available(*, unavailable)
-extension HTTPProxyServerHandler: Sendable {}
+extension HTTPProxyRecipientHandelr: Sendable {}
