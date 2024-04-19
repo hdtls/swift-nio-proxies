@@ -44,6 +44,7 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.0.3"),
   ],
   targets: [
+    .target(name: "_NELinux", dependencies: [swiftNIOCore]),
     .target(name: "CNESHAKE128"),
     .target(
       name: "NEHTTP",
@@ -78,6 +79,7 @@ let package = Package(
       ]
     ),
     .testTarget(name: "NEMiscTests", dependencies: ["NEMisc", swiftNIOCore, swiftNIOEmbedded]),
+    .testTarget(name: "NELinuxTests", dependencies: ["_NELinux"]),
     .testTarget(name: "NESHAKE128Tests", dependencies: ["NESHAKE128"]),
     .testTarget(name: "NESOCKSTests", dependencies: ["NESOCKS", swiftNIOCore, swiftNIOEmbedded]),
     .testTarget(
