@@ -13,9 +13,9 @@
 //===----------------------------------------------------------------------===//
 
 import HTTPTypes
-import NEMisc
 import NIOCore
 import NIOHTTP1
+import _NELinux
 
 extension ChannelPipeline {
 
@@ -32,7 +32,7 @@ extension ChannelPipeline {
     passwordReference: String,
     authenticationRequired: Bool,
     preferHTTPTunneling: Bool = true,
-    destinationAddress: NetAddress
+    destinationAddress: NWEndpoint
   ) -> EventLoopFuture<Void> {
 
     guard eventLoop.inEventLoop else {
@@ -110,7 +110,7 @@ extension ChannelPipeline.SynchronousOperations {
     passwordReference: String,
     authenticationRequired: Bool,
     preferHTTPTunneling: Bool = true,
-    destinationAddress: NetAddress
+    destinationAddress: NWEndpoint
   ) throws {
     eventLoop.assertInEventLoop()
     let handlers: [ChannelHandler] = [

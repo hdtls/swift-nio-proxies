@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NIOCore
 import NIOEmbedded
 import XCTest
 
@@ -28,7 +29,7 @@ class SOCKS5ClientHandlerTests: XCTestCase {
       username: "",
       passwordReference: "",
       authenticationRequired: false,
-      destinationAddress: .socketAddress(try! .init(ipAddress: "192.168.1.1", port: 80))
+      destinationAddress: .hostPort(host: "192.168.1.1", port: 80)
     )
     self.channel = EmbeddedChannel(handler: self.handler)
   }
@@ -63,7 +64,7 @@ class SOCKS5ClientHandlerTests: XCTestCase {
       username: "username",
       passwordReference: "passwordReference",
       authenticationRequired: true,
-      destinationAddress: .socketAddress(try! .init(ipAddress: "192.168.1.1", port: 80))
+      destinationAddress: .hostPort(host: "192.168.1.1", port: 80)
     )
     XCTAssertNoThrow(try channel.finish())
     channel = nil
@@ -101,7 +102,7 @@ class SOCKS5ClientHandlerTests: XCTestCase {
       username: "username",
       passwordReference: "passwordReference",
       authenticationRequired: true,
-      destinationAddress: .socketAddress(try! .init(ipAddress: "192.168.1.1", port: 80))
+      destinationAddress: .hostPort(host: "192.168.1.1", port: 80)
     )
     XCTAssertNoThrow(try channel.finish())
     channel = nil

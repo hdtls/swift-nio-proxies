@@ -18,58 +18,38 @@ import _NELinux
 final class NWEndpointTests: XCTestCase {
 
   func testCreateIPv4AddressFromString() {
-    #if !canImport(Network)
-    var address = IPv4Address("0.0.0.1")
-    var expectedAddress = Data([0x00, 0x00, 0x00, 0x01])
+    let address = IPv4Address("0.0.0.1")
+    let expectedAddress = Data([0x00, 0x00, 0x00, 0x01])
 
     XCTAssertNotNil(address)
     XCTAssertEqual(address?.rawValue, expectedAddress)
-
-    address = IPv4Address("01.102.103.104")
-    expectedAddress = Data([0x01, 0x66, 0x67, 0x68])
-    XCTAssertNotNil(address)
-    XCTAssertEqual(address?.rawValue, expectedAddress)
-    #endif
   }
 
   func testCreateIPv4AddressFromRawData() {
-    #if !canImport(Network)
     XCTAssertNotNil(IPv4Address(Data([0x00, 0x00, 0x00, 0x01])))
-    #endif
   }
 
   func testIPv4AddressEquatable() {
-    #if !canImport(Network)
     XCTAssertEqual(IPv4Address("0.0.0.1"), IPv4Address("0.0.0.1"))
-    XCTAssertEqual(IPv4Address("01.102.103.104"), IPv4Address("1.102.103.104"))
-    #endif
   }
 
   func testIPv4AddressHashable() {
-    #if !canImport(Network)
     let a = IPv4Address("0.0.0.1")
     let b = IPv4Address("0.0.0.1")
-    let c = IPv4Address("01.102.103.104")
-    let d = IPv4Address("1.102.103.104")
+    let c = IPv4Address("1.102.103.104")
 
-    let set = Set([a, b, c, d])
+    let set = Set([a, b, c])
     XCTAssertEqual(set.count, 2)
     XCTAssertTrue(set.contains(a))
     XCTAssertTrue(set.contains(b))
     XCTAssertTrue(set.contains(c))
-    XCTAssertTrue(set.contains(d))
-    #endif
   }
 
   func testIPv4AddressCustomDebugStringConvertible() {
-    #if !canImport(Network)
     XCTAssertEqual(IPv4Address("0.0.0.1")?.debugDescription, "0.0.0.1")
-    XCTAssertEqual(IPv4Address("01.102.103.104")?.debugDescription, "1.102.103.104")
-    #endif
   }
 
   func testCreateIPv6AddressFromString() {
-    #if !canImport(Network)
     let address = IPv6Address("fe80::5")
     let expectedAddress = Data([
       0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -77,11 +57,9 @@ final class NWEndpointTests: XCTestCase {
     ])
     XCTAssertNotNil(address)
     XCTAssertEqual(address?.rawValue, expectedAddress)
-    #endif
   }
 
   func testCreateIPv6AddressFromRawData() {
-    #if !canImport(Network)
     XCTAssertNotNil(
       IPv6Address(
         Data([
@@ -90,17 +68,13 @@ final class NWEndpointTests: XCTestCase {
         ])
       )
     )
-    #endif
   }
 
   func testIPv6AddressEquatable() {
-    #if !canImport(Network)
     XCTAssertEqual(IPv4Address("::"), IPv4Address("::"))
-    #endif
   }
 
   func testIPv6AddressHashable() {
-    #if !canImport(Network)
     let a = IPv6Address("::")
     let b = IPv6Address("::")
     let c = IPv6Address("fe80::5")
@@ -110,17 +84,13 @@ final class NWEndpointTests: XCTestCase {
     XCTAssertTrue(set.contains(a))
     XCTAssertTrue(set.contains(b))
     XCTAssertTrue(set.contains(c))
-    #endif
   }
 
   func testIPv6AddressCustomDebugStringConvertible() {
-    #if !canImport(Network)
     XCTAssertEqual(IPv6Address("fe80::5")?.debugDescription, "fe80::5")
-    #endif
   }
 
   func testCreateHostFromString() {
-    #if !canImport(Network)
     let name = "swift.org"
     XCTAssertEqual(NWEndpoint.Host(name), .name(name, nil))
 
@@ -129,11 +99,9 @@ final class NWEndpointTests: XCTestCase {
 
     let ipv4 = "0.0.0.0"
     XCTAssertEqual(NWEndpoint.Host(ipv4), .ipv4(IPv4Address(ipv4)!))
-    #endif
   }
 
   func testCreateHostFromStringLiteral() {
-    #if !canImport(Network)
     var host: NWEndpoint.Host = "swift.org"
     XCTAssertEqual(host, .name("swift.org", nil))
 
@@ -142,11 +110,9 @@ final class NWEndpointTests: XCTestCase {
 
     host = "0.0.0.0"
     XCTAssertEqual(host, .ipv4(IPv4Address("0.0.0.0")!))
-    #endif
   }
 
   func testHostEquatable() {
-    #if !canImport(Network)
     let name = NWEndpoint.Host.name("swift.org", nil)
     let ipv4 = NWEndpoint.Host.ipv4(IPv4Address("0.0.0.0")!)
     let ipv6 = NWEndpoint.Host.ipv6(IPv6Address("::")!)
@@ -157,11 +123,9 @@ final class NWEndpointTests: XCTestCase {
     XCTAssertNotEqual(name, ipv4)
     XCTAssertNotEqual(name, ipv6)
     XCTAssertNotEqual(ipv4, ipv6)
-    #endif
   }
 
   func testHostHashable() {
-    #if !canImport(Network)
     let name = NWEndpoint.Host.name("swift.org", nil)
     let name2 = NWEndpoint.Host.name("swift.org", nil)
     let ipv4 = NWEndpoint.Host.ipv4(IPv4Address("0.0.0.0")!)
@@ -173,34 +137,26 @@ final class NWEndpointTests: XCTestCase {
     XCTAssertTrue(set.contains(name2))
     XCTAssertTrue(set.contains(ipv4))
     XCTAssertTrue(set.contains(ipv6))
-    #endif
   }
 
   func testCreatePortFromUInt16RawValue() {
-    #if !canImport(Network)
     let port = NWEndpoint.Port(rawValue: 443)
     XCTAssertNotNil(port)
     XCTAssertEqual(port?.rawValue, 443)
-    #endif
   }
 
   func testCreatePortFromIntegerLIteral() {
-    #if !canImport(Network)
     let port: NWEndpoint.Port = 443
     XCTAssertEqual(port.rawValue, 443)
-    #endif
   }
 
   func testPortEquatable() {
-    #if !canImport(Network)
     let port: NWEndpoint.Port = 443
     XCTAssertEqual(NWEndpoint.Port(rawValue: 443)!, port)
     XCTAssertNotEqual(NWEndpoint.Port(rawValue: 80)!, port)
-    #endif
   }
 
   func testPortHashable() {
-    #if !canImport(Network)
     let a: NWEndpoint.Port = 443
     let b: NWEndpoint.Port = 443
     let c: NWEndpoint.Port = 80
@@ -210,26 +166,20 @@ final class NWEndpointTests: XCTestCase {
     XCTAssertTrue(set.contains(a))
     XCTAssertTrue(set.contains(b))
     XCTAssertTrue(set.contains(c))
-    #endif
   }
 
   func testPortCustomDebugStringConvertible() {
-    #if !canImport(Network)
     let port: NWEndpoint.Port = 443
     XCTAssertEqual(port.debugDescription, "443")
-    #endif
   }
 
   func testPortRawRepresentable() {
-    #if !canImport(Network)
     let port = NWEndpoint.Port(rawValue: 443)
     XCTAssertNotNil(port)
     XCTAssertEqual(try! XCTUnwrap(port).rawValue, 443)
-    #endif
   }
 
   func testHostPortEndpointEquatableAddHashable() {
-    #if !canImport(Network)
     let a = NWEndpoint.hostPort(host: "::", port: 0)
     let b = NWEndpoint.hostPort(host: "::", port: 0)
     let c = NWEndpoint.hostPort(host: "::", port: 1)
@@ -244,6 +194,5 @@ final class NWEndpointTests: XCTestCase {
     XCTAssertTrue(set.contains(b))
     XCTAssertTrue(set.contains(c))
     XCTAssertTrue(set.contains(d))
-    #endif
   }
 }

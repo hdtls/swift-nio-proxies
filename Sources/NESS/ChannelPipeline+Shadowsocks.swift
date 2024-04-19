@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-@_exported import NEMisc
-@_exported import NIOCore
+import NIOCore
+import _NELinux
 
 extension ChannelPipeline {
 
@@ -28,7 +28,7 @@ extension ChannelPipeline {
     position: Position = .last,
     algorithm: Algorithm,
     passwordReference: String,
-    destinationAddress: NetAddress
+    destinationAddress: NWEndpoint
   ) -> EventLoopFuture<Void> {
 
     guard eventLoop.inEventLoop else {
@@ -66,7 +66,7 @@ extension ChannelPipeline.SynchronousOperations {
     position: ChannelPipeline.Position = .last,
     algorithm: Algorithm,
     passwordReference: String,
-    destinationAddress: NetAddress
+    destinationAddress: NWEndpoint
   ) throws {
     eventLoop.assertInEventLoop()
     let inboundDecoder = ResponseDecoder(

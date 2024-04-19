@@ -49,21 +49,20 @@ let package = Package(
     .target(
       name: "NEHTTP",
       dependencies: [
-        "NEMisc", swiftNIOCore, swiftNIOHTTP1,
+        "_NELinux", swiftNIOCore, swiftNIOHTTP1,
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "NIOHTTPTypes", package: "swift-nio-extras"),
         .product(name: "NIOHTTPTypesHTTP1", package: "swift-nio-extras"),
       ]
     ),
-    .target(name: "NEMisc", dependencies: [swiftNIOCore, swiftNIOPosix]),
     .target(name: "NEPrettyBytes"),
     .target(name: "NESHAKE128", dependencies: ["CNESHAKE128", "NEPrettyBytes", swiftCrypto]),
-    .target(name: "NESOCKS", dependencies: ["NEMisc", swiftNIOCore]),
-    .target(name: "NESS", dependencies: ["NEMisc", "NEPrettyBytes", swiftCrypto, swiftNIOCore]),
+    .target(name: "NESOCKS", dependencies: ["_NELinux", swiftNIOCore]),
+    .target(name: "NESS", dependencies: ["_NELinux", "NEPrettyBytes", swiftCrypto, swiftNIOCore]),
     .target(
       name: "NEVMESS",
       dependencies: [
-        "NEMisc",
+        "_NELinux",
         "NEPrettyBytes",
         "NESHAKE128",
         swiftCrypto,
@@ -78,7 +77,6 @@ let package = Package(
         .product(name: "NIOHTTPTypes", package: "swift-nio-extras"),
       ]
     ),
-    .testTarget(name: "NEMiscTests", dependencies: ["NEMisc", swiftNIOCore, swiftNIOEmbedded]),
     .testTarget(name: "NELinuxTests", dependencies: ["_NELinux"]),
     .testTarget(name: "NESHAKE128Tests", dependencies: ["NESHAKE128"]),
     .testTarget(name: "NESOCKSTests", dependencies: ["NESOCKS", swiftNIOCore, swiftNIOEmbedded]),
@@ -93,7 +91,7 @@ let package = Package(
     .testTarget(
       name: "NEVMESSTests",
       dependencies: [
-        "NEPrettyBytes", "NEVMESS", "NEMisc", swiftCrypto, swiftNIOCore, swiftNIOEmbedded,
+        "NEPrettyBytes", "NEVMESS", "_NELinux", swiftCrypto, swiftNIOCore, swiftNIOEmbedded,
       ]
     ),
   ],

@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NEMisc
+import NIOCore
 import XCTest
 
 @testable import NEVMESS

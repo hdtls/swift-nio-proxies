@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
-import NEMisc
+import NIOCore
 import NIOEmbedded
 import XCTest
 
@@ -49,9 +49,7 @@ final class RequestEncoderTests: XCTestCase {
 
   func testEncodeShadowsocksRequestWith${removeDash(cipher['algo'])}() throws {
     let passwordReference = "BeMWIH2K5YtZ"
-    let destinationAddress = NetAddress.socketAddress(
-      try! .init(ipAddress: "192.168.1.1", port: 80)
-    )
+    let destinationAddress = NWEndpoint.hostPort(host: "192.168.1.1", port: 80)
     let handler = RequestEncoder(
       algorithm: .init(rawValue: "${cipher['algo']}")!,
       passwordReference: passwordReference,

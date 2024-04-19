@@ -12,9 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NEMisc
 import NIOCore
 import NIOHTTP1
+import _NELinux
 
 /// A channel handler that wraps a channel in HTTP CONNECT tunnel.
 /// This handler can be used in channels that are acting as the client in the HTTP CONNECT tunnel proxy dialog.
@@ -32,7 +32,7 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
   private let preferHTTPTunneling: Bool
 
   /// The destination for this proxy connection.
-  private let destinationAddress: NetAddress
+  private let destinationAddress: NWEndpoint
 
   private enum Progress: Equatable {
     case waitingForData
@@ -65,7 +65,7 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
     passwordReference: String,
     authenticationRequired: Bool,
     preferHTTPTunneling: Bool,
-    destinationAddress: NetAddress,
+    destinationAddress: NWEndpoint,
     timeoutInterval: TimeAmount = .seconds(60)
   ) {
     self.passwordReference = passwordReference
@@ -179,14 +179,28 @@ extension HTTPProxyClientHandler {
 
     let uri: String
     switch destinationAddress {
-    case .domainPort(let domain, let port):
-      uri = "\(domain):\(port)"
-    case .socketAddress(let socketAddress):
-      guard let host = socketAddress.ipAddress, let port = socketAddress.port else {
-        channelClose(context: context, reason: SocketAddressError.unsupported)
-        return
+    case .hostPort(let host, let port):
+      switch host {
+      case .name(let string, _):
+        uri = "\(string):\(port.rawValue)"
+      case .ipv4(let address):
+        uri = "\(address.debugDescription):\(port.rawValue)"
+      case .ipv6(let address):
+        uri = "\(address.debugDescription):\(port.rawValue)"
+      #if canImport(Network)
+      @unknown default:
+        uri = ""
+        assertionFailure("Unhandle case of NWEndpoint \(destinationAddress)")
+      #endif
       }
-      uri = "\(host):\(port)"
+    case .service, .unix, .url, .opaque:
+      channelClose(context: context, reason: SocketAddressError.unsupported)
+      return
+    #if canImport(Network)
+    @unknown default:
+      uri = ""
+      assertionFailure("Unhandle case of NWEndpoint \(destinationAddress)")
+    #endif
     }
 
     var head: HTTPRequestHead = .init(version: .http1_1, method: .CONNECT, uri: uri)

@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NEMisc
+import _NELinux
 
 /// Instructs the SOCKS proxy server of the target host,
 /// and how to connect.
@@ -27,7 +27,7 @@ struct Request: Hashable {
   let reserved: UInt8
 
   /// The target host address.
-  let address: NetAddress
+  let address: NWEndpoint
 
   /// Initialize an instance of `Request` with specified version command and address.
   ///
@@ -36,7 +36,7 @@ struct Request: Hashable {
     version: ProtocolVersion = .v5,
     command: Command,
     reserved: UInt8 = 0,
-    address: NetAddress
+    address: NWEndpoint
   ) {
     self.version = version
     self.command = command

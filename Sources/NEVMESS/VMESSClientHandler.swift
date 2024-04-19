@@ -13,8 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import NEMisc
 import NIOCore
+import _NELinux
 
 private enum VMESSWriteState {
   case headBegin
@@ -39,7 +39,7 @@ final public class VMESSClientHandler: ChannelInboundHandler, ChannelOutboundHan
   private var contentSecurity: ContentSecurity
   private var options: StreamOptions
   private var commandCode: CommandCode
-  private var destinationAddress: NetAddress
+  private var destinationAddress: NWEndpoint
 
   public init(
     version: VMESSVersion = .v1,
@@ -48,7 +48,7 @@ final public class VMESSClientHandler: ChannelInboundHandler, ChannelOutboundHan
     contentSecurity: ContentSecurity,
     options: StreamOptions = .chunkStream,
     commandCode: CommandCode,
-    destinationAddress: NetAddress
+    destinationAddress: NWEndpoint
   ) {
     self.version = version
     self.user = user

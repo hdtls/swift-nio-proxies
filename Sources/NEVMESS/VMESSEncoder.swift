@@ -14,7 +14,6 @@
 
 import Crypto
 import Foundation
-import NEMisc
 import NESHAKE128
 import NIOCore
 
@@ -543,28 +542,29 @@ extension BetterVMESSWriter: Sendable {}
 extension ByteBuffer {
 
   @discardableResult
-  mutating func writeVMESSAddress(_ address: NetAddress) -> Int {
-    switch address {
-    case .domainPort(let domain, let port):
-      return self.writeInteger(UInt16(port))
+  mutating func writeVMESSAddress(_ address: NWEndpoint) -> Int {
+    guard case .hostPort(host: let host, port: let port) = address else {
+      fatalError("Unsupported ByteBuffer write.")
+    }
+    switch host {
+    case .name(let string, _):
+      return self.writeInteger(port.rawValue)
         + self.writeInteger(UInt8(2))
-        + self.writeInteger(UInt8(domain.utf8.count))
-        + self.writeString(domain)
-    case .socketAddress(.v4(let addr)):
-      return self.writeInteger(addr.address.sin_port.bigEndian)
+        + self.writeInteger(UInt8(string.utf8.count))
+        + self.writeString(string)
+    case .ipv4(let iPv4Address):
+      return self.writeInteger(port.rawValue.bigEndian)
         + self.writeInteger(UInt8(1))
-        + withUnsafeBytes(of: addr.address.sin_addr) { ptr in
-          self.writeBytes(ptr)
-        }
-    case .socketAddress(.v6(let addr)):
-      return self.writeInteger(addr.address.sin6_port.bigEndian)
+        + self.writeBytes(iPv4Address.rawValue)
+    case .ipv6(let iPv6Address):
+      return self.writeInteger(port.rawValue.bigEndian)
         + self.writeInteger(UInt8(3))
-        + withUnsafeBytes(of: addr.address.sin6_addr) { ptr in
-          self.writeBytes(ptr)
-        }
-    case .socketAddress(.unixDomainSocket):
-      // enforced in the channel initalisers.
-      fatalError("UNIX domain sockets are not supported")
+        + self.writeBytes(iPv6Address.rawValue)
+    #if canImport(Network)
+    @unknown default:
+      assertionFailure("Unhandle case of NWEndpoint.Host \(host)")
+      return 0
+    #endif
     }
   }
 }

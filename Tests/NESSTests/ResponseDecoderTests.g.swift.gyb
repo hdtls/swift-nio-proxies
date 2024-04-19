@@ -13,8 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
-import NEMisc
 import NEPrettyBytes
+import NIOCore
 import NIOEmbedded
 import XCTest
 

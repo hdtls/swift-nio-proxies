@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NEMisc
 import NIOCore
+import _NELinux
 
 extension ChannelPipeline {
 
@@ -30,7 +30,7 @@ extension ChannelPipeline {
     username: String,
     passwordReference: String,
     authenticationRequired: Bool,
-    destinationAddress: NetAddress
+    destinationAddress: NWEndpoint
   ) -> EventLoopFuture<Void> {
 
     guard eventLoop.inEventLoop else {
@@ -70,7 +70,7 @@ extension ChannelPipeline {
     username: String = "",
     passwordReference: String = "",
     authenticationRequired: Bool = false,
-    completion: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Void>
+    completion: @escaping @Sendable (NWEndpoint) -> EventLoopFuture<Void>
   ) -> EventLoopFuture<Void> {
 
     guard eventLoop.inEventLoop else {
@@ -112,7 +112,7 @@ extension ChannelPipeline.SynchronousOperations {
     username: String,
     passwordReference: String,
     authenticationRequired: Bool,
-    destinationAddress: NetAddress
+    destinationAddress: NWEndpoint
   ) throws {
     eventLoop.assertInEventLoop()
 
@@ -140,7 +140,7 @@ extension ChannelPipeline.SynchronousOperations {
     username: String = "",
     passwordReference: String = "",
     authenticationRequired: Bool = false,
-    completion: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Void>
+    completion: @escaping @Sendable (NWEndpoint) -> EventLoopFuture<Void>
   ) throws {
     self.eventLoop.assertInEventLoop()
 

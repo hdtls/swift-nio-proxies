@@ -60,7 +60,7 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
     handler = HTTPProxyRecipientHandelr(
       passwordReference: passwordReference,
       authenticationRequired: true
-    ) { _,_  in
+    ) { _, _ in
       self.eventLoop.makeSucceededVoidFuture()
     }
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
@@ -81,7 +81,7 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
     handler = HTTPProxyRecipientHandelr(
       passwordReference: passwordReference,
       authenticationRequired: true
-    ) { _,_  in
+    ) { _, _ in
       self.eventLoop.makeSucceededVoidFuture()
     }
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
@@ -96,8 +96,9 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
     )
     try channel.writeInbound(HTTPServerRequestPart.head(head))
     XCTAssertThrowsError(try channel.writeInbound(HTTPServerRequestPart.end(nil))) { error in
-      guard case .unacceptableStatusCode(.unauthorized) = error as? HTTPProxyError else {
-        XCTFail("should throw HTTPProxyError.unacceptableStatusCode(.unauthorized)")
+      guard case .unacceptableStatusCode(.proxyAuthenticationRequired) = error as? HTTPProxyError
+      else {
+        XCTFail("should throw HTTPProxyError.unacceptableStatusCode(.proxyAuthenticationRequired)")
         return
       }
     }
@@ -115,7 +116,8 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
     headers.add(name: "Content-Length", value: "0")
     XCTAssertEqual(headPart, .head(.init(version: .http1_1, status: .ok, headers: headers)))
 
-    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyRecipientHandelr.self).wait()) {
+    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyRecipientHandelr.self).wait())
+    {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
     XCTAssertNoThrow(try channel.finish())
@@ -176,7 +178,8 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
     try channel.writeInbound(HTTPServerRequestPart.head(head))
     try channel.writeInbound(HTTPServerRequestPart.end(nil))
 
-    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyRecipientHandelr.self).wait()) {
+    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyRecipientHandelr.self).wait())
+    {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
     XCTAssertNoThrow(try channel.finish())

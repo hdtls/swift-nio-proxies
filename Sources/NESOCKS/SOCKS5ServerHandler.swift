@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NEMisc
 import NIOCore
+import _NELinux
 
 /// Add this handshake handler to the front of your channel, closest to the network.
 /// The handler will receive bytes from the network and parse to enforce SOCKSv5 protocol correctness.
@@ -52,7 +52,7 @@ final public class SOCKS5ServerHandler: ChannelInboundHandler, RemovableChannelH
   private let authenticationRequired: Bool
 
   /// The completion handler when proxy connection established.
-  private let completion: @Sendable (RequestInfo) -> EventLoopFuture<Void>
+  private let completion: @Sendable (NWEndpoint) -> EventLoopFuture<Void>
 
   /// Initialize an instance of `SOCKS5ServerHandler` with specified parameters.
   ///
@@ -65,7 +65,7 @@ final public class SOCKS5ServerHandler: ChannelInboundHandler, RemovableChannelH
     username: String,
     passwordReference: String,
     authenticationRequired: Bool,
-    completion: @escaping @Sendable (RequestInfo) -> EventLoopFuture<Void>
+    completion: @escaping @Sendable (NWEndpoint) -> EventLoopFuture<Void>
   ) {
     self.username = username
     self.passwordReference = passwordReference
@@ -158,15 +158,15 @@ final public class SOCKS5ServerHandler: ChannelInboundHandler, RemovableChannelH
         return
       }
 
-      let req = RequestInfo(address: details.address)
+      let address = details.address
 
-      completion(req).whenComplete {
+      completion(address).whenComplete {
         switch $0 {
         case .success:
           // FIXME: SOCKS5 response
           let response = Response(
             reply: .succeeded,
-            boundAddress: .socketAddress(context.channel.localAddress!)
+            boundAddress: .init(context.channel.localAddress!)
           )
           var buffer = context.channel.allocator.buffer(capacity: 16)
           buffer.writeServerResponse(response)
@@ -186,7 +186,7 @@ final public class SOCKS5ServerHandler: ChannelInboundHandler, RemovableChannelH
         case .failure:
           let response: Response = .init(
             reply: .hostUnreachable,
-            boundAddress: req.address
+            boundAddress: address
           )
           var buffer = context.channel.allocator.buffer(capacity: 16)
           buffer.writeServerResponse(response)

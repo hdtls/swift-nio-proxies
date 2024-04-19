@@ -12,10 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-//#if canImport(Network)
-//@_exported import Network
-//#else
-import Foundation
+#if canImport(Network)
+@_exported import Network
+#else
+@preconcurrency import Foundation
 import NIOCore
 
 public protocol OS_nw_endpoint: NSObjectProtocol, Sendable {
@@ -350,5 +350,4 @@ public struct IPv6Address: IPAddress, Hashable, CustomDebugStringConvertible {
 }
 
 public struct NWInterface: Hashable, Sendable {}
-
-//#endif
+#endif

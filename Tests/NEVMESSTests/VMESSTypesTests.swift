@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NEMisc
 import XCTest
 
 @testable import NEVMESS
@@ -26,7 +25,7 @@ final class VMESSTypesTests: XCTestCase {
     let contentSecurity = ContentSecurity.aes128Gcm
     let options = StreamOptions.chunkStream
     let commandCode = CommandCode.tcp
-    let address = NetAddress.domainPort(host: "example.com", port: 443)
+    let address = NWEndpoint.hostPort(host: "example.com", port: 443)
 
     let head = VMESSRequestHead(
       user: u,
@@ -53,7 +52,7 @@ final class VMESSTypesTests: XCTestCase {
     let contentSecurity = ContentSecurity.aes128Gcm
     let options = StreamOptions.chunkStream
     let commandCode = CommandCode.tcp
-    let address = NetAddress.domainPort(host: "example.com", port: 443)
+    let address = NWEndpoint.hostPort(host: "example.com", port: 443)
 
     let lhs = VMESSRequestHead(
       version: v,
@@ -85,7 +84,7 @@ final class VMESSTypesTests: XCTestCase {
     let contentSecurity = ContentSecurity.aes128Gcm
     let options = StreamOptions.chunkStream
     let commandCode = CommandCode.tcp
-    let address = NetAddress.domainPort(host: "example.com", port: 443)
+    let address = NWEndpoint.hostPort(host: "example.com", port: 443)
 
     let head = VMESSRequestHead(
       version: v,

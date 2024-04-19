@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NIOCore
 import XCTest
 
 @testable import NESOCKS
@@ -66,7 +67,7 @@ class MessageTests: XCTestCase {
   func testRequestReadWrite() {
     var request = Request.init(
       command: .connect,
-      address: .domainPort(host: "localhost", port: 80)
+      address: .hostPort(host: "localhost", port: 80)
     )
     var buffer = ByteBuffer()
     buffer.writeRequestDetails(request)
@@ -74,14 +75,14 @@ class MessageTests: XCTestCase {
 
     request = .init(
       command: .bind,
-      address: .socketAddress(try! .init(ipAddress: "127.0.0.1", port: 80))
+      address: .hostPort(host: "127.0.0.1", port: 80)
     )
     buffer.writeRequestDetails(request)
     XCTAssertNoThrow(XCTAssertEqual(try buffer.readRequestDetails(), request))
 
     request = .init(
       command: .udpAssociate,
-      address: .socketAddress(try! .init(ipAddress: "::1", port: 80))
+      address: .hostPort(host: "::1", port: 80)
     )
     buffer.writeRequestDetails(request)
     XCTAssertNoThrow(XCTAssertEqual(try buffer.readRequestDetails(), request))
@@ -90,7 +91,7 @@ class MessageTests: XCTestCase {
   func testResponseReadWrite() {
     let response = Response.init(
       reply: .succeeded,
-      boundAddress: .domainPort(host: "localhost", port: 80)
+      boundAddress: .hostPort(host: "localhost", port: 80)
     )
     var buffer = ByteBuffer()
     buffer.writeServerResponse(response)

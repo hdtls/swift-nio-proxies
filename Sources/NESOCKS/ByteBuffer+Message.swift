@@ -45,8 +45,8 @@ extension ByteBuffer {
     written += writeInteger(request.version.rawValue)
     written += writeInteger(UInt8(request.methods.count))
 
-    request.methods.forEach {
-      written += writeInteger($0.rawValue)
+    for method in request.methods {
+      written += writeInteger(method.rawValue)
     }
 
     return written
@@ -140,7 +140,7 @@ extension ByteBuffer {
       let version = buffer.readInteger(as: UInt8.self),
       let command = buffer.readInteger(as: UInt8.self),
       let reserved = buffer.readInteger(as: UInt8.self),
-      let address = try buffer.readAddress()
+      let address = try buffer.readRFC1928RequestAddressAsEndpoint()
     else {
       return nil
     }
@@ -160,7 +160,7 @@ extension ByteBuffer {
     var written = writeInteger(request.version.rawValue)
     written += writeInteger(request.command.rawValue)
     written += writeInteger(UInt8.zero)
-    written += writeAddress(request.address)
+    written += writeEndpointInRFC1928RequestAddressFormat(request.address)
     return written
   }
 
@@ -170,7 +170,7 @@ extension ByteBuffer {
       let version = buffer.readInteger(as: UInt8.self),
       let reply = buffer.readInteger(as: UInt8.self).map(Response.Reply.init),
       let reserved = buffer.readInteger(as: UInt8.self),
-      let boundAddress = try buffer.readAddress()
+      let boundAddress = try buffer.readRFC1928RequestAddressAsEndpoint()
     else {
       return nil
     }
@@ -189,6 +189,6 @@ extension ByteBuffer {
   mutating func writeServerResponse(_ response: Response) -> Int {
     writeInteger(response.version.rawValue)
       + writeInteger(response.reply.rawValue)
-      + writeInteger(UInt8.zero) + writeAddress(response.boundAddress)
+      + writeInteger(UInt8.zero) + writeEndpointInRFC1928RequestAddressFormat(response.boundAddress)
   }
 }

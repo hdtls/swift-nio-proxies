@@ -14,9 +14,9 @@
 
 import Crypto
 import Foundation
-@_exported import NEMisc
 import NEPrettyBytes
-@_exported import NIOCore
+import NIOCore
+import _NELinux
 
 /// Connects to a Shadowsocks server to establish a proxied connection to a host.
 final public class RequestEncoder: ChannelOutboundHandler {
@@ -29,7 +29,7 @@ final public class RequestEncoder: ChannelOutboundHandler {
 
   private let passwordReference: String
 
-  private let destinationAddress: NetAddress
+  private let destinationAddress: NWEndpoint
 
   private var symmetricKey: SymmetricKey?
 
@@ -40,7 +40,7 @@ final public class RequestEncoder: ChannelOutboundHandler {
   ///   - algorithm: The algorithm to use to encrypt stream for this connection.
   ///   - passwordReference: The password to use to generate symmetric key for encryptor.
   ///   - destinationAddress: The desired end point - note that only IPv4, IPv6, and FQDNs are supported.
-  public init(algorithm: Algorithm, passwordReference: String, destinationAddress: NetAddress) {
+  public init(algorithm: Algorithm, passwordReference: String, destinationAddress: NWEndpoint) {
     self.algorithm = algorithm
     self.passwordReference = passwordReference
     self.destinationAddress = destinationAddress
@@ -70,7 +70,7 @@ final public class RequestEncoder: ChannelOutboundHandler {
 
         // Prepare address data.
         var byteBuffer = context.channel.allocator.buffer(capacity: 36)
-        byteBuffer.writeAddress(destinationAddress)
+        byteBuffer.writeEndpointInRFC1928RequestAddressFormat(destinationAddress)
         let message = byteBuffer.readBytes(length: byteBuffer.readableBytes) ?? []
 
         // Prepare address size data

@@ -14,9 +14,9 @@
 
 import Crypto
 import Foundation
-import NEMisc
 import NEPrettyBytes
 import NIOCore
+import _NELinux
 
 extension ChannelPipeline {
 
@@ -32,7 +32,7 @@ extension ChannelPipeline {
     contentSecurity: ContentSecurity,
     user: UUID,
     commandCode: CommandCode = .tcp,
-    destinationAddress: NetAddress
+    destinationAddress: NWEndpoint
   ) -> EventLoopFuture<Void> {
     let eventLoopFuture: EventLoopFuture<Void>
 
@@ -76,7 +76,7 @@ extension ChannelPipeline.SynchronousOperations {
     contentSecurity: ContentSecurity,
     user: UUID,
     commandCode: CommandCode = .tcp,
-    destinationAddress: NetAddress
+    destinationAddress: NWEndpoint
   ) throws {
     eventLoop.assertInEventLoop()
 

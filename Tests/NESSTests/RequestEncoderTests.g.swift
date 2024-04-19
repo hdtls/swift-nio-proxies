@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
-import NEMisc
+import NIOCore
 import NIOEmbedded
 import XCTest
 
@@ -23,9 +23,7 @@ final class RequestEncoderTests: XCTestCase {
 
   func testEncodeShadowsocksRequestWithAES128GCM() throws {
     let passwordReference = "BeMWIH2K5YtZ"
-    let destinationAddress = NetAddress.socketAddress(
-      try! .init(ipAddress: "192.168.1.1", port: 80)
-    )
+    let destinationAddress = NWEndpoint.hostPort(host: "192.168.1.1", port: 80)
     let handler = RequestEncoder(
       algorithm: .init(rawValue: "AES-128-GCM")!,
       passwordReference: passwordReference,
@@ -135,9 +133,7 @@ final class RequestEncoderTests: XCTestCase {
 
   func testEncodeShadowsocksRequestWithAES256GCM() throws {
     let passwordReference = "BeMWIH2K5YtZ"
-    let destinationAddress = NetAddress.socketAddress(
-      try! .init(ipAddress: "192.168.1.1", port: 80)
-    )
+    let destinationAddress = NWEndpoint.hostPort(host: "192.168.1.1", port: 80)
     let handler = RequestEncoder(
       algorithm: .init(rawValue: "AES-256-GCM")!,
       passwordReference: passwordReference,
@@ -247,9 +243,7 @@ final class RequestEncoderTests: XCTestCase {
 
   func testEncodeShadowsocksRequestWithChaCha20Poly1305() throws {
     let passwordReference = "BeMWIH2K5YtZ"
-    let destinationAddress = NetAddress.socketAddress(
-      try! .init(ipAddress: "192.168.1.1", port: 80)
-    )
+    let destinationAddress = NWEndpoint.hostPort(host: "192.168.1.1", port: 80)
     let handler = RequestEncoder(
       algorithm: .init(rawValue: "ChaCha20-Poly1305")!,
       passwordReference: passwordReference,

@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NEMisc
+import _NELinux
 
 #if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
 import Foundation
@@ -294,7 +294,7 @@ public struct VMESSRequestHead: Hashable {
 
     fileprivate var commandCode: CommandCode
 
-    fileprivate var address: NetAddress
+    fileprivate var address: NWEndpoint
 
     fileprivate init(
       version: VMESSVersion,
@@ -303,7 +303,7 @@ public struct VMESSRequestHead: Hashable {
       contentSecurity: ContentSecurity,
       options: StreamOptions,
       commandCode: CommandCode,
-      address: NetAddress
+      address: NWEndpoint
     ) {
       self.version = version
       self.user = user
@@ -389,7 +389,7 @@ public struct VMESSRequestHead: Hashable {
     }
   }
 
-  public var address: NetAddress {
+  public var address: NWEndpoint {
     get {
       return self._storage.address
     }
@@ -406,7 +406,7 @@ public struct VMESSRequestHead: Hashable {
     algorithm: ContentSecurity,
     options: StreamOptions,
     commandCode: CommandCode,
-    address: NetAddress
+    address: NWEndpoint
   ) {
     self._storage = .init(
       version: version,

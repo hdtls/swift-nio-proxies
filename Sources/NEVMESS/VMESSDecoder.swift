@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
-import NEMisc
 import NEPrettyBytes
 import NESHAKE128
 import NIOCore

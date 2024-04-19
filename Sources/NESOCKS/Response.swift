@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NEMisc
+import _NELinux
 
 /// The SOCKS Server's response to the client's request
 /// indicating if the request succeeded or failed.
@@ -28,7 +28,7 @@ struct Response: Hashable {
   let reserved: UInt8
 
   /// The host address.
-  let boundAddress: NetAddress
+  let boundAddress: NWEndpoint
 
   /// Initialize an instance of `Response`.
   /// - Parameters:
@@ -39,7 +39,7 @@ struct Response: Hashable {
     version: ProtocolVersion = .v5,
     reply: Response.Reply,
     reserved: UInt8 = 0,
-    boundAddress: NetAddress
+    boundAddress: NWEndpoint
   ) {
     self.version = version
     self.reply = reply
