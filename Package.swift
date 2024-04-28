@@ -31,6 +31,7 @@ let package = Package(
     .tvOS(.v13),
   ],
   products: [
+    .library(name: "_NELinux", targets: ["_NELinux"]),
     .library(name: "NEHTTP", targets: ["NEHTTP"]),
     .library(name: "NESOCKS", targets: ["NESOCKS"]),
     .library(name: "NESS", targets: ["NESS"]),
