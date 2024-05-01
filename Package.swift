@@ -52,8 +52,6 @@ let package = Package(
       dependencies: [
         "_NELinux", swiftNIOCore, swiftNIOHTTP1,
         .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "NIOHTTPTypes", package: "swift-nio-extras"),
-        .product(name: "NIOHTTPTypesHTTP1", package: "swift-nio-extras"),
       ]
     ),
     .target(name: "NEPrettyBytes"),
