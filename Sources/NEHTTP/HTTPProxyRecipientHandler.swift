@@ -37,7 +37,7 @@ final public class HTTPProxyRecipientHandelr: ChannelInboundHandler, RemovableCh
   private var progress: Progress = .waitingForData
 
   /// The task request head part. this value is updated after `head` part received.
-  private var originalHTTPRequest: HTTPRequestHead!
+  private var originalHTTPRequest: HTTPRequestHead?
 
   /// The credentials used to authenticate this proxy connection.
   private let passwordReference: String
@@ -87,13 +87,13 @@ final public class HTTPProxyRecipientHandelr: ChannelInboundHandler, RemovableCh
         return
       }
       // Strip hop-by-hop header based on rfc2616.
-      originalHTTPRequest.headers.trimmingHopByHopFields()
-      eventBuffer.append(.channelRead(data: wrapInboundOut(.head(originalHTTPRequest))))
-    case .body where originalHTTPRequest != nil && originalHTTPRequest.method != .CONNECT:
+      originalHTTPRequest?.headers.trimmingHopByHopFields()
+      eventBuffer.append(.channelRead(data: wrapInboundOut(.head(originalHTTPRequest!))))
+    case .body where originalHTTPRequest != nil && originalHTTPRequest?.method != .CONNECT:
       eventBuffer.append(.channelRead(data: data))
     case .end where originalHTTPRequest != nil:
       progress = .waitingForComplete
-      if originalHTTPRequest.method != .CONNECT {
+      if originalHTTPRequest?.method != .CONNECT {
         eventBuffer.append(.channelRead(data: data))
       }
       setupHTTPProxyPipeline(context: context)
@@ -133,20 +133,20 @@ final public class HTTPProxyRecipientHandelr: ChannelInboundHandler, RemovableCh
   }
 
   private func setupHTTPProxyPipeline(context: ChannelHandlerContext) {
-    guard let originalHTTPRequest = try? HTTPRequest(originalHTTPRequest) else {
+    guard let originalHTTPRequest, let connection = try? HTTPRequest(originalHTTPRequest) else {
       channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
       return
     }
 
     do {
-      try authenticate(connection: originalHTTPRequest)
+      try authenticate(connection: connection)
     } catch {
       channelClose(context: context, reason: error)
     }
 
     let promise = context.eventLoop.makePromise(of: Void.self)
 
-    if originalHTTPRequest.method == .connect {
+    if connection.method == .connect {
       // We don't need decode request anymore.
       context.pipeline.handler(type: ByteToMessageHandler<HTTPRequestDecoder>.self)
         .flatMap {
@@ -164,12 +164,12 @@ final public class HTTPProxyRecipientHandelr: ChannelInboundHandler, RemovableCh
 
     promise.futureResult
       .flatMap {
-        self.completion(self.originalHTTPRequest.version, originalHTTPRequest)
+        self.completion(originalHTTPRequest.version, connection)
       }
       .flatMap {
         let promise = context.eventLoop.makePromise(of: Void.self)
         // Only CONNECT tunnel need established response and remove default http server pipelines.
-        if originalHTTPRequest.method == .connect {
+        if connection.method == .connect {
           // Ok, upgrade has completed! We now need to begin the upgrade process.
           // First, send the 200 connection established message.
           // This content-length header is MUST NOT, but we need to workaround NIO's insistence that
@@ -177,7 +177,7 @@ final public class HTTPProxyRecipientHandelr: ChannelInboundHandler, RemovableCh
           var headers = HTTPHeaders()
           headers.add(name: "Content-Length", value: "0")
           let head = HTTPResponseHead(
-            version: self.originalHTTPRequest.version,
+            version: originalHTTPRequest.version,
             status: .ok,
             headers: headers
           )
@@ -216,9 +216,11 @@ final public class HTTPProxyRecipientHandelr: ChannelInboundHandler, RemovableCh
     if let err = reason as? HTTPProxyError {
       switch err {
       case .invalidHTTPOrdering:
-        head = HTTPResponseHead(version: originalHTTPRequest.version, status: .badRequest)
+        let version = originalHTTPRequest?.version
+        head = HTTPResponseHead(version: version ?? .http1_1, status: .badRequest)
       case .unacceptableStatusCode(let code):
-        head = HTTPResponseHead(version: originalHTTPRequest.version, status: code)
+        let version = originalHTTPRequest?.version
+        head = HTTPResponseHead(version: version ?? .http1_1, status: code)
       case .connectionTimedOut:
         break
       }
