@@ -113,6 +113,24 @@ public enum NWEndpoint: Hashable, Sendable {
     /// for `IntegerLiteralType`.
     public typealias IntegerLiteralType = UInt16
 
+    public static let any: NWEndpoint.Port = 0
+
+    public static let ssh: NWEndpoint.Port = 22
+
+    public static let smtp: NWEndpoint.Port = 25
+
+    public static let http: NWEndpoint.Port = 80
+
+    public static let pop: NWEndpoint.Port = 110
+
+    public static let imap: NWEndpoint.Port = 143
+
+    public static let https: NWEndpoint.Port = 443
+
+    public static let imaps: NWEndpoint.Port = 993
+
+    public static let socks: NWEndpoint.Port = 1080
+
     /// The corresponding value of the raw type.
     ///
     /// A new instance initialized with `rawValue` will be equivalent to this
