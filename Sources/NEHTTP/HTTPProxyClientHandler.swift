@@ -28,9 +28,6 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
   /// A boolean value deterinse whether client should perform proxy authentication.
   private let authenticationRequired: Bool
 
-  /// A boolean value determinse whether client should use HTTP CONNECT tunnel to proxy connection.
-  private let preferHTTPTunneling: Bool
-
   /// The destination for this proxy connection.
   private let destinationAddress: NWEndpoint
 
@@ -58,19 +55,16 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
   /// - Parameters:
   ///   - passwordReference: Credentials for proxy authentication.
   ///   - authenticationRequired: A boolean value deterinse whether client should perform proxy authentication.
-  ///   - preferHTTPTunneling: A boolean value determinse whether client should use HTTP CONNECT tunnel to proxy connection.
   ///   - destinationAddress: The destination for this proxy connection.
   ///   - timeoutInterval: A TimeAmount use to calculate deadline for handshaking timeout. The default timeout interval is 60 seconds.
   public init(
     passwordReference: String,
     authenticationRequired: Bool,
-    preferHTTPTunneling: Bool,
     destinationAddress: NWEndpoint,
     timeoutInterval: TimeAmount = .seconds(60)
   ) {
     self.passwordReference = passwordReference
     self.authenticationRequired = authenticationRequired
-    self.preferHTTPTunneling = preferHTTPTunneling
     self.destinationAddress = destinationAddress
     self.bufferedWrites = .init(initialCapacity: 6)
     self.timeoutInterval = timeoutInterval

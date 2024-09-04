@@ -14,6 +14,7 @@
 
 import Foundation
 import HTTPTypes
+import NIOCore
 import NIOHTTP1
 
 let crlf: StaticString = "\r\n"

@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import HTTPTypes
+import NIOCore
 import XCTest
 
 @testable import NEHTTP

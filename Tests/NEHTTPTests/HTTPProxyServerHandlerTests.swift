@@ -12,16 +12,17 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NIOCore
 import NIOEmbedded
 import XCTest
 
 @testable import NEHTTP
 
-final class HTTPProxyRecipientHandlerTests: XCTestCase {
+final class HTTPProxyServerHandlerTests: XCTestCase {
 
   private var eventLoop: EmbeddedEventLoop!
   private var channel: EmbeddedChannel!
-  private var handler: HTTPProxyRecipientHandelr!
+  private var handler: HTTPProxyServerHandler!
   private var passwordReference: String {
     "Basic \(Data("username:password".utf8).base64EncodedString())"
   }
@@ -31,9 +32,10 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
 
     eventLoop = EmbeddedEventLoop()
 
-    handler = HTTPProxyRecipientHandelr(
+    handler = HTTPProxyServerHandler(
       passwordReference: passwordReference,
-      authenticationRequired: false
+      authenticationRequired: false,
+      additionalHTTPHandlers: []
     ) { _, _ in
       self.eventLoop.makeSucceededVoidFuture()
     }
@@ -57,9 +59,10 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
   }
 
   func testProxyAuthenticationRequire() async throws {
-    handler = HTTPProxyRecipientHandelr(
+    handler = HTTPProxyServerHandler(
       passwordReference: passwordReference,
-      authenticationRequired: true
+      authenticationRequired: true,
+      additionalHTTPHandlers: []
     ) { _, _ in
       self.eventLoop.makeSucceededVoidFuture()
     }
@@ -77,10 +80,11 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
     XCTAssertThrowsError(try channel.finish())
   }
 
-  func testProxyAuthenticationWithInvalidUsernameOrPassword() async throws {
-    handler = HTTPProxyRecipientHandelr(
+  func testProxyAuthWithInvalidUsernameOrPassword() async throws {
+    handler = HTTPProxyServerHandler(
       passwordReference: passwordReference,
-      authenticationRequired: true
+      authenticationRequired: true,
+      additionalHTTPHandlers: []
     ) { _, _ in
       self.eventLoop.makeSucceededVoidFuture()
     }
@@ -116,8 +120,7 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
     headers.add(name: "Content-Length", value: "0")
     XCTAssertEqual(headPart, .head(.init(version: .http1_1, status: .ok, headers: headers)))
 
-    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyRecipientHandelr.self).wait())
-    {
+    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyServerHandler.self).wait()) {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
     XCTAssertNoThrow(try channel.finish())
@@ -141,7 +144,7 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
     XCTAssertThrowsError(
-      try channel.pipeline.syncOperations.handler(type: HTTPProxyRecipientHandelr.self)
+      try channel.pipeline.syncOperations.handler(type: HTTPProxyServerHandler.self)
     ) {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
@@ -151,12 +154,14 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
   func testBufferingBeforePipelineSetupSuccess() async throws {
     let deferPromise = eventLoop.makePromise(of: Void.self)
 
-    handler = HTTPProxyRecipientHandelr(
+    handler = HTTPProxyServerHandler(
       passwordReference: "passwordReference",
-      authenticationRequired: false
-    ) { _, _ in
-      deferPromise.futureResult
-    }
+      authenticationRequired: false,
+      additionalHTTPHandlers: [],
+      completion: { _, _ in
+        deferPromise.futureResult
+      }
+    )
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
 
     let head = HTTPRequestHead.init(version: .http1_1, method: .CONNECT, uri: "example.com")
@@ -171,6 +176,85 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
     XCTAssertNoThrow(try channel.finish())
   }
 
+  func testNoAutoHeadersForHEADRequestEncoding() async throws {
+    let request = HTTPRequestHead(version: .http1_1, method: .HEAD, uri: "/uri")
+    try channel.writeInbound(HTTPServerRequestPart.head(request))
+    try channel.writeInbound(HTTPServerRequestPart.end(nil))
+    let buffer = try XCTUnwrap(channel.readInbound(as: ByteBuffer.self))
+    buffer.assertContainsOnly("HEAD /uri HTTP/1.1\r\n\r\n")
+  }
+
+  func testNoAutoHeadersForGetRequestEncoding() throws {
+    let request = HTTPRequestHead(version: .http1_1, method: .GET, uri: "/uri")
+    try channel.writeInbound(HTTPServerRequestPart.head(request))
+    try channel.writeInbound(HTTPServerRequestPart.end(nil))
+    let buffer = try XCTUnwrap(channel.readInbound(as: ByteBuffer.self))
+    buffer.assertContainsOnly("GET /uri HTTP/1.1\r\n\r\n")
+  }
+
+  func testContentLengthHeadersForGETEncoding() throws {
+    var request = HTTPRequestHead(version: .http1_1, method: .GET, uri: "/uri")
+    let headers = HTTPHeaders([("content-length", "17")])
+    request.headers = headers
+    try channel.writeInbound(HTTPServerRequestPart.head(request))
+    try channel.writeInbound(HTTPServerRequestPart.end(nil))
+    let buffer = try XCTUnwrap(channel.readInbound(as: ByteBuffer.self))
+    buffer.assertContainsOnly("GET /uri HTTP/1.1\r\ncontent-length: 17\r\n\r\n")
+  }
+
+  func testContentLengthHeadersForHEADEncoding() throws {
+    var request = HTTPRequestHead(version: .http1_1, method: .HEAD, uri: "/uri")
+    let headers = HTTPHeaders([("content-length", "17")])
+    request.headers = headers
+    try channel.writeInbound(HTTPServerRequestPart.head(request))
+    try channel.writeInbound(HTTPServerRequestPart.end(nil))
+    let buffer = try XCTUnwrap(channel.readInbound(as: ByteBuffer.self))
+    buffer.assertContainsOnly("HEAD /uri HTTP/1.1\r\ncontent-length: 17\r\n\r\n")
+  }
+
+  func testNoContentLengthHeadersForTRACE() throws {
+    var request = HTTPRequestHead(version: .http1_1, method: .TRACE, uri: "/uri")
+    let headers = HTTPHeaders([("content-length", "17")])
+    request.headers = headers
+    try channel.writeInbound(HTTPServerRequestPart.head(request))
+    try channel.writeInbound(HTTPServerRequestPart.end(nil))
+    let buffer = try XCTUnwrap(channel.readInbound(as: ByteBuffer.self))
+    buffer.assertContainsOnly("TRACE /uri HTTP/1.1\r\n\r\n")
+  }
+
+  func testNoTransferEncodingHeadersForTRACE() throws {
+    var request = HTTPRequestHead(version: .http1_1, method: .TRACE, uri: "/uri")
+    let headers = HTTPHeaders([("transfer-encoding", "chunked")])
+    request.headers = headers
+    try channel.writeInbound(HTTPServerRequestPart.head(request))
+    try channel.writeInbound(HTTPServerRequestPart.end(nil))
+    let buffer = try XCTUnwrap(channel.readInbound(as: ByteBuffer.self))
+    buffer.assertContainsOnly("TRACE /uri HTTP/1.1\r\n\r\n")
+  }
+
+  func testNoChunkedEncodingForHTTP10() throws {
+    let request = HTTPRequestHead(version: .http1_0, method: .GET, uri: "/uri")
+    try channel.writeInbound(HTTPServerRequestPart.head(request))
+    try channel.writeInbound(HTTPServerRequestPart.end(nil))
+    var buffer = try XCTUnwrap(channel.readInbound(as: ByteBuffer.self))
+    let response = buffer.readString(length: buffer.readableBytes)
+    XCTAssertEqual(response, "GET /uri HTTP/1.0\r\n\r\n")
+  }
+
+  func testBody() throws {
+    var request = HTTPRequestHead(version: .http1_1, method: .POST, uri: "/uri")
+    request.headers.add(name: "content-length", value: "4")
+    try channel.writeInbound(HTTPServerRequestPart.head(request))
+    try channel.writeInbound(HTTPServerRequestPart.body(ByteBuffer(string: "test")))
+    try channel.writeInbound(HTTPServerRequestPart.end(nil))
+    var buffer = try XCTUnwrap(channel.readInbound(as: ByteBuffer.self))
+    buffer.assertContainsOnly("POST /uri HTTP/1.1\r\ncontent-length: 4\r\n\r\n")
+    buffer = try XCTUnwrap(channel.readInbound(as: ByteBuffer.self))
+    buffer.assertContainsOnly("test")
+    buffer = try XCTUnwrap(channel.readInbound(as: ByteBuffer.self))
+    buffer.assertContainsOnly("")
+  }
+
   func testPlainHTTPProxyWorkflow() async throws {
     var headers = HTTPHeaders()
     headers.add(name: "Proxy-Connection", value: "keep-alive")
@@ -178,10 +262,16 @@ final class HTTPProxyRecipientHandlerTests: XCTestCase {
     try channel.writeInbound(HTTPServerRequestPart.head(head))
     try channel.writeInbound(HTTPServerRequestPart.end(nil))
 
-    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyRecipientHandelr.self).wait())
-    {
+    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyServerHandler.self).wait()) {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
     XCTAssertNoThrow(try channel.finish())
+  }
+}
+
+extension ByteBuffer {
+  fileprivate func assertContainsOnly(_ string: String) {
+    let innerData = self.getString(at: self.readerIndex, length: self.readableBytes)!
+    XCTAssertEqual(innerData, string)
   }
 }

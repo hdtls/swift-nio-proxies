@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import NEHTTP
+import NIOCore
 import NIOEmbedded
 import XCTest
 
@@ -27,7 +28,6 @@ class HTTPProxyClientHandlerTests: XCTestCase {
     self.handler = .init(
       passwordReference: "passwordReference",
       authenticationRequired: false,
-      preferHTTPTunneling: true,
       destinationAddress: .hostPort(host: "swift.org", port: 443),
       timeoutInterval: .seconds(5)
     )
@@ -119,7 +119,6 @@ class HTTPProxyClientHandlerTests: XCTestCase {
     handler = .init(
       passwordReference: "Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=",
       authenticationRequired: true,
-      preferHTTPTunneling: true,
       destinationAddress: .hostPort(host: "swift.org", port: 443)
     )
 
@@ -153,7 +152,6 @@ class HTTPProxyClientHandlerTests: XCTestCase {
     handler = .init(
       passwordReference: "passwordReference",
       authenticationRequired: true,
-      preferHTTPTunneling: true,
       destinationAddress: .hostPort(host: "swift.org", port: 443)
     )
 

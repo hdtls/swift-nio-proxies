@@ -17,141 +17,112 @@ import NIOCore
 import NIOHTTP1
 import _NELinux
 
-extension ChannelPipeline {
+public enum NEHTTPMode: Sendable {
+  case client
+  case server
+}
 
-  /// Configure a `ChannelPipeline` for use as a HTTP proxy client.
+extension Channel {
+
+  /// Configure a HTTP tunnel.
+  ///
   /// - Parameters:
-  ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy client handlers. Defaults to `.last`.
-  ///   - passwordReference: The credentials to use when authenticate this connection.
-  ///   - authenticationRequired: A boolean value to determinse whether HTTP proxy client should perform proxy authentication.
-  ///   - preferHTTPTunneling: A boolean value use to determinse whether HTTP proxy client should use CONNECT method. Defaults to `true`.
-  ///   - destinationAddress: The destination for proxy connection.
-  /// - Returns: An `EventLoopFuture` that will fire when the pipeline is configured.
-  public func addHTTPProxyClientHandlers(
-    position: ChannelPipeline.Position = .last,
-    passwordReference: String,
-    authenticationRequired: Bool,
-    preferHTTPTunneling: Bool = true,
-    destinationAddress: NWEndpoint
-  ) -> EventLoopFuture<Void> {
-
-    guard eventLoop.inEventLoop else {
-      return eventLoop.submit {
-        try self.syncOperations.addHTTPProxyClientHandlers(
-          position: position,
-          passwordReference: passwordReference,
-          authenticationRequired: authenticationRequired,
-          preferHTTPTunneling: preferHTTPTunneling,
-          destinationAddress: destinationAddress
-        )
-      }
-    }
-
-    return eventLoop.makeCompletedFuture {
-      try self.syncOperations.addHTTPProxyClientHandlers(
-        position: position,
-        passwordReference: passwordReference,
-        authenticationRequired: authenticationRequired,
-        preferHTTPTunneling: preferHTTPTunneling,
-        destinationAddress: destinationAddress
-      )
-    }
-  }
-
-  /// Configure a `ChannelPipeline` for use as a HTTP proxy server.
-  /// - Parameters:
-  ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy server handlers. Defaults to `.last`.
-  ///   - passwordReference: The credentials to use when authenticate this connection. Defaults to `""`.
-  ///   - authenticationRequired: A boolean value to determinse whether HTTP proxy server should perform proxy authentication. Defaults to `false`.
-  ///   - completion: The completion handler to use when handshake completed and outbound channel established.
-  ///       this completion pass request info, server channel and outbound client channel and returns `EventLoopFuture<Void>`.
-  /// - Returns: An `EventLoopFuture` that will fire when the pipeline is configured.
-  public func configureHTTPProxyServerPipeline(
-    position: ChannelPipeline.Position = .last,
-    passwordReference: String = "",
+  ///   - mode: The mode this pipeline will operate in, server or client.
+  ///   - authenticationRequired: The flag whether the tunnel require authentication.
+  ///   - passwordReference: The password reference for authentication.
+  ///   - destinationAddress: The target address this tunnel work for. Client only.
+  ///   - position: The position in the pipeline whitch to insert the handlers.
+  ///   - completion: The completion handler when negotation complete. Server only.
+  /// - Returns: An `EventLoopFuture<Void>` that completes when the channel is ready to negotiate.
+  public func configureHTTPTunnelPipeline(
+    mode: NEHTTPMode,
     authenticationRequired: Bool = false,
-    completion: @escaping @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<Void>
+    passwordReference: String = "",
+    destinationAddress: NWEndpoint? = nil,
+    position: ChannelPipeline.Position = .last,
+    completion: (@Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<Void>)? = nil
   ) -> EventLoopFuture<Void> {
-
-    guard eventLoop.inEventLoop else {
-      return eventLoop.submit {
-        try self.syncOperations.configureHTTPProxyServerPipeline(
-          position: position,
-          passwordReference: passwordReference,
+    let position = NIOLoopBound(position, eventLoop: eventLoop)
+    if eventLoop.inEventLoop {
+      return eventLoop.makeCompletedFuture {
+        try self.pipeline.syncOperations.configureHTTPTunnelPipeline(
+          mode: mode,
           authenticationRequired: authenticationRequired,
+          passwordReference: passwordReference,
+          destinationAddress: destinationAddress,
+          position: position.value,
           completion: completion
         )
       }
-    }
-
-    return eventLoop.makeCompletedFuture {
-      try self.syncOperations.configureHTTPProxyServerPipeline(
-        position: position,
-        passwordReference: passwordReference,
-        authenticationRequired: authenticationRequired,
-        completion: completion
-      )
+    } else {
+      return eventLoop.submit {
+        try self.pipeline.syncOperations.configureHTTPTunnelPipeline(
+          mode: mode,
+          authenticationRequired: authenticationRequired,
+          passwordReference: passwordReference,
+          destinationAddress: destinationAddress,
+          position: position.value,
+          completion: completion
+        )
+      }
     }
   }
 }
 
 extension ChannelPipeline.SynchronousOperations {
 
-  /// Configure a `ChannelPipeline` for use as a HTTP proxy client.
+  /// Configure a HTTP tunnel.
+  ///
   /// - Parameters:
-  ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy client handlers. Defaults to `.last`.
-  ///   - passwordReference: The credentials to use when authenticate this connection.
-  ///   - authenticationRequired: A boolean value to determinse whether HTTP proxy client should perform proxy authentication.
-  ///   - preferHTTPTunneling: A boolean value use to determinse whether HTTP proxy client should use CONNECT method. Defaults to `true.`
-  ///   - destinationAddress: The destination for proxy connection.
-  /// - Throws: If the pipeline could not be configured.
-  public func addHTTPProxyClientHandlers(
-    position: ChannelPipeline.Position = .last,
+  ///   - mode: The mode this pipeline will operate in, server or client.
+  ///   - authenticationRequired: The flag whether the tunnel require authentication.
+  ///   - passwordReference: The password reference for authentication.
+  ///   - destinationAddress: The target address this tunnel work for. Client only.
+  ///   - position: The position in the pipeline whitch to insert the handlers.
+  ///   - completion: The completion handler when negotation complete. Server only.
+  public func configureHTTPTunnelPipeline(
+    mode: NEHTTPMode,
+    authenticationRequired: Bool = false,
     passwordReference: String,
-    authenticationRequired: Bool,
-    preferHTTPTunneling: Bool = true,
-    destinationAddress: NWEndpoint
+    destinationAddress: NWEndpoint? = nil,
+    position: ChannelPipeline.Position = .last,
+    completion: (@Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<Void>)? = nil
   ) throws {
     eventLoop.assertInEventLoop()
-    let handlers: [ChannelHandler] = [
-      HTTPProxyClientHandler(
-        passwordReference: passwordReference,
-        authenticationRequired: authenticationRequired,
-        preferHTTPTunneling: preferHTTPTunneling,
-        destinationAddress: destinationAddress
-      )
-    ]
-    try self.addHTTPClientHandlers()
-    try self.addHandlers(handlers, position: position)
-  }
 
-  /// Configure a `ChannelPipeline` for use as a HTTP proxy server.
-  /// - Parameters:
-  ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy server handlers. Defaults to `.last`.
-  ///   - passwordReference: The credentials to use when authenticate this connection. Defaults to `""`.
-  ///   - authenticationRequired: A boolean value to determinse whether HTTP proxy server should perform proxy authentication. Defaults to `false`.
-  ///   - completion: The completion handler to use when handshake completed and outbound channel established.
-  ///       this completion pass request info, server channel and outbound client channel and returns `EventLoopFuture<Void>`.
-  /// - Throws: If the pipeline could not be configured.
-  public func configureHTTPProxyServerPipeline(
-    position: ChannelPipeline.Position = .last,
-    passwordReference: String = "",
-    authenticationRequired: Bool = false,
-    completion: @escaping @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<Void>
-  ) throws {
-    self.eventLoop.assertInEventLoop()
+    switch mode {
+    case .client:
+      guard let destinationAddress else {
+        fatalError("Missing required destination address.")
+      }
+      let handlers: [ChannelHandler] = [
+        HTTPProxyClientHandler(
+          passwordReference: passwordReference,
+          authenticationRequired: authenticationRequired,
+          destinationAddress: destinationAddress
+        ),
+        HTTPRequestEncoder(),
+        ByteToMessageHandler(HTTPResponseDecoder()),
+      ]
+      try self.addHandlers(handlers, position: position)
+    case .server:
+      guard let completion else {
+        fatalError("Missing required completion handler.")
+      }
+      let responseEncoder = HTTPResponseEncoder()
+      let requestDecoder = ByteToMessageHandler(HTTPRequestDecoder())
 
-    let responseEncoder = HTTPResponseEncoder()
-    let requestDecoder = HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)
-    let serverHandler = HTTPProxyRecipientHandelr(
-      passwordReference: passwordReference,
-      authenticationRequired: authenticationRequired,
-      completion: completion
-    )
-
-    let handlers: [RemovableChannelHandler] = [
-      responseEncoder, ByteToMessageHandler(requestDecoder), serverHandler,
-    ]
-    try self.addHandlers(handlers, position: position)
+      let handlers: [RemovableChannelHandler] = [
+        responseEncoder,
+        requestDecoder,
+        HTTPProxyServerHandler(
+          passwordReference: passwordReference,
+          authenticationRequired: authenticationRequired,
+          additionalHTTPHandlers: [responseEncoder, requestDecoder],
+          completion: completion
+        ),
+      ]
+      try self.addHandlers(handlers, position: position)
+    }
   }
 }
