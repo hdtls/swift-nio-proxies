@@ -95,14 +95,21 @@ extension ChannelPipeline.SynchronousOperations {
       guard let destinationAddress else {
         fatalError("Missing required destination address.")
       }
+      let requestEncoder = HTTPRequestEncoder()
+      let responseDecoder = ByteToMessageHandler(HTTPResponseDecoder())
+
       let handlers: [ChannelHandler] = [
         HTTPProxyClientHandler(
           passwordReference: passwordReference,
           authenticationRequired: authenticationRequired,
-          destinationAddress: destinationAddress
+          destinationAddress: destinationAddress,
+          additionalHTTPHandlers: [
+            requestEncoder,
+            responseDecoder,
+          ]
         ),
-        HTTPRequestEncoder(),
-        ByteToMessageHandler(HTTPResponseDecoder()),
+        requestEncoder,
+        responseDecoder,
       ]
       try self.addHandlers(handlers, position: position)
     case .server:

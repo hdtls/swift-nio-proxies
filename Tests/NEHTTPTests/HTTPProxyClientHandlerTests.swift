@@ -25,16 +25,25 @@ class HTTPProxyClientHandlerTests: XCTestCase {
   override func setUpWithError() throws {
     XCTAssertNil(self.channel)
 
+    let additionalHTTPHandlers = self.additionalHTTPHandlers
+
     self.handler = .init(
       passwordReference: "passwordReference",
       authenticationRequired: false,
       destinationAddress: .hostPort(host: "swift.org", port: 443),
+      additionalHTTPHandlers: additionalHTTPHandlers,
       timeoutInterval: .seconds(5)
     )
 
     self.channel = EmbeddedChannel()
-    try self.channel.pipeline.syncOperations.addHTTPClientHandlers()
+    try self.channel.pipeline.syncOperations.addHandlers(additionalHTTPHandlers)
     try self.channel.pipeline.syncOperations.addHandler(handler)
+  }
+
+  var additionalHTTPHandlers: [any RemovableChannelHandler] {
+    let requestEncoder = HTTPRequestEncoder()
+    let responseDecoder = HTTPResponseDecoder()
+    return [requestEncoder, ByteToMessageHandler(responseDecoder)]
   }
 
   override func tearDown() {
@@ -116,14 +125,17 @@ class HTTPProxyClientHandlerTests: XCTestCase {
   func testBasicAuthenticationSuccess() throws {
     try channel.close().wait()
 
+    let additionalHTTPHandlers = self.additionalHTTPHandlers
+
     handler = .init(
       passwordReference: "Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=",
       authenticationRequired: true,
-      destinationAddress: .hostPort(host: "swift.org", port: 443)
+      destinationAddress: .hostPort(host: "swift.org", port: 443),
+      additionalHTTPHandlers: additionalHTTPHandlers
     )
 
     channel = EmbeddedChannel()
-    try channel.pipeline.syncOperations.addHTTPClientHandlers()
+    try channel.pipeline.syncOperations.addHandlers(additionalHTTPHandlers)
     try channel.pipeline.syncOperations.addHandler(handler)
 
     try waitUtilConnected()
@@ -149,14 +161,16 @@ class HTTPProxyClientHandlerTests: XCTestCase {
   func testBasicAuthenticationWithIncorrectUsernameOrPassword() throws {
     try channel.close().wait()
 
+    let additionalHTTPHandlers = self.additionalHTTPHandlers
     handler = .init(
       passwordReference: "passwordReference",
       authenticationRequired: true,
-      destinationAddress: .hostPort(host: "swift.org", port: 443)
+      destinationAddress: .hostPort(host: "swift.org", port: 443),
+      additionalHTTPHandlers: additionalHTTPHandlers
     )
 
     channel = EmbeddedChannel()
-    try channel.pipeline.syncOperations.addHTTPClientHandlers()
+    try channel.pipeline.syncOperations.addHandlers(additionalHTTPHandlers)
     try channel.pipeline.syncOperations.addHandler(handler)
 
     try waitUtilConnected()
