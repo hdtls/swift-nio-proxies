@@ -15,142 +15,112 @@
 import NIOCore
 import _NELinux
 
-extension ChannelPipeline {
+public enum NESOCKSMode: Sendable {
+  case client
+  case server
+}
 
-  /// Configure a `ChannelPipeline` for use as a SOCKS client.
+extension Channel {
+
+  /// Configure a SOCKS5 proxy channel.
+  ///
   /// - Parameters:
-  ///   - position: The position in the `ChannelPipeline` where to add the SOCKS proxy client handlers. Defaults to `.last`.
-  ///   - username: The username to use when authenticate this connection.
-  ///   - passwordReference: The passwordReference to use when authenticate this connection.
-  ///   - authenticationRequired: A boolean value to determinse whether SOCKS proxy client should perform proxy authentication.
-  ///   - destinationAddress: The destination for proxy connection.
-  /// - Returns: An `EventLoopFuture` that will fire when the pipeline is configured.
-  public func addSOCKSClientHandlers(
-    position: Position = .last,
-    username: String,
-    passwordReference: String,
-    authenticationRequired: Bool,
-    destinationAddress: NWEndpoint
-  ) -> EventLoopFuture<Void> {
-
-    guard eventLoop.inEventLoop else {
-      return eventLoop.submit {
-        try self.syncOperations.addSOCKSClientHandlers(
-          position: position,
-          username: username,
-          passwordReference: passwordReference,
-          authenticationRequired: authenticationRequired,
-          destinationAddress: destinationAddress
-        )
-      }
-    }
-
-    return eventLoop.makeCompletedFuture {
-      try self.syncOperations.addSOCKSClientHandlers(
-        position: position,
-        username: username,
-        passwordReference: passwordReference,
-        authenticationRequired: authenticationRequired,
-        destinationAddress: destinationAddress
-      )
-    }
-  }
-
-  /// Configure a `ChannelPipeline` for use as a SOCKS proxy server.
-  /// - Parameters:
-  ///   - position: The position in the `ChannelPipeline` where to add the SOCKS proxy server handlers. Defaults to `.last`.
+  ///   - mode: The mode this pipeline will operate in, server or client.
   ///   - username: The username to use when authenticate this connection. Defaults to `""`.
   ///   - passwordReference: The passwordReference to use when authenticate this connection. Defaults to `""`.
   ///   - authenticationRequired: A boolean value to determinse whether SOCKS proxy client should perform proxy authentication. Defaults to `false`.
+  ///   - position: The position in the `ChannelPipeline` where to add the SOCKS proxy server handlers. Defaults to `.last`.
   ///   - completion: The completion handler to use when handshake completed and outbound channel established.
   ///       this completion pass request info, server channel and outbound client channel and returns `EventLoopFuture<Void>`.
-  /// - Returns: An `EventLoopFuture` that will fire when the pipeline is configured.
-  public func configureSOCKSServerPipeline(
-    position: ChannelPipeline.Position = .last,
+  /// - Returns: An `EventLoopFuture<Void>` that completes when the channel is ready to negotiate.
+  public func configureSOCKS5Pipeline(
+    mode: NESOCKSMode,
     username: String = "",
     passwordReference: String = "",
     authenticationRequired: Bool = false,
-    completion: @escaping @Sendable (NWEndpoint) -> EventLoopFuture<Void>
+    destinationAddress: NWEndpoint? = nil,
+    position: ChannelPipeline.Position = .last,
+    completion: (@Sendable (NWEndpoint) -> EventLoopFuture<Void>)? = nil
   ) -> EventLoopFuture<Void> {
+    let position = NIOLoopBound(position, eventLoop: eventLoop)
 
-    guard eventLoop.inEventLoop else {
-      return eventLoop.submit {
-        try self.syncOperations.configureSOCKSServerPipeline(
-          position: position,
+    if eventLoop.inEventLoop {
+      return eventLoop.makeCompletedFuture {
+        try self.pipeline.syncOperations.configureSOCKS5Pipeline(
+          mode: mode,
           username: username,
           passwordReference: passwordReference,
           authenticationRequired: authenticationRequired,
+          destinationAddress: destinationAddress,
+          position: position.value,
           completion: completion
         )
       }
-    }
-
-    return eventLoop.makeCompletedFuture {
-      try self.syncOperations.configureSOCKSServerPipeline(
-        position: position,
-        username: username,
-        passwordReference: passwordReference,
-        authenticationRequired: authenticationRequired,
-        completion: completion
-      )
+    } else {
+      return eventLoop.submit {
+        try self.pipeline.syncOperations.configureSOCKS5Pipeline(
+          mode: mode,
+          username: username,
+          passwordReference: passwordReference,
+          authenticationRequired: authenticationRequired,
+          destinationAddress: destinationAddress,
+          position: position.value,
+          completion: completion
+        )
+      }
     }
   }
 }
 
 extension ChannelPipeline.SynchronousOperations {
 
-  /// Configure a `ChannelPipeline` for use as a SOCKS client.
+  /// Configure a SOCKS5 proxy channel pipeline.
+  ///
   /// - Parameters:
-  ///   - position: The position in the `ChannelPipeline` where to add the SOCKS proxy client handlers. Defaults to `.last`.
-  ///   - username: The username to use when authenticate this connection.
-  ///   - passwordReference: The passwordReference to use when authenticate this connection.
-  ///   - authenticationRequired: A boolean value to determinse whether SOCKS proxy client should perform proxy authentication.
-  ///   - destinationAddress: The destination for proxy connection.
-  /// - Throws: If the pipeline could not be configured.
-  public func addSOCKSClientHandlers(
-    position: ChannelPipeline.Position = .last,
-    username: String,
-    passwordReference: String,
-    authenticationRequired: Bool,
-    destinationAddress: NWEndpoint
-  ) throws {
-    eventLoop.assertInEventLoop()
-
-    let handler = SOCKS5ClientHandler(
-      username: username,
-      passwordReference: passwordReference,
-      authenticationRequired: authenticationRequired,
-      destinationAddress: destinationAddress
-    )
-
-    try addHandler(handler)
-  }
-
-  /// Configure a `ChannelPipeline` for use as a SOCKS proxy server.
-  /// - Parameters:
-  ///   - position: The position in the `ChannelPipeline` where to add the SOCKS proxy server handlers. Defaults to `.last`.
+  ///   - mode: The mode this pipeline will operate in, server or client.
   ///   - username: The username to use when authenticate this connection. Defaults to `""`.
   ///   - passwordReference: The passwordReference to use when authenticate this connection. Defaults to `""`.
   ///   - authenticationRequired: A boolean value to determinse whether SOCKS proxy client should perform proxy authentication. Defaults to `false`.
+  ///   - position: The position in the `ChannelPipeline` where to add the SOCKS proxy server handlers. Defaults to `.last`.
   ///   - completion: The completion handler to use when handshake completed and outbound channel established.
   ///       this completion pass request info, server channel and outbound client channel and returns `EventLoopFuture<Void>`.
   /// - Throws: If the pipeline could not be configured.
-  public func configureSOCKSServerPipeline(
-    position: ChannelPipeline.Position = .last,
+  public func configureSOCKS5Pipeline(
+    mode: NESOCKSMode,
     username: String = "",
     passwordReference: String = "",
     authenticationRequired: Bool = false,
-    completion: @escaping @Sendable (NWEndpoint) -> EventLoopFuture<Void>
+    destinationAddress: NWEndpoint? = nil,
+    position: ChannelPipeline.Position = .last,
+    completion: (@Sendable (NWEndpoint) -> EventLoopFuture<Void>)? = nil
   ) throws {
     self.eventLoop.assertInEventLoop()
 
-    let handler = SOCKS5ServerHandler(
-      username: username,
-      passwordReference: passwordReference,
-      authenticationRequired: authenticationRequired,
-      completion: completion
-    )
+    switch mode {
+    case .client:
+      guard let destinationAddress else {
+        fatalError("Missing required destination address.")
+      }
+      let handler = SOCKS5ClientHandler(
+        username: username,
+        passwordReference: passwordReference,
+        authenticationRequired: authenticationRequired,
+        destinationAddress: destinationAddress
+      )
 
-    try self.addHandler(handler, position: position)
+      try addHandler(handler)
+    case .server:
+      guard let completion else {
+        fatalError("Missing required completion handler.")
+      }
+      let handler = SOCKS5ServerHandler(
+        username: username,
+        passwordReference: passwordReference,
+        authenticationRequired: authenticationRequired,
+        completion: completion
+      )
+
+      try self.addHandler(handler, position: position)
+    }
   }
 }

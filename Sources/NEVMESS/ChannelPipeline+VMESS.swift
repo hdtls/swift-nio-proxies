@@ -18,106 +18,126 @@ import NEPrettyBytes
 import NIOCore
 import _NELinux
 
-extension ChannelPipeline {
+public enum NEVMESSMode: Sendable {
+  case client
+  case server
+}
 
-  /// Configure a `ChannelPipeline` for use as a VMESS proxy client.
+extension Channel {
+
+  /// Configure a VMESS proxy channel.
+  ///
   /// - Parameters:
-  ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy client handlers. Defaults to `.last`.
+  ///   - mode: The mode this pipeline will operate in, server or client.
   ///   - contentSecurity: VMESS data stream security settings..
   ///   - user: VMESS client ID.
   ///   - commandCode: Command code for VMESS request/response. Defaults to `.tcp`.
-  ///   - destinationAddress: The destination for proxy connection.
-  public func addVMESSClientHandlers(
-    position: Position = .last,
+  ///   - destinationAddress: The destination for proxy connection, Client only.
+  ///   - position: The position in the pipeline whitch to insert the handlers.
+  /// - Returns: An `EventLoopFuture<Void>` that completes when the channel is ready.
+  public func configureVMESSPipeline(
+    mode: NEVMESSMode,
     contentSecurity: ContentSecurity,
     user: UUID,
     commandCode: CommandCode = .tcp,
-    destinationAddress: NWEndpoint
+    destinationAddress: NWEndpoint? = nil,
+    position: ChannelPipeline.Position = .last
   ) -> EventLoopFuture<Void> {
-    let eventLoopFuture: EventLoopFuture<Void>
-
+    let position = NIOLoopBound(position, eventLoop: eventLoop)
     if eventLoop.inEventLoop {
-      let result = Result<Void, Error> {
-        try syncOperations.addVMESSClientHandlers(
-          position: position,
+      return eventLoop.makeCompletedFuture {
+        try self.pipeline.syncOperations.configureVMESSPipeline(
+          mode: mode,
           contentSecurity: contentSecurity,
           user: user,
           commandCode: commandCode,
-          destinationAddress: destinationAddress
+          destinationAddress: destinationAddress,
+          position: position.value
         )
       }
-      eventLoopFuture = eventLoop.makeCompletedFuture(result)
     } else {
-      eventLoopFuture = eventLoop.submit {
-        try self.syncOperations.addVMESSClientHandlers(
-          position: position,
+      return eventLoop.submit {
+        try self.pipeline.syncOperations.configureVMESSPipeline(
+          mode: mode,
           contentSecurity: contentSecurity,
           user: user,
           commandCode: commandCode,
-          destinationAddress: destinationAddress
+          destinationAddress: destinationAddress,
+          position: position.value
         )
       }
     }
-    return eventLoopFuture
   }
 }
 
 extension ChannelPipeline.SynchronousOperations {
 
-  /// Configure a `ChannelPipeline` for use as a VMESS proxy client.
+  /// Configure a VMESS proxy channel pipeline.
+  ///
   /// - Parameters:
-  ///   - position: The position in the `ChannelPipeline` where to add the HTTP proxy client handlers. Defaults to `.last`.
+  ///   - mode: The mode this pipeline will operate in, server or client.
   ///   - contentSecurity: VMESS data stream security settings..
   ///   - user: VMESS client ID.
   ///   - commandCode: Command code for VMESS request/response. Defaults to `.tcp`.
-  ///   - destinationAddress: The destination for proxy connection.
-  public func addVMESSClientHandlers(
-    position: ChannelPipeline.Position = .last,
+  ///   - destinationAddress: The destination for proxy connection, Client only.
+  ///   - position: The position in the pipeline whitch to insert the handlers.
+  /// - Throws: If the pipeline could not be configured.
+  public func configureVMESSPipeline(
+    mode: NEVMESSMode,
     contentSecurity: ContentSecurity,
     user: UUID,
     commandCode: CommandCode = .tcp,
-    destinationAddress: NWEndpoint
+    destinationAddress: NWEndpoint? = nil,
+    position: ChannelPipeline.Position = .last
   ) throws {
     eventLoop.assertInEventLoop()
 
-    let authenticationCode = UInt8.random(in: .min ... .max)
-    let symmetricKey = SymmetricKey(size: .bits128)
-    var nonce = Array(repeating: UInt8.zero, count: 16)
-    nonce.withUnsafeMutableBytes {
-      $0.initializeWithRandomBytes(count: 16)
-    }
-    let options = StreamOptions.chunkStream
+    switch mode {
+    case .client:
+      guard let destinationAddress else {
+        fatalError("Missing required destination address.")
+      }
+      let authenticationCode = UInt8.random(in: .min ... .max)
+      let symmetricKey = SymmetricKey(size: .bits128)
+      var nonce = Array(repeating: UInt8.zero, count: 16)
+      nonce.withUnsafeMutableBytes {
+        $0.initializeWithRandomBytes(count: 16)
+      }
+      let options = StreamOptions.chunkStream
 
-    let messageEncoder = VMESSEncoder<VMESSPart<VMESSRequestHead, ByteBuffer>>(
-      authenticationCode: authenticationCode,
-      contentSecurity: contentSecurity,
-      symmetricKey: symmetricKey,
-      nonce: nonce,
-      options: options,
-      commandCode: commandCode
-    )
-
-    let messageDecoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
-      contentSecurity: contentSecurity,
-      symmetricKey: symmetricKey,
-      nonce: Array(nonce),
-      options: options,
-      commandCode: commandCode
-    )
-
-    let handlers: [ChannelHandler] = [
-      ByteToMessageHandler(messageDecoder),
-      messageEncoder,
-      VMESSClientHandler(
-        user: user,
+      let messageEncoder = VMESSEncoder<VMESSPart<VMESSRequestHead, ByteBuffer>>(
         authenticationCode: authenticationCode,
         contentSecurity: contentSecurity,
+        symmetricKey: symmetricKey,
+        nonce: nonce,
         options: options,
-        commandCode: commandCode,
-        destinationAddress: destinationAddress
-      ),
-    ]
+        commandCode: commandCode
+      )
 
-    try addHandlers(handlers, position: position)
+      let messageDecoder = VMESSDecoder<VMESSPart<VMESSResponseHead, ByteBuffer>>(
+        contentSecurity: contentSecurity,
+        symmetricKey: symmetricKey,
+        nonce: Array(nonce),
+        options: options,
+        commandCode: commandCode
+      )
+
+      let handlers: [ChannelHandler] = [
+        ByteToMessageHandler(messageDecoder),
+        messageEncoder,
+        VMESSClientHandler(
+          user: user,
+          authenticationCode: authenticationCode,
+          contentSecurity: contentSecurity,
+          options: options,
+          commandCode: commandCode,
+          destinationAddress: destinationAddress
+        ),
+      ]
+
+      try addHandlers(handlers, position: position)
+    case .server:
+      fatalError("Not supported yet.")
+    }
   }
 }

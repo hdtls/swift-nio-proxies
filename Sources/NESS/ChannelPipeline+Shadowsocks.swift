@@ -15,70 +15,91 @@
 import NIOCore
 import _NELinux
 
-extension ChannelPipeline {
+public enum NESSMode: Sendable {
+  case client
+  case server
+}
 
-  /// Configure a `ChannelPipeline` for use as a Shadowsocks client.
+extension Channel {
+
+  /// Configure a Shadowsocks proxy channel.
+  ///
   /// - Parameters:
-  ///   - position: The position in the `ChannelPipeline` where to add the Shadowsocks proxy client handlers. Defaults to `.last`.
+  ///   - mode: The mode this pipeline will operate in, server or client.
   ///   - algorithm: The algorithm to use to encrypt/decript stream for this connection.
   ///   - passwordReference: The passwordReference to use to generate symmetric key for stream encription/decryption.
   ///   - destinationAddress: The destination for proxy connection.
-  /// - Returns: An `EventLoopFuture` that will fire when the pipeline is configured.
-  public func addSSClientHandlers(
-    position: Position = .last,
+  ///   - position: The position in the pipeline whitch to insert the handlers.
+  /// - Returns: An `EventLoopFuture<Void>` that completes when the channel is ready.
+  public func configureSSPipeline(
+    mode: NESSMode,
     algorithm: Algorithm,
     passwordReference: String,
-    destinationAddress: NWEndpoint
+    destinationAddress: NWEndpoint? = nil,
+    position: ChannelPipeline.Position = .last
   ) -> EventLoopFuture<Void> {
-
-    guard eventLoop.inEventLoop else {
-      return eventLoop.submit {
-        try self.syncOperations.addSSClientHandlers(
-          position: position,
+    if eventLoop.inEventLoop {
+      return eventLoop.makeCompletedFuture {
+        try self.pipeline.syncOperations.configureSSPipeline(
+          mode: mode,
           algorithm: algorithm,
           passwordReference: passwordReference,
-          destinationAddress: destinationAddress
+          destinationAddress: destinationAddress,
+          position: position
         )
       }
-    }
-
-    return eventLoop.makeCompletedFuture {
-      try syncOperations.addSSClientHandlers(
-        position: position,
-        algorithm: algorithm,
-        passwordReference: passwordReference,
-        destinationAddress: destinationAddress
-      )
+    } else {
+      return eventLoop.submit {
+        try self.pipeline.syncOperations.configureSSPipeline(
+          mode: mode,
+          algorithm: algorithm,
+          passwordReference: passwordReference,
+          destinationAddress: destinationAddress,
+          position: position
+        )
+      }
     }
   }
 }
 
 extension ChannelPipeline.SynchronousOperations {
 
-  /// Configure a `ChannelPipeline` for use as a Shadowsocks client.
+  /// Configure a Shadowsocks proxy channel pipeline.
+  ///
   /// - Parameters:
-  ///   - position: The position in the `ChannelPipeline` where to add the Shadowsocks proxy client handlers. Defaults to `.last`.
+  ///   - mode: The mode this pipeline will operate in, server or client.
   ///   - algorithm: The algorithm to use to encrypt/decript stream for this connection.
   ///   - passwordReference: The passwordReference to use to generate symmetric key for stream encription/decryption.
   ///   - destinationAddress: The destination for proxy connection.
+  ///   - position: The position in the pipeline whitch to insert the handlers.
   /// - Throws: If the pipeline could not be configured.
-  public func addSSClientHandlers(
-    position: ChannelPipeline.Position = .last,
+  public func configureSSPipeline(
+    mode: NESSMode,
     algorithm: Algorithm,
     passwordReference: String,
-    destinationAddress: NWEndpoint
+    destinationAddress: NWEndpoint? = nil,
+    position: ChannelPipeline.Position = .last
   ) throws {
     eventLoop.assertInEventLoop()
-    let inboundDecoder = ResponseDecoder(
-      algorithm: algorithm,
-      passwordReference: passwordReference
-    )
-    let outboundHandler = RequestEncoder(
-      algorithm: algorithm,
-      passwordReference: passwordReference,
-      destinationAddress: destinationAddress
-    )
-    let handlers: [ChannelHandler] = [ByteToMessageHandler(inboundDecoder), outboundHandler]
-    try addHandlers(handlers, position: position)
+
+    switch mode {
+    case .client:
+      guard let destinationAddress else {
+        fatalError("Missing required destination address.")
+      }
+      let inboundDecoder = ResponseDecoder(
+        algorithm: algorithm,
+        passwordReference: passwordReference
+      )
+      let outboundHandler = RequestEncoder(
+        algorithm: algorithm,
+        passwordReference: passwordReference,
+        destinationAddress: destinationAddress
+      )
+      let handlers: [ChannelHandler] = [ByteToMessageHandler(inboundDecoder), outboundHandler]
+      try addHandlers(handlers, position: position)
+    case .server:
+      fatalError("Not supported yet")
+    }
   }
 }
