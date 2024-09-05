@@ -79,11 +79,15 @@ private func correctlyFrameTransportHeaders(
 
 /// A channel handler that wraps a channel for HTTP proxy.
 /// This handler can be used in channels that are acting as the server in the HTTP proxy dialog.
-final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChannelHandler {
+final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler,
+  RemovableChannelHandler
+{
 
   public typealias InboundIn = HTTPServerRequestPart
 
   public typealias OutboundOut = HTTPServerResponsePart
+
+  public typealias NegotiationResult = (any Channel, Connection)
 
   private enum EventBuffer {
     case channelRead(data: NIOAny)
@@ -119,26 +123,43 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
 
   private let additionalHTTPHandlers: [any RemovableChannelHandler]
 
-  /// The completion handler when proxy connection established.
-  private let completion: @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<Void>
+  private var negotiationResultPromise: EventLoopPromise<NegotiationResult>?
 
-  /// Initialize an instance of `HTTPTunnelSVRHandler` with specified parameters.
+  public var negotiationResultFuture: EventLoopFuture<NegotiationResult> {
+    guard let negotiationResultPromise else {
+      preconditionFailure(
+        "Tried to access the negotiation result before the handler was added to the pipeline"
+      )
+    }
+    return negotiationResultPromise.futureResult
+  }
+
+  private let channelInitializer:
+    @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<NegotiationResult>
+
+  /// Initialize an instance of `HTTPProxyServerHandler` with specified parameters.
   ///
   /// - Parameters:
   ///   - passwordReference: Credentials for proxy authentication.
   ///   - authenticationRequired: A boolean value deterinse whether server should evaluate proxy authentication request.
   ///   - additionalHTTPHandlers: Additional HTTP handlers use for http codec.
-  ///   - completion: The completion handler when proxy connection established, returns `EventLoopFuture<Void>` using given request info.
+  ///   - channelInitializer: The outbound channel initializer.
   public init(
     passwordReference: String,
     authenticationRequired: Bool,
     additionalHTTPHandlers: [any RemovableChannelHandler],
-    completion: @escaping @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<Void>
+    channelInitializer: @escaping @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<
+      NegotiationResult
+    >
   ) {
     self.passwordReference = passwordReference
     self.authenticationRequired = authenticationRequired
     self.additionalHTTPHandlers = additionalHTTPHandlers
-    self.completion = completion
+    self.channelInitializer = channelInitializer
+  }
+
+  public func handlerAdded(context: ChannelHandlerContext) {
+    negotiationResultPromise = context.eventLoop.makePromise(of: NegotiationResult.self)
   }
 
   public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -280,9 +301,9 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
     let ctx = NIOLoopBound(context, eventLoop: context.eventLoop)
 
     let originalHTTPVersion = self.originalHTTPVersion
-    completion(originalHTTPVersion, originalHTTPRequest)
+    channelInitializer(originalHTTPVersion, originalHTTPRequest)
       .hop(to: context.eventLoop)
-      .flatMap {
+      .flatMap { negotiationResult in
         // Only CONNECT tunnel need established response and remove default http server pipelines.
         if originalHTTPRequest.method == .connect {
           // Ok, upgrade has completed! We now need to begin the upgrade process.
@@ -309,14 +330,15 @@ final public class HTTPProxyServerHandler: ChannelInboundHandler, RemovableChann
               return ctx.value.eventLoop.makeSucceededVoidFuture()
             }
         }
-        return .andAllSucceed(futures, on: ctx.value.eventLoop)
+        return EventLoopFuture.andAllSucceed(futures, on: ctx.value.eventLoop)
+          .map { _ in negotiationResult }
       }
       .whenComplete {
         switch $0 {
-        case .success:
+        case .success(let negotiationResult):
           // After all additional http handlers removed, we should flush our response.
           ctx.value.flush()
-
+          bs.value.negotiationResultPromise?.succeed(negotiationResult)
           bs.value.progress = .completed
           // We're being removed from the pipeline. If we have buffered events, deliver them.
           while !bs.value.eventBuffer.isEmpty {

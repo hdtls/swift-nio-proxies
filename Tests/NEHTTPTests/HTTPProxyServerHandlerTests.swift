@@ -22,7 +22,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
 
   private var eventLoop: EmbeddedEventLoop!
   private var channel: EmbeddedChannel!
-  private var handler: HTTPProxyServerHandler!
+  private var handler: HTTPProxyServerHandler<Int>!
   private var passwordReference: String {
     "Basic \(Data("username:password".utf8).base64EncodedString())"
   }
@@ -37,7 +37,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
       authenticationRequired: false,
       additionalHTTPHandlers: []
     ) { _, _ in
-      self.eventLoop.makeSucceededVoidFuture()
+      self.eventLoop.makeSucceededFuture((EmbeddedChannel(), 0))
     }
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
   }
@@ -64,7 +64,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
       authenticationRequired: true,
       additionalHTTPHandlers: []
     ) { _, _ in
-      self.eventLoop.makeSucceededVoidFuture()
+      self.eventLoop.makeSucceededFuture((EmbeddedChannel(), 0))
     }
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
 
@@ -86,7 +86,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
       authenticationRequired: true,
       additionalHTTPHandlers: []
     ) { _, _ in
-      self.eventLoop.makeSucceededVoidFuture()
+      self.eventLoop.makeSucceededFuture((EmbeddedChannel(), 0))
     }
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
 
@@ -120,7 +120,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     headers.add(name: "Content-Length", value: "0")
     XCTAssertEqual(headPart, .head(.init(version: .http1_1, status: .ok, headers: headers)))
 
-    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyServerHandler.self).wait()) {
+    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyServerHandler<Int>.self).wait()) {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
     XCTAssertNoThrow(try channel.finish())
@@ -144,7 +144,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
     XCTAssertThrowsError(
-      try channel.pipeline.syncOperations.handler(type: HTTPProxyServerHandler.self)
+      try channel.pipeline.syncOperations.handler(type: HTTPProxyServerHandler<Int>.self)
     ) {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
@@ -157,11 +157,10 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     handler = HTTPProxyServerHandler(
       passwordReference: "passwordReference",
       authenticationRequired: false,
-      additionalHTTPHandlers: [],
-      completion: { _, _ in
+      additionalHTTPHandlers: []) { _,_ in
         deferPromise.futureResult
+          .map { (EmbeddedChannel(), 0) }
       }
-    )
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
 
     let head = HTTPRequestHead.init(version: .http1_1, method: .CONNECT, uri: "example.com")
@@ -262,7 +261,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     try channel.writeInbound(HTTPServerRequestPart.head(head))
     try channel.writeInbound(HTTPServerRequestPart.end(nil))
 
-    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyServerHandler.self).wait()) {
+    XCTAssertThrowsError(try channel.pipeline.handler(type: HTTPProxyServerHandler<Int>.self).wait()) {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
     XCTAssertNoThrow(try channel.finish())

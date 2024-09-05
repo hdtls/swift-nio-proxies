@@ -17,13 +17,15 @@ import _NELinux
 
 /// Add this handshake handler to the front of your channel, closest to the network.
 /// The handler will receive bytes from the network and parse to enforce SOCKSv5 protocol correctness.
-final public class SOCKS5ServerHandler: ChannelInboundHandler, RemovableChannelHandler {
+final public class SOCKS5ServerHandler<Connection>: ChannelInboundHandler, RemovableChannelHandler {
 
   public typealias InboundIn = ByteBuffer
 
   public typealias InboundOut = ByteBuffer
 
   public typealias OutboundOut = ByteBuffer
+
+  public typealias NegotiationResult = (any Channel, Connection)
 
   private enum Progress: Equatable {
     case waitingForGreeting(ByteBuffer?)
@@ -51,8 +53,18 @@ final public class SOCKS5ServerHandler: ChannelInboundHandler, RemovableChannelH
   /// A boolean value deterinse whether server should evaluate proxy authentication request.
   private let authenticationRequired: Bool
 
-  /// The completion handler when proxy connection established.
-  private let completion: @Sendable (NWEndpoint) -> EventLoopFuture<Void>
+  private var negotiationResultPromise: EventLoopPromise<NegotiationResult>?
+
+  public var negotiationResultFuture: EventLoopFuture<NegotiationResult> {
+    guard let negotiationResultPromise else {
+      preconditionFailure(
+        "Tried to access the negotiation result before the handler was added to the pipeline"
+      )
+    }
+    return negotiationResultPromise.futureResult
+  }
+
+  private let channelInitializer: @Sendable (NWEndpoint) -> EventLoopFuture<NegotiationResult>
 
   /// Initialize an instance of `SOCKS5ServerHandler` with specified parameters.
   ///
@@ -65,12 +77,16 @@ final public class SOCKS5ServerHandler: ChannelInboundHandler, RemovableChannelH
     username: String,
     passwordReference: String,
     authenticationRequired: Bool,
-    completion: @escaping @Sendable (NWEndpoint) -> EventLoopFuture<Void>
+    channelInitializer: @escaping @Sendable (NWEndpoint) -> EventLoopFuture<NegotiationResult>
   ) {
     self.username = username
     self.passwordReference = passwordReference
     self.authenticationRequired = authenticationRequired
-    self.completion = completion
+    self.channelInitializer = channelInitializer
+  }
+
+  public func handlerAdded(context: ChannelHandlerContext) {
+    negotiationResultPromise = context.eventLoop.makePromise(of: NegotiationResult.self)
   }
 
   public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -160,9 +176,9 @@ final public class SOCKS5ServerHandler: ChannelInboundHandler, RemovableChannelH
 
       let address = details.address
 
-      completion(address).whenComplete {
+      channelInitializer(address).whenComplete {
         switch $0 {
-        case .success:
+        case .success(let negotiationResult):
           // FIXME: SOCKS5 response
           let response = Response(
             reply: .succeeded,
@@ -174,6 +190,7 @@ final public class SOCKS5ServerHandler: ChannelInboundHandler, RemovableChannelH
 
           context.fireUserInboundEventTriggered(SOCKSUserEvent.handshakeCompleted)
 
+          self.negotiationResultPromise?.succeed(negotiationResult)
           self.progress = .completed
 
           // Prepare data that need forward to next handler.

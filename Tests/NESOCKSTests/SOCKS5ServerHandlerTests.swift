@@ -22,7 +22,7 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
 
   var eventLoop: EmbeddedEventLoop!
   var channel: EmbeddedChannel!
-  var handler: SOCKS5ServerHandler!
+  var handler: SOCKS5ServerHandler<Int>!
 
   override func setUpWithError() throws {
     XCTAssertNil(self.channel)
@@ -34,7 +34,7 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
       passwordReference: "",
       authenticationRequired: false
     ) { _ in
-      self.eventLoop.makeSucceededVoidFuture()
+      self.eventLoop.makeSucceededFuture((EmbeddedChannel(), 0))
     }
 
     self.channel = EmbeddedChannel(handler: self.handler, loop: eventLoop)
@@ -60,7 +60,7 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
 
     XCTAssertNotNil(try channel.readOutbound(as: ByteBuffer.self))
 
-    XCTAssertThrowsError(try channel.pipeline.handler(type: SOCKS5ServerHandler.self).wait()) {
+    XCTAssertThrowsError(try channel.pipeline.handler(type: SOCKS5ServerHandler<Int>.self).wait()) {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
   }
@@ -71,7 +71,7 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
       passwordReference: "passwordReference",
       authenticationRequired: true
     ) { _ in
-      self.eventLoop.makeSucceededVoidFuture()
+      self.eventLoop.makeSucceededFuture((EmbeddedChannel(), 0))
     }
 
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)
@@ -99,7 +99,7 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
 
     XCTAssertNotNil(try channel.readOutbound())
 
-    XCTAssertThrowsError(try channel.pipeline.handler(type: SOCKS5ServerHandler.self).wait()) {
+    XCTAssertThrowsError(try channel.pipeline.handler(type: SOCKS5ServerHandler<Int>.self).wait()) {
       XCTAssertEqual($0 as? ChannelPipelineError, .notFound)
     }
   }
@@ -110,7 +110,7 @@ final class SOCKS5ServerHandlerTests: XCTestCase {
       passwordReference: "passwordReference",
       authenticationRequired: true
     ) { _ in
-      self.eventLoop.makeSucceededVoidFuture()
+      self.eventLoop.makeSucceededFuture((EmbeddedChannel(), 0))
     }
 
     channel = EmbeddedChannel(handler: handler, loop: eventLoop)

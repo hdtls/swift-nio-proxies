@@ -42,7 +42,7 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
     .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
     .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.22.0"),
-    .package(url: "https://github.com/apple/swift-http-types.git", from: "1.0.3"),
+    .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
   ],
   targets: [
     .target(name: "_NELinux", dependencies: [swiftNIOCore]),

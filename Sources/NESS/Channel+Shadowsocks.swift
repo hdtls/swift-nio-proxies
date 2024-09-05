@@ -15,33 +15,25 @@
 import NIOCore
 import _NELinux
 
-public enum NESSMode: Sendable {
-  case client
-  case server
-}
-
 extension Channel {
 
-  /// Configure a Shadowsocks proxy channel.
+  /// Configure a Shadowsocks proxy channel for client.
   ///
   /// - Parameters:
-  ///   - mode: The mode this pipeline will operate in, server or client.
   ///   - algorithm: The algorithm to use to encrypt/decript stream for this connection.
   ///   - passwordReference: The passwordReference to use to generate symmetric key for stream encription/decryption.
   ///   - destinationAddress: The destination for proxy connection.
   ///   - position: The position in the pipeline whitch to insert the handlers.
   /// - Returns: An `EventLoopFuture<Void>` that completes when the channel is ready.
   public func configureSSPipeline(
-    mode: NESSMode,
     algorithm: Algorithm,
     passwordReference: String,
-    destinationAddress: NWEndpoint? = nil,
+    destinationAddress: NWEndpoint,
     position: ChannelPipeline.Position = .last
   ) -> EventLoopFuture<Void> {
     if eventLoop.inEventLoop {
       return eventLoop.makeCompletedFuture {
         try self.pipeline.syncOperations.configureSSPipeline(
-          mode: mode,
           algorithm: algorithm,
           passwordReference: passwordReference,
           destinationAddress: destinationAddress,
@@ -51,7 +43,6 @@ extension Channel {
     } else {
       return eventLoop.submit {
         try self.pipeline.syncOperations.configureSSPipeline(
-          mode: mode,
           algorithm: algorithm,
           passwordReference: passwordReference,
           destinationAddress: destinationAddress,
@@ -64,42 +55,32 @@ extension Channel {
 
 extension ChannelPipeline.SynchronousOperations {
 
-  /// Configure a Shadowsocks proxy channel pipeline.
+  /// Configure a Shadowsocks proxy channel pipeline for client.
   ///
   /// - Parameters:
-  ///   - mode: The mode this pipeline will operate in, server or client.
   ///   - algorithm: The algorithm to use to encrypt/decript stream for this connection.
   ///   - passwordReference: The passwordReference to use to generate symmetric key for stream encription/decryption.
   ///   - destinationAddress: The destination for proxy connection.
   ///   - position: The position in the pipeline whitch to insert the handlers.
   /// - Throws: If the pipeline could not be configured.
   public func configureSSPipeline(
-    mode: NESSMode,
     algorithm: Algorithm,
     passwordReference: String,
-    destinationAddress: NWEndpoint? = nil,
+    destinationAddress: NWEndpoint,
     position: ChannelPipeline.Position = .last
   ) throws {
     eventLoop.assertInEventLoop()
 
-    switch mode {
-    case .client:
-      guard let destinationAddress else {
-        fatalError("Missing required destination address.")
-      }
-      let inboundDecoder = ResponseDecoder(
-        algorithm: algorithm,
-        passwordReference: passwordReference
-      )
-      let outboundHandler = RequestEncoder(
-        algorithm: algorithm,
-        passwordReference: passwordReference,
-        destinationAddress: destinationAddress
-      )
-      let handlers: [ChannelHandler] = [ByteToMessageHandler(inboundDecoder), outboundHandler]
-      try addHandlers(handlers, position: position)
-    case .server:
-      fatalError("Not supported yet")
-    }
+    let inboundDecoder = ResponseDecoder(
+      algorithm: algorithm,
+      passwordReference: passwordReference
+    )
+    let outboundHandler = RequestEncoder(
+      algorithm: algorithm,
+      passwordReference: passwordReference,
+      destinationAddress: destinationAddress
+    )
+    let handlers: [ChannelHandler] = [ByteToMessageHandler(inboundDecoder), outboundHandler]
+    try addHandlers(handlers, position: position)
   }
 }
