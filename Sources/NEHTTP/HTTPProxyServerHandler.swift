@@ -79,9 +79,7 @@ private func correctlyFrameTransportHeaders(
 
 /// A channel handler that wraps a channel for HTTP proxy.
 /// This handler can be used in channels that are acting as the server in the HTTP proxy dialog.
-final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler,
-  RemovableChannelHandler
-{
+final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
 
   public typealias InboundIn = HTTPServerRequestPart
 
@@ -188,6 +186,7 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler,
           eventBuffer.append(.channelRead(data: NIOAny(data)))
         }
       } catch {
+        negotiationResultPromise?.fail(error)
         channelClose(context: context, reason: error)
       }
     case .body(let bodyPart)
@@ -202,6 +201,7 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler,
       }
       configureHTTPTunnelPipeline(context: context)
     default:
+      negotiationResultPromise?.fail(HTTPProxyError.invalidHTTPOrdering)
       channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
     }
   }
@@ -282,6 +282,9 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler,
     }
 
     guard connection.headerFields[values: .proxyAuthorization].contains(passwordReference) else {
+      negotiationResultPromise?.fail(
+        HTTPProxyError.unacceptableStatusCode(.proxyAuthenticationRequired)
+      )
       channelClose(
         context: context,
         reason: HTTPProxyError.unacceptableStatusCode(.proxyAuthenticationRequired)
@@ -292,6 +295,7 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler,
 
   private func configureHTTPTunnelPipeline(context: ChannelHandlerContext) {
     guard let originalHTTPRequest else {
+      negotiationResultPromise?.fail(HTTPProxyError.invalidHTTPOrdering)
       channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
       return
     }
@@ -340,17 +344,9 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler,
           ctx.value.flush()
           bs.value.negotiationResultPromise?.succeed(negotiationResult)
           bs.value.progress = .completed
-          // We're being removed from the pipeline. If we have buffered events, deliver them.
-          while !bs.value.eventBuffer.isEmpty {
-            switch bs.value.eventBuffer.removeFirst() {
-            case .channelRead(let data):
-              ctx.value.fireChannelRead(data)
-            case .channelReadComplete:
-              ctx.value.fireChannelReadComplete()
-            }
-          }
           ctx.value.pipeline.removeHandler(bs.value, promise: nil)
         case .failure(let error):
+          bs.value.negotiationResultPromise?.fail(error)
           bs.value.channelClose(context: ctx.value, reason: error)
         }
       }
@@ -377,6 +373,30 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler,
 
     context.fireErrorCaught(reason)
     context.close(promise: nil)
+  }
+}
+
+extension HTTPProxyServerHandler: RemovableChannelHandler {
+
+  public func removeHandler(
+    context: ChannelHandlerContext,
+    removalToken: ChannelHandlerContext.RemovalToken
+  ) {
+    // We're being removed from the pipeline. If we have buffered events, deliver them.
+    while !eventBuffer.isEmpty {
+      switch eventBuffer.removeFirst() {
+      case .channelRead(let data):
+        context.fireChannelRead(data)
+      case .channelReadComplete:
+        context.fireChannelReadComplete()
+      }
+    }
+
+    if progress != .completed {
+      negotiationResultPromise?.fail(ChannelError.inappropriateOperationForState)
+    }
+
+    context.leavePipeline(removalToken: removalToken)
   }
 }
 

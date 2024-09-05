@@ -17,7 +17,7 @@ import _NELinux
 
 /// Add this handshake handler to the front of your channel, closest to the network.
 /// The handler will receive bytes from the network and parse to enforce SOCKSv5 protocol correctness.
-final public class SOCKS5ServerHandler<Connection>: ChannelInboundHandler, RemovableChannelHandler {
+final public class SOCKS5ServerHandler<Connection>: ChannelInboundHandler {
 
   public typealias InboundIn = ByteBuffer
 
@@ -123,6 +123,7 @@ final public class SOCKS5ServerHandler<Connection>: ChannelInboundHandler, Remov
     }
 
     guard message.version == .v5 else {
+      negotiationResultPromise?.fail(SOCKSError.unsupportedProtocolVersion)
       channelClose(context: context, reason: SOCKSError.unsupportedProtocolVersion)
       return
     }
@@ -176,47 +177,64 @@ final public class SOCKS5ServerHandler<Connection>: ChannelInboundHandler, Remov
 
       let address = details.address
 
-      channelInitializer(address).whenComplete {
-        switch $0 {
-        case .success(let negotiationResult):
-          // FIXME: SOCKS5 response
-          let response = Response(
-            reply: .succeeded,
-            boundAddress: .init(context.channel.localAddress!)
-          )
-          var buffer = context.channel.allocator.buffer(capacity: 16)
-          buffer.writeServerResponse(response)
-          context.writeAndFlush(self.wrapOutboundOut(buffer), promise: nil)
+      let bs = NIOLoopBound(self, eventLoop: context.eventLoop)
+      let ctx = NIOLoopBound(context, eventLoop: context.eventLoop)
 
-          context.fireUserInboundEventTriggered(SOCKSUserEvent.handshakeCompleted)
+      channelInitializer(address)
+        .hop(to: context.eventLoop)
+        .whenComplete {
+          switch $0 {
+          case .success(let negotiationResult):
+            // FIXME: SOCKS5 response
+            let response = Response(
+              reply: .succeeded,
+              boundAddress: .init(ctx.value.channel.localAddress!)
+            )
+            var buffer = ctx.value.channel.allocator.buffer(capacity: 16)
+            buffer.writeServerResponse(response)
+            ctx.value.writeAndFlush(bs.value.wrapOutboundOut(buffer), promise: nil)
 
-          self.negotiationResultPromise?.succeed(negotiationResult)
-          self.progress = .completed
+            ctx.value.fireUserInboundEventTriggered(SOCKSUserEvent.handshakeCompleted)
 
-          // Prepare data that need forward to next handler.
-          if byteBuffer.readableBytes > 0 {
-            byteBuffer.discardReadBytes()
-            self.eventBuffer.append(.channelRead(data: self.wrapInboundOut(byteBuffer)))
+            bs.value.negotiationResultPromise?.succeed(negotiationResult)
+            bs.value.progress = .completed
+
+            // Prepare data that need forward to next handler.
+            if byteBuffer.readableBytes > 0 {
+              byteBuffer.discardReadBytes()
+              bs.value.eventBuffer.append(.channelRead(data: bs.value.wrapInboundOut(byteBuffer)))
+            }
+            ctx.value.pipeline.removeHandler(bs.value, promise: nil)
+          case .failure(let error):
+            let response: Response = .init(
+              reply: .hostUnreachable,
+              boundAddress: address
+            )
+            var buffer = ctx.value.channel.allocator.buffer(capacity: 16)
+            buffer.writeServerResponse(response)
+            ctx.value.writeAndFlush(bs.value.wrapOutboundOut(buffer), promise: nil)
+            bs.value.negotiationResultPromise?.fail(error)
           }
-          self.flushBuffers(context: context)
-          context.pipeline.removeHandler(self, promise: nil)
-        case .failure:
-          let response: Response = .init(
-            reply: .hostUnreachable,
-            boundAddress: address
-          )
-          var buffer = context.channel.allocator.buffer(capacity: 16)
-          buffer.writeServerResponse(response)
-          context.writeAndFlush(self.wrapOutboundOut(buffer), promise: nil)
         }
-      }
     } catch {
+      negotiationResultPromise?.fail(error)
       channelClose(context: context, reason: error)
       return
     }
   }
 
-  private func flushBuffers(context: ChannelHandlerContext) {
+  private func channelClose(context: ChannelHandlerContext, reason: Error) {
+    context.fireErrorCaught(reason)
+    context.close(promise: nil)
+  }
+}
+
+extension SOCKS5ServerHandler: RemovableChannelHandler {
+
+  public func removeHandler(
+    context: ChannelHandlerContext,
+    removalToken: ChannelHandlerContext.RemovalToken
+  ) {
     while !eventBuffer.isEmpty {
       switch eventBuffer.removeFirst() {
       case .channelRead(let data):
@@ -225,11 +243,12 @@ final public class SOCKS5ServerHandler<Connection>: ChannelInboundHandler, Remov
         context.fireChannelReadComplete()
       }
     }
-  }
 
-  private func channelClose(context: ChannelHandlerContext, reason: Error) {
-    context.fireErrorCaught(reason)
-    context.close(promise: nil)
+    if progress != .completed {
+      negotiationResultPromise?.fail(ChannelError.inappropriateOperationForState)
+    }
+
+    context.leavePipeline(removalToken: removalToken)
   }
 }
 
