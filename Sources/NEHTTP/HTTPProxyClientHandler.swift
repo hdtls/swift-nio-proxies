@@ -105,7 +105,7 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
         scheduled?.cancel()
         channelClose(
           context: context,
-          reason: HTTPProxyError.unacceptableStatusCode(head.status)
+          reason: NEHTTPError(status: head.status)
         )
       }
     case (.body, .waitingForComplete):
@@ -114,7 +114,7 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
       established(context: context)
     default:
       scheduled?.cancel()
-      channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
+      channelClose(context: context, reason: NEHTTPError.badRequest)
     }
   }
 
@@ -153,9 +153,6 @@ extension HTTPProxyClientHandler {
       context.write(bufferedWrite.data, promise: bufferedWrite.promise)
     }
   }
-}
-
-extension HTTPProxyClientHandler {
 
   /// Sending HTTP CONNECT request to proxy server and perform a timeout schedule task.
   private func performCONNECTHandshake(context: ChannelHandlerContext) {
@@ -172,7 +169,7 @@ extension HTTPProxyClientHandler {
           "How can we have a scheduled timeout, if the connection is not even up?"
         )
       case .waitingForComplete:
-        bs.value.channelClose(context: ctx.value, reason: HTTPProxyError.connectionTimedOut)
+        bs.value.channelClose(context: ctx.value, reason: NEHTTPError.requestTimeout)
       case .completed:
         break
       }
@@ -242,9 +239,18 @@ extension HTTPProxyClientHandler {
     }
   }
 
-  private func channelClose(context: ChannelHandlerContext, reason: Error) {
-    context.fireErrorCaught(reason)
-    context.close(promise: nil)
+  private func channelClose(context: ChannelHandlerContext, reason: any Error) {
+    guard let error = reason as? NEHTTPError else {
+      context.fireErrorCaught(reason)
+      return
+    }
+
+    switch error.status {
+    case .badRequest, .requestTimeout:
+      context.close(promise: nil)
+    default:
+      context.fireErrorCaught(error)
+    }
   }
 }
 

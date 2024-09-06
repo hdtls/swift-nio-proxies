@@ -14,6 +14,7 @@
 
 import HTTPTypes
 import NIOCore
+import NIOHTTP1
 import XCTest
 
 @testable import NEHTTP

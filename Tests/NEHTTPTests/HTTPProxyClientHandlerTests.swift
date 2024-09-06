@@ -15,6 +15,7 @@
 import NEHTTP
 import NIOCore
 import NIOEmbedded
+import NIOHTTP1
 import XCTest
 
 class HTTPProxyClientHandlerTests: XCTestCase {
@@ -188,7 +189,7 @@ class HTTPProxyClientHandlerTests: XCTestCase {
       )
     )
 
-    XCTAssertThrowsError(try channel.finish())
+    XCTAssertNoThrow(try channel.finish())
   }
 
   func testBasicAuthenticationRequired() throws {
@@ -203,6 +204,6 @@ class HTTPProxyClientHandlerTests: XCTestCase {
         ByteBuffer(string: "HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
       )
     )
-    XCTAssertThrowsError(try channel.finish())
+    XCTAssertNoThrow(try channel.finish())
   }
 }

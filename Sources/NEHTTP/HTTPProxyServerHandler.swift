@@ -201,13 +201,17 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
       }
       configureHTTPTunnelPipeline(context: context)
     default:
-      negotiationResultPromise?.fail(HTTPProxyError.invalidHTTPOrdering)
-      channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
+      negotiationResultPromise?.fail(NEHTTPError.badRequest)
+      channelClose(context: context, reason: NEHTTPError.badRequest)
     }
   }
 
   public func channelReadComplete(context: ChannelHandlerContext) {
     eventBuffer.append(.channelReadComplete)
+  }
+
+  public func errorCaught(context: ChannelHandlerContext, error: any Error) {
+    channelClose(context: context, reason: error)
   }
 
   /// Encode HTTP request into ByteBuffer, see HTTPRequestEncoder for more details.
@@ -281,22 +285,17 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
       return
     }
 
-    guard connection.headerFields[values: .proxyAuthorization].contains(passwordReference) else {
-      negotiationResultPromise?.fail(
-        HTTPProxyError.unacceptableStatusCode(.proxyAuthenticationRequired)
-      )
-      channelClose(
-        context: context,
-        reason: HTTPProxyError.unacceptableStatusCode(.proxyAuthenticationRequired)
-      )
+    guard !connection.headerFields[values: .proxyAuthorization].contains(passwordReference) else {
       return
     }
+    negotiationResultPromise?.fail(NEHTTPError.proxyAuthenticationRequired)
+    channelClose(context: context, reason: NEHTTPError.proxyAuthenticationRequired)
   }
 
   private func configureHTTPTunnelPipeline(context: ChannelHandlerContext) {
     guard let originalHTTPRequest else {
-      negotiationResultPromise?.fail(HTTPProxyError.invalidHTTPOrdering)
-      channelClose(context: context, reason: HTTPProxyError.invalidHTTPOrdering)
+      negotiationResultPromise?.fail(NEHTTPError.badRequest)
+      channelClose(context: context, reason: NEHTTPError.badRequest)
       return
     }
     authenticate(context: context, connection: originalHTTPRequest)
@@ -353,26 +352,30 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
   }
 
   private func channelClose(context: ChannelHandlerContext, reason: Error) {
-    var head: HTTPResponseHead?
-
-    if let err = reason as? HTTPProxyError {
-      switch err {
-      case .invalidHTTPOrdering:
-        head = HTTPResponseHead(version: originalHTTPVersion, status: .badRequest)
-      case .unacceptableStatusCode(let code):
-        head = HTTPResponseHead(version: originalHTTPVersion, status: code)
-      case .connectionTimedOut:
-        break
-      }
+    var error = reason
+    if reason is HTTPParserError {
+      error = NEHTTPError.badRequest
     }
 
-    if let head = head {
-      context.write(wrapOutboundOut(.head(head)), promise: nil)
-      context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
+    guard let error = error as? NEHTTPError else {
+      context.fireErrorCaught(error)
+      return
     }
 
-    context.fireErrorCaught(reason)
-    context.close(promise: nil)
+    let head = HTTPResponseHead(
+      version: originalHTTPVersion,
+      status: error.status,
+      headers: error.httpFields
+    )
+    context.write(wrapOutboundOut(.head(head)), promise: nil)
+    context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
+
+    switch error {
+    case .badRequest, .requestTimeout:
+      context.close(promise: nil)
+    default:
+      context.fireErrorCaught(error)
+    }
   }
 }
 
