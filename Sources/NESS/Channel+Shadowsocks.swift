@@ -25,7 +25,21 @@ extension Channel {
   ///   - destinationAddress: The destination for proxy connection.
   ///   - position: The position in the pipeline whitch to insert the handlers.
   /// - Returns: An `EventLoopFuture<Void>` that completes when the channel is ready.
-  public func configureSSPipeline(
+  @preconcurrency public func configureSSPipeline(
+    algorithm: Algorithm,
+    passwordReference: String,
+    destinationAddress: Address,
+    position: ChannelPipeline.Position = .last
+  ) -> EventLoopFuture<Void> {
+    _configureSSPipeline(
+      algorithm: algorithm,
+      passwordReference: passwordReference,
+      destinationAddress: destinationAddress,
+      position: position
+    )
+  }
+
+  private func _configureSSPipeline(
     algorithm: Algorithm,
     passwordReference: String,
     destinationAddress: Address,

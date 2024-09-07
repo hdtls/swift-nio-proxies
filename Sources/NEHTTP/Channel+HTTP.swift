@@ -27,7 +27,21 @@ extension Channel {
   ///   - destinationAddress: The target address this tunnel work for.
   ///   - position: The position in the pipeline whitch to insert the handlers.
   /// - Returns: An `EventLoopFuture<Void>` that completes when the channel is ready to negotiate.
-  public func configureHTTPTunnelPipeline(
+  @preconcurrency public func configureHTTPTunnelPipeline(
+    authenticationRequired: Bool = false,
+    passwordReference: String = "",
+    destinationAddress: Address,
+    position: ChannelPipeline.Position = .last
+  ) -> EventLoopFuture<Void> {
+    _configureHTTPTunnelPipeline(
+      authenticationRequired: authenticationRequired,
+      passwordReference: passwordReference,
+      destinationAddress: destinationAddress,
+      position: position
+    )
+  }
+
+  private func _configureHTTPTunnelPipeline(
     authenticationRequired: Bool = false,
     passwordReference: String = "",
     destinationAddress: Address,
@@ -62,7 +76,23 @@ extension Channel {
   ///   - position: The position in the pipeline whitch to insert the handlers.
   ///   - channelInitializer: The outbound channel initializer.
   /// - Returns: An `EventLoopFuture<EventLoopFuture<(any Channel, C>>` that completes when the channel is ready.
-  public func configureHTTPTunnelPipeline<C>(
+  @preconcurrency public func configureHTTPTunnelPipeline<C>(
+    authenticationRequired: Bool = false,
+    passwordReference: String = "",
+    position: ChannelPipeline.Position = .last,
+    channelInitializer: @escaping @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<
+      (any Channel, C)
+    >
+  ) -> EventLoopFuture<EventLoopFuture<(any Channel, C)>> {
+    _configureHTTPTunnelPipeline(
+      authenticationRequired: authenticationRequired,
+      passwordReference: passwordReference,
+      position: position,
+      channelInitializer: channelInitializer
+    )
+  }
+
+  private func _configureHTTPTunnelPipeline<C>(
     authenticationRequired: Bool = false,
     passwordReference: String = "",
     position: ChannelPipeline.Position = .last,

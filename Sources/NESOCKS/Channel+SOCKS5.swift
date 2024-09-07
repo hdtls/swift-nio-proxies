@@ -26,7 +26,23 @@ extension Channel {
   ///   - destinationAddress: The target address this tunnel work for.
   ///   - position: The position in the `ChannelPipeline` where to add the SOCKS proxy server handlers. Defaults to `.last`.
   /// - Returns: An `EventLoopFuture<Void>` that completes when the channel is ready.
-  public func configureSOCKS5Pipeline(
+  @preconcurrency public func configureSOCKS5Pipeline(
+    username: String = "",
+    passwordReference: String = "",
+    authenticationRequired: Bool = false,
+    destinationAddress: Address,
+    position: ChannelPipeline.Position = .last
+  ) -> EventLoopFuture<Void> {
+    _configureSOCKS5Pipeline(
+      username: username,
+      passwordReference: passwordReference,
+      authenticationRequired: authenticationRequired,
+      destinationAddress: destinationAddress,
+      position: position
+    )
+  }
+
+  private func _configureSOCKS5Pipeline(
     username: String = "",
     passwordReference: String = "",
     authenticationRequired: Bool = false,
@@ -66,7 +82,23 @@ extension Channel {
   ///   - channelInitializer: The outbound channel initialzier to use to create channel to proxy server.
   ///       this channel initializer pass request info and returns `EventLoopFuture<any Channel, C>`.
   /// - Returns: An `EventLoopFuture<EventLoopFuture<(any Channel, C>>` that completes when the channel is ready.
-  public func configureSOCKS5Pipeline<C>(
+  @preconcurrency public func configureSOCKS5Pipeline<C>(
+    username: String = "",
+    passwordReference: String = "",
+    authenticationRequired: Bool = false,
+    position: ChannelPipeline.Position = .last,
+    channelInitializer: @escaping @Sendable (Address) -> EventLoopFuture<(any Channel, C)>
+  ) -> EventLoopFuture<EventLoopFuture<(any Channel, C)>> {
+    _configureSOCKS5Pipeline(
+      username: username,
+      passwordReference: passwordReference,
+      authenticationRequired: authenticationRequired,
+      position: position,
+      channelInitializer: channelInitializer
+    )
+  }
+
+  private func _configureSOCKS5Pipeline<C>(
     username: String = "",
     passwordReference: String = "",
     authenticationRequired: Bool = false,

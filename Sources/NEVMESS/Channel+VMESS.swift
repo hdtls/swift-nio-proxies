@@ -29,7 +29,23 @@ extension Channel {
   ///   - destinationAddress: The destination for proxy connection, Client only.
   ///   - position: The position in the pipeline whitch to insert the handlers.
   /// - Returns: An `EventLoopFuture<Void>` that completes when the channel is ready.
-  public func configureVMESSPipeline(
+  @preconcurrency public func configureVMESSPipeline(
+    contentSecurity: ContentSecurity,
+    user: UUID,
+    commandCode: CommandCode = .tcp,
+    destinationAddress: Address,
+    position: ChannelPipeline.Position = .last
+  ) -> EventLoopFuture<Void> {
+    _configureVMESSPipeline(
+      contentSecurity: contentSecurity,
+      user: user,
+      commandCode: commandCode,
+      destinationAddress: destinationAddress,
+      position: position
+    )
+  }
+
+  private func _configureVMESSPipeline(
     contentSecurity: ContentSecurity,
     user: UUID,
     commandCode: CommandCode = .tcp,
