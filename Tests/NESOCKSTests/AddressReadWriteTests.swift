@@ -12,19 +12,20 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NEAddressProcessing
 import NIOCore
 import XCTest
 
 @testable import NESOCKS
 
-class NWEndpointReadWriteTests: XCTestCase {
+class AddressReadWriteTests: XCTestCase {
 
   func testWriteNameHostPort() {
     let expectedAddress: [UInt8] = [
       0x03, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74, 0x00, 0x50,
     ]
     var buffer = ByteBuffer()
-    let endpoint = NWEndpoint.hostPort(host: "localhost", port: 80)
+    let endpoint = Address.hostPort(host: "localhost", port: 80)
     let bytesWritten = buffer.writeEndpointInRFC1928RequestAddressFormat(endpoint)
 
     XCTAssertEqual(bytesWritten, expectedAddress.count)
@@ -34,7 +35,7 @@ class NWEndpointReadWriteTests: XCTestCase {
   func testWriteIPv4AddressHostPort() {
     let expectedAddress: [UInt8] = [0x01, 0x7F, 0x00, 0x00, 0x01, 0x00, 0x50]
     var buffer = ByteBuffer()
-    let address = NWEndpoint.hostPort(host: "127.0.0.1", port: 80)
+    let address = Address.hostPort(host: "127.0.0.1", port: 80)
 
     XCTAssertEqual(buffer.writeEndpointInRFC1928RequestAddressFormat(address), 7)
     XCTAssertEqual(buffer.readableBytes, 7)
@@ -47,7 +48,7 @@ class NWEndpointReadWriteTests: XCTestCase {
       0x00, 0x01, 0x00, 0x50,
     ]
     var buffer = ByteBuffer()
-    let address = NWEndpoint.hostPort(host: "::1", port: 80)
+    let address = Address.hostPort(host: "::1", port: 80)
 
     XCTAssertEqual(buffer.writeEndpointInRFC1928RequestAddressFormat(address), 19)
     XCTAssertEqual(buffer.readableBytes, 19)

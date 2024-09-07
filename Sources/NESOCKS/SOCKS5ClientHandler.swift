@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NEAddressProcessing
 import NIOCore
-import _NELinux
 
 /// Connects to a SOCKS server to establish a proxied connection
 /// to a host. This handler should be inserted at the beginning of a
@@ -47,7 +47,7 @@ final public class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
   private let authenticationRequired: Bool
 
   /// The destination address of the proxy request.
-  private let destinationAddress: NWEndpoint
+  private let destinationAddress: Address
 
   /// Creates a new `SOCKS5ClientHandler` that connects to a server
   /// and instructs the server to connect to `destinationAddress`.
@@ -60,7 +60,7 @@ final public class SOCKS5ClientHandler: ChannelDuplexHandler, RemovableChannelHa
     username: String,
     passwordReference: String,
     authenticationRequired: Bool,
-    destinationAddress: NWEndpoint
+    destinationAddress: Address
   ) {
     guard case .hostPort = destinationAddress else {
       preconditionFailure("Initialize with \(destinationAddress) is not supported yet.")

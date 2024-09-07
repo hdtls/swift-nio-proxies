@@ -13,8 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import NEAddressProcessing
 import NIOCore
-import _NELinux
 
 /// Address identifier defined in RFC 1928.
 private enum AddressFlag: UInt8 {
@@ -54,14 +54,14 @@ extension ByteBuffer {
 
 extension ByteBuffer {
 
-  /// Read `NWEndpoint` from buffer which contains RFC1928 request address formatted bytes.
+  /// Read `Address` from buffer which contains RFC1928 request address formatted bytes.
   ///
   /// This method is used to parse address that encoded as SOCKS address defined in RFC 1928.
   ///
   /// - Throws: May throw  `SocketAddressError.unsupported` if address type is illegal,
   ///     or `SocketAddressError.FailedToParseIPByteBuffer(address:)` if failed to parse ipaddress.
   /// - Returns: If success return `NetAddress` else return nil for need more bytes.
-  mutating func readRFC1928RequestAddressAsEndpoint() throws -> NWEndpoint? {
+  mutating func readRFC1928RequestAddressAsEndpoint() throws -> Address? {
     try parseUnwinding { buffer in
       guard let rawValue = buffer.readInteger(as: UInt8.self) else {
         return nil
@@ -75,30 +75,27 @@ extension ByteBuffer {
       case .domain:
         // Unlike IPv4 and IPv6 address domain name have a variable length
         guard let slice = buffer.readLengthPrefixedSlice(as: UInt8.self),
-          let _port = buffer.readInteger(as: UInt16.self),
-          let port = NWEndpoint.Port(rawValue: _port)
+          let port = buffer.readInteger(as: UInt16.self)
         else {
           return nil
         }
-        return .hostPort(host: .name(String(buffer: slice), nil), port: port)
+        return .hostPort(host: .name(String(buffer: slice)), port: .init(rawValue: port))
       case .v4:
         guard let packedIPAddress = buffer.readSlice(length: 4),
           let address = IPv4Address(Data(Array(buffer: packedIPAddress))),
-          let _port = buffer.readInteger(as: UInt16.self),
-          let port = NWEndpoint.Port(rawValue: _port)
+          let port = buffer.readInteger(as: UInt16.self)
         else {
           return nil
         }
-        return .hostPort(host: .ipv4(address), port: port)
+        return .hostPort(host: .ipv4(address), port: .init(rawValue: port))
       case .v6:
         guard let packedIPAddress = buffer.readSlice(length: 16),
           let address = IPv6Address(Data(Array(buffer: packedIPAddress))),
-          let _port = buffer.readInteger(as: UInt16.self),
-          let port = NWEndpoint.Port(rawValue: _port)
+          let port = buffer.readInteger(as: UInt16.self)
         else {
           return nil
         }
-        return .hostPort(host: .ipv6(address), port: port)
+        return .hostPort(host: .ipv6(address), port: .init(rawValue: port))
       }
     }
   }
@@ -107,7 +104,7 @@ extension ByteBuffer {
   /// - Parameter address: The address waiting to write.
   /// - Returns: Byte count.
   @discardableResult
-  mutating func writeEndpointInRFC1928RequestAddressFormat(_ address: NWEndpoint) -> Int {
+  mutating func writeEndpointInRFC1928RequestAddressFormat(_ address: Address) -> Int {
     var totalBytesWritten = 0
 
     switch address {
@@ -121,24 +118,16 @@ extension ByteBuffer {
         totalBytesWritten += writeInteger(AddressFlag.v6.rawValue)
         totalBytesWritten += writeBytes(address.rawValue)
         totalBytesWritten += writeInteger(port.rawValue)
-      case .name(let name, _):
+      case .name(let name):
         totalBytesWritten += writeInteger(AddressFlag.domain.rawValue)
         // swift-format-ignore: NeverUseForceTry
         totalBytesWritten += try! writeLengthPrefixed(as: UInt8.self) {
           $0.writeString(name)
         }
         totalBytesWritten += writeInteger(port.rawValue)
-      #if canImport(Network)
-      @unknown default:
-        assertionFailure("Unhandle case of NWEndpoint.Host \(host)")
-      #endif
       }
-    case .service, .unix, .url, .opaque:
+    case .unix, .url:
       fatalError("\(#function) unsupported endpoint")
-    #if canImport(Network)
-    @unknown default:
-      assertionFailure("Unhandle case of NWEndpoint \(address)")
-    #endif
     }
     return totalBytesWritten
   }

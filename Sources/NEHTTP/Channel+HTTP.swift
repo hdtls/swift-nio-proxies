@@ -13,9 +13,9 @@
 //===----------------------------------------------------------------------===//
 
 import HTTPTypes
+import NEAddressProcessing
 import NIOCore
 import NIOHTTP1
-import _NELinux
 
 extension Channel {
 
@@ -30,7 +30,7 @@ extension Channel {
   public func configureHTTPTunnelPipeline(
     authenticationRequired: Bool = false,
     passwordReference: String = "",
-    destinationAddress: NWEndpoint,
+    destinationAddress: Address,
     position: ChannelPipeline.Position = .last
   ) -> EventLoopFuture<Void> {
     if eventLoop.inEventLoop {
@@ -104,7 +104,7 @@ extension ChannelPipeline.SynchronousOperations {
   public func configureHTTPTunnelPipeline(
     authenticationRequired: Bool = false,
     passwordReference: String,
-    destinationAddress: NWEndpoint,
+    destinationAddress: Address,
     position: ChannelPipeline.Position = .last
   ) throws {
     eventLoop.assertInEventLoop()

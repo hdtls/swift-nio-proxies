@@ -13,15 +13,16 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import NEAddressProcessing
 import NIOCore
 
 @testable import NESS
 
 extension Data {
 
-  /// Read `NetAddress` from buffer.
-  /// - Returns: If success return `NetAddress` else return nil for need more bytes.
-  mutating func readAddress() throws -> NWEndpoint? {
+  /// Read `Address` from buffer.
+  /// - Returns: If success return `Address` else return nil for need more bytes.
+  mutating func readAddress() throws -> Address? {
     let data = self
     var byteBuffer = ByteBuffer(bytes: data)
     defer {
@@ -34,7 +35,7 @@ extension Data {
   /// - Parameter address: The address waiting to write.
   /// - Returns: Byte count.
   @discardableResult
-  mutating func writeAddress(_ address: NWEndpoint) -> Int {
+  mutating func writeAddress(_ address: Address) -> Int {
     var byteBuffer = ByteBuffer()
     defer {
       append(contentsOf: Array(buffer: byteBuffer))

@@ -12,9 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NEAddressProcessing
 import NIOCore
 import NIOHTTP1
-import _NELinux
 
 /// A channel handler that wraps a channel in HTTP CONNECT tunnel.
 /// This handler can be used in channels that are acting as the client in the HTTP CONNECT tunnel proxy dialog.
@@ -31,7 +31,7 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
   private let authenticationRequired: Bool
 
   /// The destination for this proxy connection.
-  private let destinationAddress: NWEndpoint
+  private let destinationAddress: Address
 
   private enum Progress: Equatable {
     case waitingForData
@@ -65,7 +65,7 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
   public init(
     passwordReference: String,
     authenticationRequired: Bool,
-    destinationAddress: NWEndpoint,
+    destinationAddress: Address,
     additionalHTTPHandlers: [any RemovableChannelHandler],
     timeoutInterval: TimeAmount = .seconds(60)
   ) {
@@ -181,26 +181,16 @@ extension HTTPProxyClientHandler {
     switch destinationAddress {
     case .hostPort(let host, let port):
       switch host {
-      case .name(let string, _):
+      case .name(let string):
         uri = "\(string):\(port.rawValue)"
       case .ipv4(let address):
         uri = "\(address.debugDescription):\(port.rawValue)"
       case .ipv6(let address):
         uri = "\(address.debugDescription):\(port.rawValue)"
-      #if canImport(Network)
-      @unknown default:
-        uri = ""
-        assertionFailure("Unhandle case of NWEndpoint \(destinationAddress)")
-      #endif
       }
-    case .service, .unix, .url, .opaque:
+    case .unix, .url:
       channelClose(context: context, reason: SocketAddressError.unsupported)
       return
-    #if canImport(Network)
-    @unknown default:
-      uri = ""
-      assertionFailure("Unhandle case of NWEndpoint \(destinationAddress)")
-    #endif
     }
 
     var head: HTTPRequestHead = .init(version: .http1_1, method: .CONNECT, uri: uri)

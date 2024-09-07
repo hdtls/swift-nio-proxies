@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NEAddressProcessing
 import NIOCore
-import _NELinux
 
 extension Channel {
 
@@ -30,7 +30,7 @@ extension Channel {
     username: String = "",
     passwordReference: String = "",
     authenticationRequired: Bool = false,
-    destinationAddress: NWEndpoint,
+    destinationAddress: Address,
     position: ChannelPipeline.Position = .last
   ) -> EventLoopFuture<Void> {
     if eventLoop.inEventLoop {
@@ -71,7 +71,7 @@ extension Channel {
     passwordReference: String = "",
     authenticationRequired: Bool = false,
     position: ChannelPipeline.Position = .last,
-    channelInitializer: @escaping @Sendable (NWEndpoint) -> EventLoopFuture<(any Channel, C)>
+    channelInitializer: @escaping @Sendable (Address) -> EventLoopFuture<(any Channel, C)>
   ) -> EventLoopFuture<EventLoopFuture<(any Channel, C)>> {
     if eventLoop.inEventLoop {
       return eventLoop.makeCompletedFuture {
@@ -112,7 +112,7 @@ extension ChannelPipeline.SynchronousOperations {
     username: String = "",
     passwordReference: String = "",
     authenticationRequired: Bool = false,
-    destinationAddress: NWEndpoint,
+    destinationAddress: Address,
     position: ChannelPipeline.Position = .last
   ) throws {
     eventLoop.assertInEventLoop()
@@ -142,7 +142,7 @@ extension ChannelPipeline.SynchronousOperations {
     passwordReference: String = "",
     authenticationRequired: Bool = false,
     position: ChannelPipeline.Position = .last,
-    channelInitializer: @escaping @Sendable (NWEndpoint) -> EventLoopFuture<(any Channel, C)>
+    channelInitializer: @escaping @Sendable (Address) -> EventLoopFuture<(any Channel, C)>
   ) throws -> EventLoopFuture<(any Channel, C)> {
     eventLoop.assertInEventLoop()
 

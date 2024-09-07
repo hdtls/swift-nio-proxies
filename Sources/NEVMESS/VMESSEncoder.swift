@@ -14,6 +14,7 @@
 
 import Crypto
 import Foundation
+import NEAddressProcessing
 import NESHAKE128
 import NIOCore
 
@@ -542,12 +543,12 @@ extension BetterVMESSWriter: Sendable {}
 extension ByteBuffer {
 
   @discardableResult
-  mutating func writeVMESSAddress(_ address: NWEndpoint) -> Int {
+  mutating func writeVMESSAddress(_ address: Address) -> Int {
     guard case .hostPort(host: let host, port: let port) = address else {
       fatalError("Unsupported ByteBuffer write.")
     }
     switch host {
-    case .name(let string, _):
+    case .name(let string):
       return self.writeInteger(port.rawValue)
         + self.writeInteger(UInt8(2))
         + self.writeInteger(UInt8(string.utf8.count))
@@ -560,11 +561,6 @@ extension ByteBuffer {
       return self.writeInteger(port.rawValue.bigEndian)
         + self.writeInteger(UInt8(3))
         + self.writeBytes(iPv6Address.rawValue)
-    #if canImport(Network)
-    @unknown default:
-      assertionFailure("Unhandle case of NWEndpoint.Host \(host)")
-      return 0
-    #endif
     }
   }
 }

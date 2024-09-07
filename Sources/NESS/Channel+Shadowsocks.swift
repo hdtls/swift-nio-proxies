@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NEAddressProcessing
 import NIOCore
-import _NELinux
 
 extension Channel {
 
@@ -28,7 +28,7 @@ extension Channel {
   public func configureSSPipeline(
     algorithm: Algorithm,
     passwordReference: String,
-    destinationAddress: NWEndpoint,
+    destinationAddress: Address,
     position: ChannelPipeline.Position = .last
   ) -> EventLoopFuture<Void> {
     if eventLoop.inEventLoop {
@@ -66,7 +66,7 @@ extension ChannelPipeline.SynchronousOperations {
   public func configureSSPipeline(
     algorithm: Algorithm,
     passwordReference: String,
-    destinationAddress: NWEndpoint,
+    destinationAddress: Address,
     position: ChannelPipeline.Position = .last
   ) throws {
     eventLoop.assertInEventLoop()

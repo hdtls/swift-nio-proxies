@@ -12,9 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-import _NELinux
+import NEAddressProcessing
 
-#if os(iOS) || os(macOS) || os(tvOS) || os(watchOS)
+#if canImport(Darwin)
 import Foundation
 #else
 @preconcurrency import Foundation
@@ -294,7 +294,7 @@ public struct VMESSRequestHead: Hashable {
 
     fileprivate var commandCode: CommandCode
 
-    fileprivate var address: NWEndpoint
+    fileprivate var address: Address
 
     fileprivate init(
       version: VMESSVersion,
@@ -303,7 +303,7 @@ public struct VMESSRequestHead: Hashable {
       contentSecurity: ContentSecurity,
       options: StreamOptions,
       commandCode: CommandCode,
-      address: NWEndpoint
+      address: Address
     ) {
       self.version = version
       self.user = user
@@ -389,7 +389,7 @@ public struct VMESSRequestHead: Hashable {
     }
   }
 
-  public var address: NWEndpoint {
+  public var address: Address {
     get {
       return self._storage.address
     }
@@ -406,7 +406,7 @@ public struct VMESSRequestHead: Hashable {
     algorithm: ContentSecurity,
     options: StreamOptions,
     commandCode: CommandCode,
-    address: NWEndpoint
+    address: Address
   ) {
     self._storage = .init(
       version: version,

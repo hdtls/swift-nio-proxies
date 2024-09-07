@@ -18,7 +18,6 @@ import PackageDescription
 let swiftNIOCore: Target.Dependency = .product(name: "NIOCore", package: "swift-nio")
 let swiftNIOEmbedded: Target.Dependency = .product(name: "NIOEmbedded", package: "swift-nio")
 let swiftNIOHTTP1: Target.Dependency = .product(name: "NIOHTTP1", package: "swift-nio")
-let swiftNIOPosix: Target.Dependency = .product(name: "NIOPosix", package: "swift-nio")
 let swiftNIOSSL: Target.Dependency = .product(name: "NIOSSL", package: "swift-nio-ssl")
 let swiftCrypto: Target.Dependency = .product(name: "Crypto", package: "swift-crypto")
 
@@ -31,7 +30,7 @@ let package = Package(
     .tvOS(.v13),
   ],
   products: [
-    .library(name: "_NELinux", targets: ["_NELinux"]),
+    .library(name: "NEAddressProcessing", targets: ["NEAddressProcessing"]),
     .library(name: "NEHTTP", targets: ["NEHTTP"]),
     .library(name: "NESOCKS", targets: ["NESOCKS"]),
     .library(name: "NESS", targets: ["NESS"]),
@@ -41,27 +40,29 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
     .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
-    .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.22.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
   ],
   targets: [
-    .target(name: "_NELinux", dependencies: [swiftNIOCore]),
+    .target(name: "NEAddressProcessing", dependencies: [swiftNIOCore]),
     .target(name: "CNESHAKE128"),
     .target(
       name: "NEHTTP",
       dependencies: [
-        "_NELinux", swiftNIOCore, swiftNIOHTTP1,
+        "NEAddressProcessing", swiftNIOCore, swiftNIOHTTP1,
         .product(name: "HTTPTypes", package: "swift-http-types"),
       ]
     ),
     .target(name: "NEPrettyBytes"),
     .target(name: "NESHAKE128", dependencies: ["CNESHAKE128", "NEPrettyBytes", swiftCrypto]),
-    .target(name: "NESOCKS", dependencies: ["_NELinux", swiftNIOCore]),
-    .target(name: "NESS", dependencies: ["_NELinux", "NEPrettyBytes", swiftCrypto, swiftNIOCore]),
+    .target(name: "NESOCKS", dependencies: ["NEAddressProcessing", swiftNIOCore]),
+    .target(
+      name: "NESS",
+      dependencies: ["NEAddressProcessing", "NEPrettyBytes", swiftCrypto, swiftNIOCore]
+    ),
     .target(
       name: "NEVMESS",
       dependencies: [
-        "_NELinux",
+        "NEAddressProcessing",
         "NEPrettyBytes",
         "NESHAKE128",
         swiftCrypto,
@@ -73,10 +74,9 @@ let package = Package(
       name: "NEHTTPTests",
       dependencies: [
         "NEHTTP", swiftNIOCore, swiftNIOEmbedded, swiftNIOHTTP1, swiftNIOSSL,
-        .product(name: "NIOHTTPTypes", package: "swift-nio-extras"),
       ]
     ),
-    .testTarget(name: "NELinuxTests", dependencies: ["_NELinux"]),
+    .testTarget(name: "NEAddressProcessingTests", dependencies: ["NEAddressProcessing"]),
     .testTarget(name: "NESHAKE128Tests", dependencies: ["NESHAKE128"]),
     .testTarget(name: "NESOCKSTests", dependencies: ["NESOCKS", swiftNIOCore, swiftNIOEmbedded]),
     .testTarget(
@@ -90,7 +90,8 @@ let package = Package(
     .testTarget(
       name: "NEVMESSTests",
       dependencies: [
-        "NEPrettyBytes", "NEVMESS", "_NELinux", swiftCrypto, swiftNIOCore, swiftNIOEmbedded,
+        "NEPrettyBytes", "NEVMESS", "NEAddressProcessing", swiftCrypto, swiftNIOCore,
+        swiftNIOEmbedded,
       ]
     ),
   ],

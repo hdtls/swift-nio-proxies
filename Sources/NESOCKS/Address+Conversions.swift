@@ -13,8 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import NEAddressProcessing
 import NIOCore
-import _NELinux
 
 extension IPv4Address {
   /// Create an `IPv4Address` object from a `sockaddr_in`.
@@ -39,7 +39,7 @@ extension IPv6Address {
   }
 }
 
-extension NWEndpoint {
+extension Address {
   internal init(_ socketAddress: SocketAddress) {
     switch socketAddress {
     case .unixDomainSocket(let uds):
@@ -48,15 +48,15 @@ extension NWEndpoint {
         let ptr = ptr.baseAddress!.bindMemory(to: UInt8.self, capacity: 104)
         return String(cString: ptr)
       }
-      self = NWEndpoint.unix(path: path)
+      self = .unix(path: path)
     case .v4(let v4Addr):
       let v4Address = IPv4Address(v4Addr.address)
-      let port = NWEndpoint.Port(rawValue: UInt16(socketAddress.port!))!
-      self = NWEndpoint.hostPort(host: .ipv4(v4Address), port: port)
+      let port = Address.Port(rawValue: UInt16(socketAddress.port!))
+      self = .hostPort(host: .ipv4(v4Address), port: port)
     case .v6(let v6Addr):
       let v6Address = IPv6Address(v6Addr.address)
-      let port = NWEndpoint.Port(rawValue: UInt16(socketAddress.port!))!
-      self = NWEndpoint.hostPort(host: .ipv6(v6Address), port: port)
+      let port = Address.Port(rawValue: UInt16(socketAddress.port!))
+      self = .hostPort(host: .ipv6(v6Address), port: port)
     }
   }
 }

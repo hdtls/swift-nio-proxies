@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+import NEAddressProcessing
 import NIOCore
-import _NELinux
 
 /// Add this handshake handler to the front of your channel, closest to the network.
 /// The handler will receive bytes from the network and parse to enforce SOCKSv5 protocol correctness.
@@ -64,7 +64,7 @@ final public class SOCKS5ServerHandler<Connection>: ChannelInboundHandler {
     return negotiationResultPromise.futureResult
   }
 
-  private let channelInitializer: @Sendable (NWEndpoint) -> EventLoopFuture<NegotiationResult>
+  private let channelInitializer: @Sendable (Address) -> EventLoopFuture<NegotiationResult>
 
   /// Initialize an instance of `SOCKS5ServerHandler` with specified parameters.
   ///
@@ -77,7 +77,7 @@ final public class SOCKS5ServerHandler<Connection>: ChannelInboundHandler {
     username: String,
     passwordReference: String,
     authenticationRequired: Bool,
-    channelInitializer: @escaping @Sendable (NWEndpoint) -> EventLoopFuture<NegotiationResult>
+    channelInitializer: @escaping @Sendable (Address) -> EventLoopFuture<NegotiationResult>
   ) {
     self.username = username
     self.passwordReference = passwordReference
