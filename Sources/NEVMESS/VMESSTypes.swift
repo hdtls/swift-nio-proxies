@@ -12,13 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NEAddressProcessing
-
-#if canImport(Darwin)
 import Foundation
-#else
-@preconcurrency import Foundation
-#endif
+import NEAddressProcessing
 
 /// `Version` defines VMESS protocol version.
 public struct VMESSVersion: Hashable, RawRepresentable, Sendable {
