@@ -13,11 +13,11 @@ on:
 
 jobs:
   test:
-    name: pull request validation (${{ matrix.swift-version }}-${{ matrix.platform }})
-    runs-on: ${{ matrix.platform }}
+    name: pull request validation (${{ matrix.swift-version }}-${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        platform: [ubuntu-22.04, macos-14]
+        os: [ubuntu-22.04, macos-14]
         swift-version: ["5.9", "5.10"]
         
     steps:
