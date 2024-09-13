@@ -31,6 +31,7 @@ let package = Package(
   ],
   products: [
     .library(name: "NEAddressProcessing", targets: ["NEAddressProcessing"]),
+    .library(name: "NEPrettyBytes", targets: ["NEPrettyBytes"]),
     .library(name: "NEHTTP", targets: ["NEHTTP"]),
     .library(name: "NESOCKS", targets: ["NESOCKS"]),
     .library(name: "NESS", targets: ["NESS"]),
