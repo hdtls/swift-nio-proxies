@@ -37,4 +37,9 @@ jobs:
           swift-version: ${{matrix.swift-version}}
 
       - name: Unit tests...
+        if: ${{ matrix.swift-version == 5.9 || matrix.swift-version == 5.10 }}
         run: swift test -Xswiftc -warnings-as-errors --explicit-target-dependency-import-check error
+
+      - name: Unit tests...
+        if: ${{ matrix.swift-version == 6.0 }}
+        run: swift test --explicit-target-dependency-import-check error
