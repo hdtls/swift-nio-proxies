@@ -5,7 +5,7 @@
 // Copyright (c) 2022 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
-// See LICENSE for license information
+// See LICENSE.txt for license information
 // See CONTRIBUTORS.txt for the list of Netbot project authors
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -401,12 +401,6 @@ final public class VMESSDecoder<Out>: ByteToMessageDecoder, VMESSDecoderDelegate
   private var stopParsing = false
 
   /// Creates a new instance of `VMESSDecoder`.
-  /// - Parameters:
-  ///   - contentSecurity: The security type use to control message decoding method.
-  ///   - symmetricKey: SymmetricKey for decriptor.
-  ///   - nonce: Nonce for decryptor.
-  ///   - options: The stream options use to control data padding and mask.
-  ///   - headDecryptionStrategy: Strategy to decrypt encrypted response head. Defaults to `.useAEAD`.
   public init(
     contentSecurity: ContentSecurity,
     symmetricKey: SymmetricKey,

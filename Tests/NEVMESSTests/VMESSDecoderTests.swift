@@ -5,7 +5,7 @@
 // Copyright (c) 2023 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
-// See LICENSE for license information
+// See LICENSE.txt for license information
 // See CONTRIBUTORS.txt for the list of Netbot project authors
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -167,12 +167,12 @@ final class VMESSDecoderTests: XCTestCase {
     let data = ByteBuffer(hexEncoded: "f9b53af2a0b7d87ca97fb9f089ba97ed1149")!
     XCTAssertThrowsError(try channel.writeInbound(data)) { error in
       #if canImport(CryptoKit)
-      guard case .authenticationFailure = error as? CryptoKitError else {
-        XCTFail("error should be CryptoKitError.authenticationFailure but got \(error)")
-        return
-      }
+        guard case .authenticationFailure = error as? CryptoKitError else {
+          XCTFail("error should be CryptoKitError.authenticationFailure but got \(error)")
+          return
+        }
       #else
-      XCTAssertTrue(error is CryptoKitError, "error should be CryptoKitError")
+        XCTAssertTrue(error is CryptoKitError, "error should be CryptoKitError")
       #endif
     }
   }
@@ -192,12 +192,12 @@ final class VMESSDecoderTests: XCTestCase {
     )!
     XCTAssertThrowsError(try channel.writeInbound(data)) { error in
       #if canImport(CryptoKit)
-      guard case .authenticationFailure = error as? CryptoKitError else {
-        XCTFail("error should be CryptoKitError.authenticationFailure but got \(error)")
-        return
-      }
+        guard case .authenticationFailure = error as? CryptoKitError else {
+          XCTFail("error should be CryptoKitError.authenticationFailure but got \(error)")
+          return
+        }
       #else
-      XCTAssertTrue(error is CryptoKitError, "error should be CryptoKitError")
+        XCTAssertTrue(error is CryptoKitError, "error should be CryptoKitError")
       #endif
     }
   }

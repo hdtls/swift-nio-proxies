@@ -5,7 +5,7 @@
 // Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
-// See LICENSE for license information
+// See LICENSE.txt for license information
 // See CONTRIBUTORS.txt for the list of Netbot project authors
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -72,7 +72,8 @@ final public class SOCKS5ServerHandler<Connection>: ChannelInboundHandler {
   ///   - username: Username for proxy authentication.
   ///   - passwordReference: Password for proxy authentication.
   ///   - authenticationRequired: A boolean value deterinse whether server should evaluate proxy authentication request.
-  ///   - completion: The completion handler when proxy connection established, returns `EventLoopFuture<Void>` using given request info, server channel and outbound client channel.
+  ///   - channelInitializer: The outbound channel initialzier to use to create channel to proxy server.
+  ///       this channel initializer pass request info and returns `EventLoopFuture<any Channel, Connection>`.
   public init(
     username: String,
     passwordReference: String,

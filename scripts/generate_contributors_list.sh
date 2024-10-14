@@ -6,7 +6,7 @@
 ## Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 ## Licensed under Apache License v2.0
 ##
-## See LICENSE for license information
+## See LICENSE.txt for license information
 ## See CONTRIBUTORS.txt for the list of Netbot project authors
 ##
 ## SPDX-License-Identifier: Apache-2.0

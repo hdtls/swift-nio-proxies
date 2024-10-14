@@ -5,7 +5,7 @@
 // Copyright (c) 2022 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
-// See LICENSE for license information
+// See LICENSE.txt for license information
 // See CONTRIBUTORS.txt for the list of Netbot project authors
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -578,12 +578,6 @@ final public class VMESSEncoder<In: Equatable>: ChannelOutboundHandler {
   private let writer: BetterVMESSWriter<In>
 
   /// Creates a new instance of `VMESSEncoder`.
-  /// - Parameters:
-  ///   - authenticationCode: The authentication code to use to verify authenticated head message.
-  ///   - contentSecurity: The security type use to control message encoding method.
-  ///   - symmetricKey: SymmetricKey for encryptor.
-  ///   - nonce: Nonce for encryptor.
-  ///   - options: The stream options use to control data padding and mask.
   public init(
     authenticationCode: UInt8,
     contentSecurity: ContentSecurity,

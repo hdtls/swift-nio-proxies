@@ -5,7 +5,7 @@
 // Copyright (c) 2023 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
-// See LICENSE for license information
+// See LICENSE.txt for license information
 // See CONTRIBUTORS.txt for the list of Netbot project authors
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -16,9 +16,9 @@
 import Foundation
 
 #if canImport(CommonCrypto)
-private typealias AESECBImpl = CommonCryptoAESECBImpl
+  private typealias AESECBImpl = CommonCryptoAESECBImpl
 #else
-private typealias AESECBImpl = OpenSSLAESECBImpl
+  private typealias AESECBImpl = OpenSSLAESECBImpl
 #endif
 
 extension AES {

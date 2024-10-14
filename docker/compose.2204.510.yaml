@@ -11,7 +11,7 @@ services:
     image: swift-netbot-core:5.10-jammy
     environment:
       - WARN_AS_ERROR_ARG=-Xswiftc -warnings-as-errors
-#      - SANITIZER_ARG=--sanitize=thread
+      #      - SANITIZER_ARG=--sanitize=thread
       - IMPORT_CHECK_ARG=--explicit-target-dependency-import-check error
 
   shell:

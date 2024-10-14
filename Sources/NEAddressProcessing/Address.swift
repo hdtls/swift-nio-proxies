@@ -5,7 +5,7 @@
 // Copyright (c) 2024 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
-// See LICENSE for license information
+// See LICENSE.txt for license information
 // See CONTRIBUTORS.txt for the list of Netbot project authors
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -13,136 +13,136 @@
 //===----------------------------------------------------------------------===//
 
 #if canImport(Network)
-import Foundation
-@_exported import Network
+  import Foundation
+  @_exported import Network
 #else
-@preconcurrency import Foundation
-import enum NIOCore.SocketAddress
-import struct NIOCore.ByteBuffer
+  @preconcurrency import Foundation
+  import enum NIOCore.SocketAddress
+  import struct NIOCore.ByteBuffer
 
-/// An IP address
-public protocol IPAddress: Sendable {
+  /// An IP address
+  public protocol IPAddress: Sendable {
 
-  /// Fetch the raw address as data
-  var rawValue: Data { get }
+    /// Fetch the raw address as data
+    var rawValue: Data { get }
 
-  /// Create an IP address from data. The length of the data must
-  /// match the expected length of addresses in the address family
-  /// (four bytes for IPv4, and sixteen bytes for IPv6)
-  init?(_ rawValue: Data)
+    /// Create an IP address from data. The length of the data must
+    /// match the expected length of addresses in the address family
+    /// (four bytes for IPv4, and sixteen bytes for IPv6)
+    init?(_ rawValue: Data)
 
-  /// Create an IP address from an address literal string.
-  /// If the string contains '%' to indicate an interface, the interface will be
-  /// associated with the address, such as "::1%lo0" being associated with the loopback
-  /// interface.
-  /// This function does not perform host name to address resolution. This is the same as calling getaddrinfo
-  /// and using AI_NUMERICHOST.
-  init?(_ string: String)
-}
-
-/// IPv4Address
-/// Base type to hold an IPv4 address and convert between strings and raw bytes.
-/// Note that an IPv4 address may be scoped to an interface.
-public struct IPv4Address: IPAddress, Hashable, CustomDebugStringConvertible {
-
-  /// Fetch the raw address (four bytes)
-  public var rawValue: Data { _rawValue }
-  private var _rawValue: Data
-
-  /// Create an IPv4 address from a 4-byte data.
-  ///
-  /// - Parameter rawValue: The raw bytes of the IPv4 address, must be exactly 4 bytes or init will fail.
-  /// - Returns: An IPv4Address or nil if the Data parameter did not contain an IPv4 address.
-  public init?(_ rawValue: Data) {
-    guard rawValue.count == 4 else {
-      return nil
-    }
-
-    let buffer = ByteBuffer(bytes: rawValue)
-    guard case .v4 = try? SocketAddress(packedIPAddress: buffer, port: 0) else {
-      return nil
-    }
-
-    _rawValue = rawValue
+    /// Create an IP address from an address literal string.
+    /// If the string contains '%' to indicate an interface, the interface will be
+    /// associated with the address, such as "::1%lo0" being associated with the loopback
+    /// interface.
+    /// This function does not perform host name to address resolution. This is the same as calling getaddrinfo
+    /// and using AI_NUMERICHOST.
+    init?(_ string: String)
   }
 
-  /// Create an IPv4 address from an address literal string.
-  ///
-  /// This function does not perform host name to address resolution. This is the same as calling getaddrinfo
-  /// and using AI_NUMERICHOST.
-  ///
-  /// - Parameter string: An IPv4 address literal string such as "127.0.0.1".
-  /// - Returns: An IPv4Address or nil if the string parameter did not
-  /// contain an IPv4 address literal.
-  public init?(_ string: String) {
-    guard case .v4(let v4) = try? SocketAddress(ipAddress: string, port: 0) else {
-      return nil
-    }
-    var localAddr = v4.address
-    _rawValue = withUnsafeBytes(of: &localAddr.sin_addr) {
-      precondition($0.count == 4)
-      return Data(bytes: $0.baseAddress!, count: $0.count)
-    }
-  }
+  /// IPv4Address
+  /// Base type to hold an IPv4 address and convert between strings and raw bytes.
+  /// Note that an IPv4 address may be scoped to an interface.
+  public struct IPv4Address: IPAddress, Hashable, CustomDebugStringConvertible {
 
-  public var debugDescription: String {
-    let packedIPAddress = ByteBuffer(bytes: rawValue)
-    let address = try! SocketAddress(packedIPAddress: packedIPAddress, port: 0)
-    return address.ipAddress!
-  }
-}
+    /// Fetch the raw address (four bytes)
+    public var rawValue: Data { _rawValue }
+    private var _rawValue: Data
 
-/// IPv6Address
-/// Base type to hold an IPv6 address and convert between strings and raw bytes.
-/// Note that an IPv6 address may be scoped to an interface.
-public struct IPv6Address: IPAddress, Hashable, CustomDebugStringConvertible {
+    /// Create an IPv4 address from a 4-byte data.
+    ///
+    /// - Parameter rawValue: The raw bytes of the IPv4 address, must be exactly 4 bytes or init will fail.
+    /// - Returns: An IPv4Address or nil if the Data parameter did not contain an IPv4 address.
+    public init?(_ rawValue: Data) {
+      guard rawValue.count == 4 else {
+        return nil
+      }
 
-  /// Create an IPv6 from a raw 16 byte value and optional interface
-  ///
-  /// - Parameter rawValue: A 16 byte IPv6 address
-  /// - Parameter interface: An optional interface the address is scoped to. Defaults to nil.
-  /// - Returns: nil unless the raw data contained an IPv6 address
-  public init?(_ rawValue: Data) {
-    guard rawValue.count == 16 else {
-      return nil
+      let buffer = ByteBuffer(bytes: rawValue)
+      guard case .v4 = try? SocketAddress(packedIPAddress: buffer, port: 0) else {
+        return nil
+      }
+
+      _rawValue = rawValue
     }
 
-    let buffer = ByteBuffer(bytes: rawValue)
-    guard case .v6 = try? SocketAddress(packedIPAddress: buffer, port: 0) else {
-      return nil
+    /// Create an IPv4 address from an address literal string.
+    ///
+    /// This function does not perform host name to address resolution. This is the same as calling getaddrinfo
+    /// and using AI_NUMERICHOST.
+    ///
+    /// - Parameter string: An IPv4 address literal string such as "127.0.0.1".
+    /// - Returns: An IPv4Address or nil if the string parameter did not
+    /// contain an IPv4 address literal.
+    public init?(_ string: String) {
+      guard case .v4(let v4) = try? SocketAddress(ipAddress: string, port: 0) else {
+        return nil
+      }
+      var localAddr = v4.address
+      _rawValue = withUnsafeBytes(of: &localAddr.sin_addr) {
+        precondition($0.count == 4)
+        return Data(bytes: $0.baseAddress!, count: $0.count)
+      }
     }
 
-    _rawValue = rawValue
-  }
-
-  /// Create an IPv6 address from a string literal such as "2001:DB8::5"
-  ///
-  /// This function does not perform hostname resolution. This is similar to calling getaddrinfo with
-  /// AI_NUMERICHOST.
-  ///
-  /// - Parameter string: An IPv6 address literal string.
-  /// - Returns: nil unless the string contained an IPv6 literal
-  public init?(_ string: String) {
-    guard case .v6(let v6) = try? SocketAddress(ipAddress: string, port: 0) else {
-      return nil
-    }
-    var localAddr = v6.address
-    _rawValue = withUnsafeBytes(of: &localAddr.sin6_addr) {
-      precondition($0.count == 16)
-      return Data(bytes: $0.baseAddress!, count: $0.count)
+    public var debugDescription: String {
+      let packedIPAddress = ByteBuffer(bytes: rawValue)
+      let address = try! SocketAddress(packedIPAddress: packedIPAddress, port: 0)
+      return address.ipAddress!
     }
   }
 
-  /// Fetch the raw address (sixteen bytes)
-  public var rawValue: Data { _rawValue }
-  private var _rawValue: Data
+  /// IPv6Address
+  /// Base type to hold an IPv6 address and convert between strings and raw bytes.
+  /// Note that an IPv6 address may be scoped to an interface.
+  public struct IPv6Address: IPAddress, Hashable, CustomDebugStringConvertible {
 
-  public var debugDescription: String {
-    let packedIPAddress = ByteBuffer(bytes: rawValue)
-    let address = try! SocketAddress(packedIPAddress: packedIPAddress, port: 0)
-    return address.ipAddress!
+    /// Create an IPv6 from a raw 16 byte value and optional interface
+    ///
+    /// - Parameter rawValue: A 16 byte IPv6 address
+    /// - Parameter interface: An optional interface the address is scoped to. Defaults to nil.
+    /// - Returns: nil unless the raw data contained an IPv6 address
+    public init?(_ rawValue: Data) {
+      guard rawValue.count == 16 else {
+        return nil
+      }
+
+      let buffer = ByteBuffer(bytes: rawValue)
+      guard case .v6 = try? SocketAddress(packedIPAddress: buffer, port: 0) else {
+        return nil
+      }
+
+      _rawValue = rawValue
+    }
+
+    /// Create an IPv6 address from a string literal such as "2001:DB8::5"
+    ///
+    /// This function does not perform hostname resolution. This is similar to calling getaddrinfo with
+    /// AI_NUMERICHOST.
+    ///
+    /// - Parameter string: An IPv6 address literal string.
+    /// - Returns: nil unless the string contained an IPv6 literal
+    public init?(_ string: String) {
+      guard case .v6(let v6) = try? SocketAddress(ipAddress: string, port: 0) else {
+        return nil
+      }
+      var localAddr = v6.address
+      _rawValue = withUnsafeBytes(of: &localAddr.sin6_addr) {
+        precondition($0.count == 16)
+        return Data(bytes: $0.baseAddress!, count: $0.count)
+      }
+    }
+
+    /// Fetch the raw address (sixteen bytes)
+    public var rawValue: Data { _rawValue }
+    private var _rawValue: Data
+
+    public var debugDescription: String {
+      let packedIPAddress = ByteBuffer(bytes: rawValue)
+      let address = try! SocketAddress(packedIPAddress: packedIPAddress, port: 0)
+      return address.ipAddress!
+    }
   }
-}
 #endif
 
 public enum Address: Hashable, Sendable {
@@ -293,19 +293,19 @@ public enum Address: Hashable, Sendable {
       }
     case .url(let url):
       #if canImport(Darwin)
-      if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
-        return url.host(percentEncoded: percentEncoded)
-      } else {
+        if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
+          return url.host(percentEncoded: percentEncoded)
+        } else {
+          guard percentEncoded else {
+            return url.host?.removingPercentEncoding
+          }
+          return url.host?.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
+        }
+      #else
         guard percentEncoded else {
           return url.host?.removingPercentEncoding
         }
         return url.host?.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
-      }
-      #else
-      guard percentEncoded else {
-        return url.host?.removingPercentEncoding
-      }
-      return url.host?.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)
       #endif
     case .unix:
       return nil

@@ -5,7 +5,7 @@
 // Copyright (c) 2021 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
-// See LICENSE for license information
+// See LICENSE.txt for license information
 // See CONTRIBUTORS.txt for the list of Netbot project authors
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -134,7 +134,6 @@ extension ChannelPipeline.SynchronousOperations {
   /// Configure a SOCKS5 proxy channel pipeline for client.
   ///
   /// - Parameters:
-  ///   - mode: The mode this pipeline will operate in, server or client.
   ///   - username: The username to use when authenticate this connection. Defaults to `""`.
   ///   - passwordReference: The passwordReference to use when authenticate this connection. Defaults to `""`.
   ///   - authenticationRequired: A boolean value to determinse whether SOCKS proxy client should perform proxy authentication. Defaults to `false`.

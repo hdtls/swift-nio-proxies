@@ -5,7 +5,7 @@
 // Copyright (c) 2022 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
-// See LICENSE for license information
+// See LICENSE.txt for license information
 // See CONTRIBUTORS.txt for the list of Netbot project authors
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -46,7 +46,7 @@ struct KDF {
     }
 
     mutating func update<D: DataProtocol>(data: D) {
-      data.regions.forEach { (regionData) in
+      for regionData in data.regions {
         regionData.withUnsafeBytes({ (dataPtr) in
           self.update(bufferPointer: dataPtr)
         })

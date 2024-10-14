@@ -5,7 +5,7 @@
 // Copyright (c) 2022 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
-// See LICENSE for license information
+// See LICENSE.txt for license information
 // See CONTRIBUTORS.txt for the list of Netbot project authors
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -30,7 +30,7 @@ final class HKDFTests: XCTestCase {
       ("oFiepZOAGh", "261575ed8d5b995706d054d0ad0b64650e7ce54a8cf3ea3ca4228253b4599392"),
     ]
 
-    testable.forEach { k, expected in
+    for (k, expected) in testable {
       hkdfDerivedSymmetricKey(secretKey: k, salt: salt, outputByteCount: 32).withUnsafeBytes {
         XCTAssertEqual($0.hexEncodedString(), expected)
       }

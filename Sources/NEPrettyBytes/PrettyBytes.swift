@@ -5,7 +5,7 @@
 // Copyright (c) 2022 Junfeng Zhang and the Netbot project authors
 // Licensed under Apache License v2.0
 //
-// See LICENSE for license information
+// See LICENSE.txt for license information
 // See CONTRIBUTORS.txt for the list of Netbot project authors
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -60,7 +60,7 @@ extension DataProtocol {
     var hexChars = [UInt8](repeating: 0, count: hexLen)
     var offset = 0
 
-    self.regions.forEach { (_) in
+    for _ in self.regions {
       for i in self {
         hexChars[Int(offset * 2)] = itoh((i >> 4) & 0xF)
         hexChars[Int(offset * 2 + 1)] = itoh(i & 0xF)
