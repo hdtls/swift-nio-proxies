@@ -72,7 +72,6 @@ public struct IPv4Address: IPAddress, Hashable, CustomDebugStringConvertible {
   /// and using AI_NUMERICHOST.
   ///
   /// - Parameter string: An IPv4 address literal string such as "127.0.0.1".
-  /// - Returns: An IPv4Address or nil if the string parameter did not
   /// contain an IPv4 address literal.
   public init?(_ string: String) {
     guard case .v4(let v4) = try? SocketAddress(ipAddress: string, port: 0) else {
@@ -104,8 +103,6 @@ public struct IPv6Address: IPAddress, Hashable, CustomDebugStringConvertible {
   /// Create an IPv6 from a raw 16 byte value and optional interface
   ///
   /// - Parameter rawValue: A 16 byte IPv6 address
-  /// - Parameter interface: An optional interface the address is scoped to. Defaults to nil.
-  /// - Returns: nil unless the raw data contained an IPv6 address
   public init?(_ rawValue: Data) {
     guard rawValue.count == 16 else {
       return nil
@@ -125,7 +122,6 @@ public struct IPv6Address: IPAddress, Hashable, CustomDebugStringConvertible {
   /// AI_NUMERICHOST.
   ///
   /// - Parameter string: An IPv6 address literal string.
-  /// - Returns: nil unless the string contained an IPv6 literal
   public init?(_ string: String) {
     guard case .v6(let v6) = try? SocketAddress(ipAddress: string, port: 0) else {
       return nil
