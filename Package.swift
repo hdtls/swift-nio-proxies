@@ -82,11 +82,7 @@ let package = Package(
     .testTarget(name: "NESOCKSTests", dependencies: ["NESOCKS", swiftNIOCore, swiftNIOEmbedded]),
     .testTarget(
       name: "NESSTests",
-      dependencies: ["NEPrettyBytes", "NESS", swiftNIOCore, swiftNIOEmbedded],
-      exclude: [
-        "RequestEncoderTests.g.swift.gyb",
-        "ResponseDecoderTests.g.swift.gyb",
-      ]
+      dependencies: ["NEPrettyBytes", "NESS", swiftNIOCore, swiftNIOEmbedded]
     ),
     .testTarget(
       name: "NEVMESSTests",
