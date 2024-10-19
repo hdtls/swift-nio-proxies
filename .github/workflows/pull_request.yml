@@ -1,0 +1,16 @@
+name: Pull Request Validation (CI)
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+    branches: [main, release/*]
+
+jobs:
+  soundness:
+    name: Soundness
+    uses: ./.github/workflows/soundness.yml
+
+  unit-tests:
+    name: Unit tests
+    uses: ./.github/workflows/unit_tests.yml
