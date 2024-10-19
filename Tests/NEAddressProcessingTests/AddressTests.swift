@@ -139,6 +139,15 @@ final class AddressTests: XCTestCase {
     XCTAssertTrue(set.contains(ipv6))
   }
 
+  func testHostCustomDebugStringConvertible() {
+    var host: Address.Host = "swift.org"
+    XCTAssertEqual(host.debugDescription, "swift.org")
+    host = "127.0.0.1"
+    XCTAssertEqual(host.debugDescription, "127.0.0.1")
+    host = "fe80::5"
+    XCTAssertEqual(host.debugDescription, "fe80::5")
+  }
+
   func testCreatePortFromUInt16RawValue() {
     let port = Address.Port(rawValue: 443)
     XCTAssertNotNil(port)
@@ -227,5 +236,23 @@ final class AddressTests: XCTestCase {
     address = .url(URL(string: "https://example.com:443")!)
     XCTAssertEqual(address.host(), "example.com")
     XCTAssertEqual(address.host(percentEncoded: false), "example.com")
+  }
+
+  func testAddressHashableConformance() {
+    let address = Address.hostPort(host: "swift.org", port: 443)
+    let addressCopy = address
+    let addresses = Set<Address>([address, addressCopy])
+    XCTAssertEqual(addresses, [address])
+  }
+
+  func testAddressCustomDebugStringConvertibleConformance() {
+    var address = Address.hostPort(host: "swift.org", port: 443)
+    XCTAssertEqual(address.debugDescription, "swift.org:443")
+
+    address = Address.unix(path: "/var/run/tmp.sock")
+    XCTAssertEqual(address.debugDescription, "/var/run/tmp.sock")
+
+    address = Address.url(URL(string: "https://swift.org:443")!)
+    XCTAssertEqual(address.debugDescription, "https://swift.org:443")
   }
 }

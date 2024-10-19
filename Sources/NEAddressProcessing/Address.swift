@@ -140,7 +140,7 @@ public struct IPv6Address: IPAddress, Hashable, CustomDebugStringConvertible {
   }
 }
 
-public enum Address: Hashable, Sendable {
+public enum Address: Hashable, CustomDebugStringConvertible, Sendable {
 
   /// A host port endpoint represents an endpoint defined by the host and port.
   case hostPort(host: Host, port: Port)
@@ -154,7 +154,7 @@ public enum Address: Hashable, Sendable {
   case url(URL)
 
   /// A Host is a name or address
-  public enum Host: Hashable, ExpressibleByStringLiteral, Sendable {
+  public enum Host: Hashable, CustomDebugStringConvertible, ExpressibleByStringLiteral, Sendable {
 
     /// A host specified as a name and optional interface scope
     case name(String)
@@ -192,6 +192,17 @@ public enum Address: Hashable, Sendable {
       }
 
       self = .name(string)
+    }
+
+    public var debugDescription: String {
+      switch self {
+      case .name(let string):
+        return string
+      case .ipv4(let iPv4Address):
+        return iPv4Address.debugDescription
+      case .ipv6(let iPv6Address):
+        return iPv6Address.debugDescription
+      }
     }
   }
 
@@ -257,6 +268,17 @@ public enum Address: Hashable, Sendable {
 
     public var debugDescription: String {
       String(rawValue)
+    }
+  }
+
+  public var debugDescription: String {
+    switch self {
+    case .hostPort(let host, let port):
+      return "\(host):\(port)"
+    case .unix(let path):
+      return "\(path)"
+    case .url(let url):
+      return "\(url)"
     }
   }
 
