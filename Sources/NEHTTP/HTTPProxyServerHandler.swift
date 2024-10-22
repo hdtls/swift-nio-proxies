@@ -121,8 +121,6 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
 
   private let additionalHTTPHandlers: [any RemovableChannelHandler]
 
-  private var negotiationResultPromise: EventLoopPromise<NegotiationResult>?
-
   public var negotiationResultFuture: EventLoopFuture<NegotiationResult> {
     guard let negotiationResultPromise else {
       preconditionFailure(
@@ -131,6 +129,7 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
     }
     return negotiationResultPromise.futureResult
   }
+  private var negotiationResultPromise: EventLoopPromise<NegotiationResult>?
 
   private let channelInitializer:
     @Sendable (HTTPVersion, HTTPRequest) -> EventLoopFuture<NegotiationResult>
@@ -186,8 +185,9 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
           eventBuffer.append(.channelRead(data: NIOAny(data)))
         }
       } catch {
-        negotiationResultPromise?.fail(error)
-        channelClose(context: context, reason: error)
+        fail(
+          error: NEHTTPError(code: .badRequest, errorDescription: error.localizedDescription),
+          context: context)
       }
     case .body(let bodyPart)
     where originalHTTPRequest != nil && originalHTTPRequest?.method != .connect:
@@ -201,17 +201,12 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
       }
       configureHTTPTunnelPipeline(context: context)
     default:
-      negotiationResultPromise?.fail(NEHTTPError.badRequest)
-      channelClose(context: context, reason: NEHTTPError.badRequest)
+      fail(error: NEHTTPError.badRequest, context: context)
     }
   }
 
   public func channelReadComplete(context: ChannelHandlerContext) {
     eventBuffer.append(.channelReadComplete)
-  }
-
-  public func errorCaught(context: ChannelHandlerContext, error: any Error) {
-    channelClose(context: context, reason: error)
   }
 
   /// Encode HTTP request into ByteBuffer, see HTTPRequestEncoder for more details.
@@ -288,20 +283,15 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
     guard !connection.headerFields[values: .proxyAuthorization].contains(passwordReference) else {
       return
     }
-    negotiationResultPromise?.fail(NEHTTPError.proxyAuthenticationRequired)
-    channelClose(context: context, reason: NEHTTPError.proxyAuthenticationRequired)
+    fail(error: NEHTTPError.proxyAuthenticationRequired, context: context)
   }
 
   private func configureHTTPTunnelPipeline(context: ChannelHandlerContext) {
     guard let originalHTTPRequest else {
-      negotiationResultPromise?.fail(NEHTTPError.badRequest)
-      channelClose(context: context, reason: NEHTTPError.badRequest)
+      fail(error: NEHTTPError.badRequest, context: context)
       return
     }
     authenticate(context: context, connection: originalHTTPRequest)
-
-    let bs = NIOLoopBound(self, eventLoop: context.eventLoop)
-    let ctx = NIOLoopBound(context, eventLoop: context.eventLoop)
 
     let originalHTTPVersion = self.originalHTTPVersion
     channelInitializer(originalHTTPVersion, originalHTTPRequest)
@@ -318,64 +308,77 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
           let data = NIOAny(HTTPServerResponsePart.head(head))
 
           // We don't flush data until we remove all additional http handlers.
-          ctx.value.write(data, promise: nil)
+          context.write(data, promise: nil)
         }
 
         // Remove all additional http handlers, so we can receive original request data.
-        let futures = bs.value.additionalHTTPHandlers.map {
-          ctx.value.pipeline.removeHandler($0)
+        let futures = self.additionalHTTPHandlers.map {
+          context.pipeline.removeHandler($0)
             .flatMapError { error in
-              // We don't want handler not found error interrupt our stream, because handlers may
+              // Map `notFound` error to success future, because handlers may
               // be removed by user outside this handler.
               guard case .notFound = error as? ChannelPipelineError else {
-                return ctx.value.eventLoop.makeFailedFuture(error)
+                return context.eventLoop.makeFailedFuture(error)
               }
-              return ctx.value.eventLoop.makeSucceededVoidFuture()
+              return context.eventLoop.makeSucceededVoidFuture()
             }
         }
-        return EventLoopFuture.andAllSucceed(futures, on: ctx.value.eventLoop)
+        return EventLoopFuture.andAllSucceed(futures, on: context.eventLoop)
           .map { _ in negotiationResult }
       }
       .whenComplete {
         switch $0 {
         case .success(let negotiationResult):
           // After all additional http handlers removed, we should flush our response.
-          ctx.value.flush()
-          bs.value.negotiationResultPromise?.succeed(negotiationResult)
-          bs.value.progress = .completed
-          ctx.value.pipeline.removeHandler(bs.value, promise: nil)
+          context.flush()
+          self.negotiationResultPromise?.succeed(negotiationResult)
+          self.progress = .completed
+          context.pipeline.removeHandler(self, promise: nil)
         case .failure(let error):
-          bs.value.negotiationResultPromise?.fail(error)
-          bs.value.channelClose(context: ctx.value, reason: error)
+          self.fail(error: error, context: context)
         }
       }
   }
 
-  private func channelClose(context: ChannelHandlerContext, reason: Error) {
-    var error = reason
-    if reason is HTTPParserError {
-      error = NEHTTPError.badRequest
+  private func fail(error: any Error, context: ChannelHandlerContext, close: Bool = true) {
+    defer {
+      context.fireErrorCaught(error)
+      if close {
+        context.close(mode: .all, promise: nil)
+      }
     }
 
     guard let error = error as? NEHTTPError else {
-      context.fireErrorCaught(error)
+      return
+    }
+
+    var status: HTTPResponseStatus?
+    var httpFields = HTTPHeaders()
+    switch error.code {
+    case .badRequest:
+      status = .badRequest
+      httpFields = ["Connection": "close", "Content-Length": "0"]
+    case .proxyAuthenticationRequired:
+      status = .proxyAuthenticationRequired
+      httpFields = ["Connection": "close", "Content-Length": "0"]
+    case .requestTimeout:
+      status = .requestTimeout
+      httpFields = ["Connection": "close", "Content-Length": "0"]
+    default:
+      break
+    }
+
+    guard let status else {
       return
     }
 
     let head = HTTPResponseHead(
       version: originalHTTPVersion,
-      status: error.status,
-      headers: error.httpFields
+      status: status,
+      headers: httpFields
     )
     context.write(wrapOutboundOut(.head(head)), promise: nil)
     context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
-
-    switch error {
-    case .badRequest, .requestTimeout:
-      context.close(promise: nil)
-    default:
-      context.fireErrorCaught(error)
-    }
   }
 }
 

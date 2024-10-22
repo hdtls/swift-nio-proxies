@@ -12,15 +12,21 @@
 //
 //===----------------------------------------------------------------------===//
 
-import NIOHTTP1
+import HTTPTypes
 
 public struct NEHTTPError: Error, Equatable {
 
-  /// The HTTP status code this error will return.
-  public var status: HTTPResponseStatus
-
-  /// Optional `HTTPHeaders` to add to the error response.
-  public var httpFields: HTTPHeaders
+  public enum Code: Equatable, Sendable {
+    case badRequest
+    case proxyAuthenticationRequired
+    case requestTimeout
+    case unsupportedAddress
+    case channelInactive
+    case unacceptableStatus(HTTPResponse.Status)
+    case unacceptableRead
+  }
+  /// The code this error will return.
+  public var code: Code
 
   /// A localized message describing what error occurred.
   public var errorDescription: String?
@@ -32,14 +38,12 @@ public struct NEHTTPError: Error, Equatable {
   public var recoverySuggestion: String?
 
   init(
-    status: HTTPResponseStatus,
-    httpFields: HTTPHeaders = .init(),
+    code: Code,
     errorDescription: String? = nil,
     failureReason: String? = nil,
     recoverySuggestion: String? = nil
   ) {
-    self.status = status
-    self.httpFields = httpFields
+    self.code = code
     self.errorDescription = errorDescription
     self.failureReason = failureReason
     self.recoverySuggestion = recoverySuggestion
@@ -49,19 +53,19 @@ public struct NEHTTPError: Error, Equatable {
 extension NEHTTPError {
 
   public static var badRequest: NEHTTPError {
-    let httpFields: HTTPHeaders = ["Connection": "close", "Content-Length": "0"]
-    return .init(status: .badRequest, httpFields: httpFields)
+    //    let httpFields: HTTPHeaders = ["Connection": "close", "Content-Length": "0"]
+    return .init(code: .badRequest)
   }
 
   public static var proxyAuthenticationRequired: NEHTTPError {
     // TODO: Provides information about the authentication scheme
     //    let httpFields: HTTPHeaders = ["Proxy-Authenticate" : "Basic realm=Access token"]
-    let httpFields: HTTPHeaders = ["Content-Length": "0"]
-    return .init(status: .proxyAuthenticationRequired, httpFields: httpFields)
+    //    let httpFields: HTTPHeaders = ["Content-Length": "0"]
+    return .init(code: .proxyAuthenticationRequired)
   }
 
   public static var requestTimeout: NEHTTPError {
-    let httpFields: HTTPHeaders = ["Connection": "close", "Content-Length": "0"]
-    return .init(status: .requestTimeout, httpFields: httpFields)
+    //    let httpFields: HTTPHeaders = ["Connection": "close", "Content-Length": "0"]
+    return .init(code: .requestTimeout)
   }
 }

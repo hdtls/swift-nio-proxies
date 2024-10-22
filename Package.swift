@@ -42,6 +42,7 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.32.1"),
     .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.1"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
+    .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.24.1"),
   ],
   targets: [
     .target(name: "NEAddressProcessing", dependencies: [swiftNIOCore]),
@@ -51,6 +52,7 @@ let package = Package(
       dependencies: [
         "NEAddressProcessing", swiftNIOCore, swiftNIOHTTP1,
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "NIOHTTPTypesHTTP1", package: "swift-nio-extras"),
       ]
     ),
     .target(name: "NEPrettyBytes"),
@@ -75,6 +77,7 @@ let package = Package(
       name: "NEHTTPTests",
       dependencies: [
         "NEHTTP", swiftNIOCore, swiftNIOEmbedded, swiftNIOHTTP1, swiftNIOSSL,
+        .product(name: "NIOHTTPTypesHTTP1", package: "swift-nio-extras"),
       ]
     ),
     .testTarget(name: "NEAddressProcessingTests", dependencies: ["NEAddressProcessing"]),

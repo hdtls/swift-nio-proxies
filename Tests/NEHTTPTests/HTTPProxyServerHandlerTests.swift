@@ -51,12 +51,14 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
   }
 
   func testReceiveRequestEndBeforeHeadReceived() throws {
-    XCTAssertNoThrow(try channel.writeInbound(HTTPServerRequestPart.end(nil)))
+    XCTAssertThrowsError(try channel.writeInbound(HTTPServerRequestPart.end(nil)))
     var response = try XCTUnwrap(channel.readOutbound(as: HTTPServerResponsePart.self))
     XCTAssertEqual(
       response,
       .head(
-        .init(version: .http1_1, status: .badRequest, headers: NEHTTPError.badRequest.httpFields)
+        .init(
+          version: .http1_1, status: .badRequest,
+          headers: ["Connection": "close", "Content-Length": "0"])
       )
     )
     response = try XCTUnwrap(channel.readOutbound(as: HTTPServerResponsePart.self))
@@ -65,12 +67,14 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
   }
 
   func testReceiveRequestBodyBeforeHeadReceived() throws {
-    XCTAssertNoThrow(try channel.writeInbound(HTTPServerRequestPart.end(nil)))
+    XCTAssertThrowsError(try channel.writeInbound(HTTPServerRequestPart.end(nil)))
     var response = try XCTUnwrap(channel.readOutbound(as: HTTPServerResponsePart.self))
     XCTAssertEqual(
       response,
       .head(
-        .init(version: .http1_1, status: .badRequest, headers: NEHTTPError.badRequest.httpFields)
+        .init(
+          version: .http1_1, status: .badRequest,
+          headers: ["Connection": "close", "Content-Length": "0"])
       )
     )
     response = try XCTUnwrap(channel.readOutbound(as: HTTPServerResponsePart.self))
@@ -107,13 +111,13 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
         .init(
           version: .http1_1,
           status: .proxyAuthenticationRequired,
-          headers: NEHTTPError.proxyAuthenticationRequired.httpFields
+          headers: ["Connection": "close", "Content-Length": "0"]
         )
       )
     )
     response = try XCTUnwrap(channel.readOutbound(as: HTTPServerResponsePart.self))
     XCTAssertEqual(response, .end(nil))
-    XCTAssertNoThrow(try channel.finish())
+    XCTAssertNoThrow(try channel.finish(acceptAlreadyClosed: true))
   }
 
   func testProxyAuthWithInvalidUsernameOrPassword() async throws {
@@ -152,13 +156,13 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
         .init(
           version: .http1_1,
           status: .proxyAuthenticationRequired,
-          headers: NEHTTPError.proxyAuthenticationRequired.httpFields
+          headers: ["Connection": "close", "Content-Length": "0"]
         )
       )
     )
     response = try XCTUnwrap(channel.readOutbound(as: HTTPServerResponsePart.self))
     XCTAssertEqual(response, .end(nil))
-    XCTAssertNoThrow(try channel.finish())
+    XCTAssertNoThrow(try channel.finish(acceptAlreadyClosed: true))
   }
 
   func testHTTPConnectProxyWorkflow() async throws {

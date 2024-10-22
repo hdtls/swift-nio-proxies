@@ -12,109 +12,212 @@
 //
 //===----------------------------------------------------------------------===//
 
+import HTTPTypes
 import NEHTTP
 import NIOCore
 import NIOEmbedded
 import NIOHTTP1
+import NIOHTTPTypes
 import XCTest
 
 class HTTPProxyClientHandlerTests: XCTestCase {
 
-  var channel: EmbeddedChannel!
-  var handler: HTTPProxyClientHandler!
-
-  override func setUpWithError() throws {
-    XCTAssertNil(self.channel)
-
-    let additionalHTTPHandlers = self.additionalHTTPHandlers
-
-    self.handler = .init(
-      passwordReference: "passwordReference",
+  private func makeHandler() -> HTTPProxyClientHandler {
+    HTTPProxyClientHandler(
+      passwordReference: "Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=",
       authenticationRequired: false,
-      destinationAddress: .hostPort(host: "swift.org", port: 443),
-      additionalHTTPHandlers: additionalHTTPHandlers,
+      destinationAddress: .hostPort(host: "example.com", port: 443),
+      additionalHTTPHandlers: [],
       timeoutInterval: .seconds(5)
     )
-
-    self.channel = EmbeddedChannel()
-    try self.channel.pipeline.syncOperations.addHandlers(additionalHTTPHandlers)
-    try self.channel.pipeline.syncOperations.addHandler(handler)
   }
 
-  var additionalHTTPHandlers: [any RemovableChannelHandler] {
-    let requestEncoder = HTTPRequestEncoder()
-    let responseDecoder = HTTPResponseDecoder()
-    return [requestEncoder, ByteToMessageHandler(responseDecoder)]
+  private func assertThrowsError(_ future: EventLoopFuture<Void>?) async {
+    let expectation = expectation(description: "Wait negotiation result")
+    if let future {
+      future.whenComplete { result in
+        do {
+          try result.get()
+          XCTFail("should fail with AbortError")
+        } catch {
+        }
+        expectation.fulfill()
+      }
+    } else {
+      expectation.fulfill()
+    }
+    await fulfillment(of: [expectation], timeout: 5, enforceOrder: false)
   }
 
-  override func tearDown() {
-    XCTAssertNotNil(self.channel)
-    self.channel = nil
+  func testNegotiationResultFutureAvailableAfterHanderAdded() async throws {
+    let channel = EmbeddedChannel()
+    let handler = makeHandler()
+    XCTAssertNil(handler.negotiationResultFuture)
+    try await channel.pipeline.addHandler(handler).get()
+    XCTAssertNotNil(handler.negotiationResultFuture)
   }
 
-  func waitUtilConnected() throws {
-    try self.channel.connect(to: .init(ipAddress: "127.0.0.1", port: 80)).wait()
+  func testRemoveHandlerBeforeResponseHeadReceived() async throws {
+    let channel = EmbeddedChannel()
+    let handler = makeHandler()
+    try await channel.pipeline.addHandler(handler).get()
+    channel.pipeline.removeHandler(handler, promise: nil)
+    await assertThrowsError(handler.negotiationResultFuture)
+    XCTAssertThrowsError(try channel.finish())
   }
 
-  func testHandshakingShouldBeginAfterChannelActive() throws {
+  func testRemoveHandlerBeforeResponseReceived() async throws {
+    let channel = EmbeddedChannel()
+    let handler = makeHandler()
+    try await channel.pipeline.addHandler(handler).get()
+    try channel.writeInbound(HTTPResponsePart.head(.init(status: .ok)))
+    channel.pipeline.removeHandler(handler, promise: nil)
+    await assertThrowsError(handler.negotiationResultFuture)
+    XCTAssertThrowsError(try channel.finish())
+  }
+
+  func testHandshakingShouldBeginImmediatelyAfterChannelAdded() async throws {
+    let channel = EmbeddedChannel()
+    try await channel.pipeline.addHandler(makeHandler()).get()
+    XCTAssertEqual(
+      try channel.readOutbound(),
+      HTTPRequestPart.head(
+        .init(method: .connect, scheme: nil, authority: "example.com:443", path: nil))
+    )
+  }
+
+  func testIgnoreDuplicatedHandshakeRequestAfterHandlerActive() async throws {
+    let channel = EmbeddedChannel()
+    try await channel.pipeline.addHandler(makeHandler()).get()
     XCTAssertFalse(channel.isActive)
-    XCTAssertNil(try channel.readOutbound())
-    try waitUtilConnected()
+    XCTAssertNotNil(try channel.readOutbound(as: HTTPRequestPart.self))
+    XCTAssertNotNil(try channel.readOutbound(as: HTTPRequestPart.self))
+    XCTAssertNil(try channel.readOutbound(as: HTTPRequestPart.self))
+
+    try channel.connect(to: .init(ipAddress: "0.0.0.0", port: 0), promise: nil)
     XCTAssertTrue(channel.isActive)
-    XCTAssertEqual(
-      try channel.readOutbound(),
-      ByteBuffer(string: "CONNECT swift.org:443 HTTP/1.1\r\n\r\n")
-    )
+    XCTAssertNil(try channel.readOutbound(as: HTTPRequestPart.self))
   }
 
-  func testAddHandlerAfterChannelActive() throws {
-    //    XCTAssertNoThrow(try self.channel.close().wait())
-    //    self.channel = EmbeddedChannel()
-    //    XCTAssertNoThrow(try waitUtilConnected())
-    //    XCTAssertTrue(self.channel.isActive)
-    //    XCTAssertNil(try self.channel.readOutbound())
-    //    XCTAssertNoThrow(try channel.pipeline.syncOperations.addHTTPClientHandlers())
-    //    XCTAssertNoThrow(self.channel.pipeline.addHandler(self.handler))
-    //    XCTAssertEqual(
-    //      try channel.readOutbound(),
-    //      ByteBuffer(string: "CONNECT swift.org:443 HTTP/1.1\r\n\r\n")
-    //    )
-    //    XCTAssertNoThrow(try channel.finish())
+  func testHandshakeWithoutAuthentication() async throws {
+    let channel = EmbeddedChannel()
+    let handler = makeHandler()
+    try await channel.pipeline.addHandler(handler).get()
+
+    XCTAssertEqual(
+      try channel.readOutbound(as: HTTPRequestPart.self),
+      .head(.init(method: .connect, scheme: nil, authority: "example.com:443", path: nil)))
   }
 
-  func testBuffering() throws {
-    try waitUtilConnected()
+  func testHandshakeWithAuthentication() async throws {
+    let channel = EmbeddedChannel()
+    let handler = HTTPProxyClientHandler(
+      passwordReference: "Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=",
+      authenticationRequired: true,
+      destinationAddress: .hostPort(host: "example.com", port: 443),
+      additionalHTTPHandlers: [],
+      timeoutInterval: .seconds(5)
+    )
+    try await channel.pipeline.addHandler(handler).get()
 
-    let writePromise = self.channel.eventLoop.makePromise(of: Void.self)
-    channel.writeAndFlush(ByteBuffer(bytes: [1, 2, 3]), promise: writePromise)
+    XCTAssertEqual(
+      try channel.readOutbound(as: HTTPRequestPart.self),
+      .head(
+        .init(
+          method: .connect, scheme: nil, authority: "example.com:443", path: nil,
+          headerFields: [.proxyAuthorization: "Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U="])))
+  }
+
+  func testReceiveProxyAuthenticationRequiredResponse() async throws {
+    let channel = EmbeddedChannel()
+    let handler = makeHandler()
+    try await channel.pipeline.addHandler(handler).get()
+
     XCTAssertEqual(
       try channel.readOutbound(),
-      ByteBuffer(string: "CONNECT swift.org:443 HTTP/1.1\r\n\r\n")
+      HTTPRequestPart.head(
+        .init(method: .connect, scheme: nil, authority: "example.com:443", path: nil))
     )
-    try channel.writeInbound(ByteBuffer(string: "HTTP/1.1 200 OK\r\n\r\n"))
-    channel.embeddedEventLoop.advanceTime(to: .now())
 
-    XCTAssertNoThrow(try writePromise.futureResult.wait())
+    XCTAssertThrowsError(
+      try channel.writeInbound(HTTPResponsePart.head(.init(status: .proxyAuthenticationRequired)))
+    )
+    await assertThrowsError(handler.negotiationResultFuture)
+    XCTAssertThrowsError(try channel.finish())
+  }
+
+  func testReceiveResponseThatIsNotSuccessfulOrProxyAuthenticationRequiredResponse() async throws {
+    let channel = EmbeddedChannel()
+    let handler = makeHandler()
+    try await channel.pipeline.addHandler(handler).get()
+    XCTAssertThrowsError(
+      try channel.writeInbound(HTTPResponsePart.head(.init(status: .internalServerError)))
+    )
+    await assertThrowsError(handler.negotiationResultFuture)
+    XCTAssertThrowsError(try channel.finish())
+  }
+
+  func testFailedAfterHTTPBodyReceived() async throws {
+    let channel = EmbeddedChannel()
+    let handler = makeHandler()
+    try await channel.pipeline.addHandler(handler).get()
+    try channel.writeInbound(HTTPResponsePart.head(.init(status: .ok)))
+    XCTAssertThrowsError(try channel.writeInbound(HTTPResponsePart.body(.init(bytes: [0x01]))))
+    try channel.writeInbound(HTTPResponsePart.end(nil))
+    await assertThrowsError(handler.negotiationResultFuture)
+    XCTAssertThrowsError(try channel.finish())
+  }
+
+  func testFailedToRemoveAdditionalHTTPHandlers() async throws {
+    let channel = EmbeddedChannel()
+    class ExtraHandler: ChannelInboundHandler, RemovableChannelHandler {
+      typealias InboundIn = NIOAny
+    }
+    let handler = HTTPProxyClientHandler(
+      passwordReference: "",
+      authenticationRequired: false,
+      destinationAddress: .hostPort(host: "example.com", port: 443),
+      additionalHTTPHandlers: [
+        ExtraHandler()
+      ]
+    )
+    try await channel.pipeline.addHandler(handler).get()
+    try channel.writeInbound(HTTPResponsePart.head(.init(status: .ok)))
+    XCTAssertThrowsError(try channel.writeInbound(HTTPResponsePart.end(nil)))
+    await assertThrowsError(handler.negotiationResultFuture)
+    XCTAssertThrowsError(try channel.finish())
+  }
+
+  func testBufferAllWritesBeforeHandshakeComplete() async throws {
+    let channel = EmbeddedChannel()
+    try await channel.pipeline.addHandler(makeHandler()).get()
+
+    channel.writeAndFlush(ByteBuffer(bytes: [1, 2, 3]), promise: nil)
+
+    try channel.writeInbound(HTTPResponsePart.head(.init(status: .ok)))
+    try channel.writeInbound(HTTPResponsePart.end(nil))
+
+    _ = try channel.readOutbound(as: HTTPRequestPart.self)
+    _ = try channel.readOutbound(as: HTTPRequestPart.self)
+
     XCTAssertEqual(try channel.readOutbound(), ByteBuffer(bytes: [1, 2, 3]))
     XCTAssertNoThrow(try channel.finish())
   }
 
-  func testBufferingWithMark() throws {
-    try waitUtilConnected()
-    let writePromise1 = self.channel.eventLoop.makePromise(of: Void.self)
-    let writePromise2 = self.channel.eventLoop.makePromise(of: Void.self)
-    channel.write(ByteBuffer(bytes: [1, 2, 3]), promise: writePromise1)
+  func testBufferingWithMark() async throws {
+    let channel = EmbeddedChannel()
+    try await channel.pipeline.addHandler(makeHandler()).get()
+
+    channel.write(ByteBuffer(bytes: [1, 2, 3]), promise: nil)
     channel.flush()
-    channel.write(ByteBuffer(bytes: [4, 5, 6]), promise: writePromise2)
+    channel.write(ByteBuffer(bytes: [4, 5, 6]), promise: nil)
 
-    XCTAssertEqual(
-      try channel.readOutbound(),
-      ByteBuffer(string: "CONNECT swift.org:443 HTTP/1.1\r\n\r\n")
-    )
-    try channel.writeInbound(ByteBuffer(string: "HTTP/1.1 200 OK\r\n\r\n"))
-    channel.embeddedEventLoop.advanceTime(to: .now())
+    try channel.writeInbound(HTTPResponsePart.head(.init(status: .ok)))
+    try channel.writeInbound(HTTPResponsePart.end(nil))
 
-    XCTAssertNoThrow(try writePromise1.futureResult.wait())
+    _ = try channel.readOutbound(as: HTTPRequestPart.self)
+    _ = try channel.readOutbound(as: HTTPRequestPart.self)
+
     XCTAssertEqual(try channel.readOutbound(), ByteBuffer(bytes: [1, 2, 3]))
 
     XCTAssertNotNil(try channel.writeAndFlush(ByteBuffer(bytes: [7, 8, 9])).wait())
@@ -123,87 +226,26 @@ class HTTPProxyClientHandlerTests: XCTestCase {
     XCTAssertNoThrow(try channel.finish())
   }
 
-  func testBasicAuthenticationSuccess() throws {
-    try channel.close().wait()
-
-    let additionalHTTPHandlers = self.additionalHTTPHandlers
-
-    handler = .init(
+  func testTimeoutAfterHeadReceived() async throws {
+    let channel = EmbeddedChannel()
+    let handler = HTTPProxyClientHandler(
       passwordReference: "Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=",
-      authenticationRequired: true,
-      destinationAddress: .hostPort(host: "swift.org", port: 443),
-      additionalHTTPHandlers: additionalHTTPHandlers
+      authenticationRequired: false,
+      destinationAddress: .hostPort(host: "example.com", port: 443),
+      additionalHTTPHandlers: [],
+      timeoutInterval: .seconds(1)
     )
+    try await channel.pipeline.addHandler(handler).get()
 
-    channel = EmbeddedChannel()
-    try channel.pipeline.syncOperations.addHandlers(additionalHTTPHandlers)
-    try channel.pipeline.syncOperations.addHandler(handler)
+    _ = try channel.readOutbound(as: HTTPRequestPart.self)
+    _ = try channel.readOutbound(as: HTTPRequestPart.self)
 
-    try waitUtilConnected()
+    try channel.writeInbound(HTTPResponsePart.head(.init(status: .ok)))
 
-    let writePromise = self.channel.eventLoop.makePromise(of: Void.self)
-    channel.writeAndFlush(ByteBuffer(bytes: [1, 2, 3]), promise: writePromise)
+    try await Task.sleep(nanoseconds: 1_000_000_000)
 
-    XCTAssertEqual(
-      try channel.readOutbound(),
-      ByteBuffer(
-        string:
-          "CONNECT swift.org:443 HTTP/1.1\r\nProxy-Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmRSZWZlcmVuY2U=\r\n\r\n"
-      )
-    )
-    try channel.writeInbound(ByteBuffer(string: "HTTP/1.1 200 OK\r\n\r\n"))
-    channel.embeddedEventLoop.advanceTime(to: .now())
+    _ = try channel.readInbound(as: HTTPResponsePart.self)
 
-    XCTAssertNoThrow(try writePromise.futureResult.wait())
-    XCTAssertEqual(try channel.readOutbound(), ByteBuffer(bytes: [1, 2, 3]))
-    XCTAssertNoThrow(try channel.finish())
-  }
-
-  func testBasicAuthenticationWithIncorrectUsernameOrPassword() throws {
-    try channel.close().wait()
-
-    let additionalHTTPHandlers = self.additionalHTTPHandlers
-    handler = .init(
-      passwordReference: "passwordReference",
-      authenticationRequired: true,
-      destinationAddress: .hostPort(host: "swift.org", port: 443),
-      additionalHTTPHandlers: additionalHTTPHandlers
-    )
-
-    channel = EmbeddedChannel()
-    try channel.pipeline.syncOperations.addHandlers(additionalHTTPHandlers)
-    try channel.pipeline.syncOperations.addHandler(handler)
-
-    try waitUtilConnected()
-
-    XCTAssertEqual(
-      try channel.readOutbound(),
-      ByteBuffer(
-        string:
-          "CONNECT swift.org:443 HTTP/1.1\r\nProxy-Authorization: passwordReference\r\n\r\n"
-      )
-    )
-    XCTAssertThrowsError(
-      try channel.writeInbound(
-        ByteBuffer(string: "HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
-      )
-    )
-
-    XCTAssertNoThrow(try channel.finish())
-  }
-
-  func testBasicAuthenticationRequired() throws {
-    try waitUtilConnected()
-
-    XCTAssertEqual(
-      try channel.readOutbound(),
-      ByteBuffer(string: "CONNECT swift.org:443 HTTP/1.1\r\n\r\n")
-    )
-    XCTAssertThrowsError(
-      try channel.writeInbound(
-        ByteBuffer(string: "HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
-      )
-    )
-    XCTAssertNoThrow(try channel.finish())
+    XCTAssertThrowsError(try channel.finish())
   }
 }

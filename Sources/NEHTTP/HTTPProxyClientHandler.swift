@@ -12,17 +12,19 @@
 //
 //===----------------------------------------------------------------------===//
 
+import HTTPTypes
 import NEAddressProcessing
 import NIOCore
-import NIOHTTP1
+import NIOHTTPTypes
 
 /// A channel handler that wraps a channel in HTTP CONNECT tunnel.
 /// This handler can be used in channels that are acting as the client in the HTTP CONNECT tunnel proxy dialog.
 final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChannelHandler {
 
-  public typealias InboundIn = HTTPClientResponsePart
+  public typealias InboundIn = HTTPResponsePart
 
-  public typealias OutboundIn = NIOAny
+  public typealias OutboundIn = Never
+  public typealias OutboundOut = HTTPRequestPart
 
   /// The credentials used to authenticate this proxy connection.
   private let passwordReference: String
@@ -33,28 +35,46 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
   /// The destination for this proxy connection.
   private let destinationAddress: Address
 
-  private enum Progress: Equatable {
-    case waitingForData
-    case waitingForComplete
-    case completed
+  /// States a handshake may be in
+  private enum State {
+
+    /// The initial state prior to start
+    case setup
+
+    /// Waiting are waiting for HTTP response head part data
+    case waiting(Scheduled<Void>)
+
+    /// Preparing are HTTP response head part data received
+    case preparing(Scheduled<Void>)
+
+    /// Ready are actively establishing the connection
+    case ready
+
+    case failed(any Error)
   }
 
-  private var progress: Progress = .waitingForData
+  private var state = State.setup
 
   private let additionalHTTPHandlers: [any RemovableChannelHandler]
 
   /// The HTTP proxy connection time out time amount.
   private let timeoutInterval: TimeAmount
 
-  /// Time out shceduled task.
-  private var scheduled: Scheduled<Void>?
+  private typealias BufferedWrite = (data: NIOAny, promise: EventLoopPromise<Void>?)
 
   /// The circular buffer to buffer channel write before handshake established.
   ///
   /// All buffered write will unbuffered when proxy established.
   private var bufferedWrites: MarkedCircularBuffer<BufferedWrite>
 
-  /// Initialize an instance of `HTTP1ClientCONNECTTunnelHandler` with specified parameters.
+  /// Return negotiation result future
+  /// This future success once HTTP CONNECT negotiation success.
+  public var negotiationResultFuture: EventLoopFuture<Void>? {
+    negotiationResultPromise?.futureResult
+  }
+  private var negotiationResultPromise: EventLoopPromise<Void>?
+
+  /// Initialize an instance of `HTTPProxyClientHandler` with specified parameters.
   ///
   /// - Parameters:
   ///   - passwordReference: Credentials for proxy authentication.
@@ -78,43 +98,54 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
   }
 
   public func handlerAdded(context: ChannelHandlerContext) {
-    if context.channel.isActive {
-      performCONNECTHandshake(context: context)
+    negotiationResultPromise = context.eventLoop.makePromise()
+    becomeActive(context: context)
+  }
+
+  public func handlerRemoved(context: ChannelHandlerContext) {
+    switch state {
+    case .setup, .waiting, .preparing:
+      struct AbortError: Error {}
+      fail(error: AbortError(), context: context)
+    case .ready, .failed:
+      break
     }
   }
 
   public func channelActive(context: ChannelHandlerContext) {
     context.fireChannelActive()
-    performCONNECTHandshake(context: context)
+    becomeActive(context: context)
   }
 
   public func channelInactive(context: ChannelHandlerContext) {
     context.fireChannelInactive()
-    scheduled?.cancel()
+    switch state {
+    case .setup:
+      preconditionFailure("How can we receive a channelInactive before a channelActive?")
+    case .waiting(let scheduled), .preparing(let scheduled):
+      scheduled.cancel()
+      fail(
+        error: NEHTTPError(
+          code: .channelInactive, errorDescription: "HTTP proxy client channel inactive"),
+        context: context, close: false)
+    case .ready, .failed:
+      break
+    }
   }
 
   public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-    guard progress == .waitingForComplete else {
+    if case .ready = state {
       context.fireChannelRead(data)
       return
     }
 
-    switch (unwrapInboundIn(data), progress) {
-    case (.head(let head), .waitingForComplete):
-      if !(200..<300).contains(head.status.code) {
-        scheduled?.cancel()
-        channelClose(
-          context: context,
-          reason: NEHTTPError(status: head.status)
-        )
-      }
-    case (.body, .waitingForComplete):
-      break
-    case (.end, .waitingForComplete):
-      established(context: context)
-    default:
-      scheduled?.cancel()
-      channelClose(context: context, reason: NEHTTPError.badRequest)
+    switch unwrapInboundIn(data) {
+    case .head(let response):
+      handleHTTPPartHead(response: response, context: context)
+    case .body(let body):
+      handleHTTPPartBody(body: body, context: context)
+    case .end(let fields):
+      handleHTTPPartEnd(fields: fields, context: context)
     }
   }
 
@@ -130,16 +161,21 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
     bufferedWrites.mark()
 
     // Unbuffer writes when handshake is success.
-    guard progress == .completed else {
+    guard case .ready = state else {
       return
     }
     unbufferWrites(context: context)
   }
+
+  public func removeHandler(
+    context: ChannelHandlerContext, removalToken: ChannelHandlerContext.RemovalToken
+  ) {
+    unbufferWrites(context: context)
+    context.leavePipeline(removalToken: removalToken)
+  }
 }
 
 extension HTTPProxyClientHandler {
-
-  private typealias BufferedWrite = (data: NIOAny, promise: EventLoopPromise<Void>?)
 
   private func unbufferWrites(context: ChannelHandlerContext) {
     while bufferedWrites.hasMark {
@@ -154,92 +190,135 @@ extension HTTPProxyClientHandler {
     }
   }
 
-  /// Sending HTTP CONNECT request to proxy server and perform a timeout schedule task.
-  private func performCONNECTHandshake(context: ChannelHandlerContext) {
-    guard context.channel.isActive, progress == .waitingForData else {
+  private func becomeActive(context: ChannelHandlerContext) {
+    guard case .setup = self.state else {
+      // we might run into this handler twice, once in handlerAdded and once in channelActive.
       return
     }
 
-    let bs = NIOLoopBound(self, eventLoop: context.eventLoop)
-    let ctx = NIOLoopBound(context, eventLoop: context.eventLoop)
-    scheduled = context.eventLoop.scheduleTask(in: timeoutInterval) {
-      switch bs.value.progress {
-      case .waitingForData:
+    let timeout = context.eventLoop.scheduleTask(deadline: .now() + timeoutInterval) {
+      switch self.state {
+      case .setup:
         preconditionFailure(
-          "How can we have a scheduled timeout, if the connection is not even up?"
-        )
-      case .waitingForComplete:
-        bs.value.channelClose(context: ctx.value, reason: NEHTTPError.requestTimeout)
-      case .completed:
+          "How can we have a scheduled timeout, if the connection is not even up?")
+      case .waiting:
+        self.fail(error: NEHTTPError.requestTimeout, context: context)
+      case .preparing, .ready, .failed:
         break
       }
     }
 
-    progress = .waitingForComplete
+    self.state = .waiting(timeout)
 
-    let uri: String
+    var uri = ""
     switch destinationAddress {
-    case .hostPort(let host, let port):
-      switch host {
-      case .name(let string):
-        uri = "\(string):\(port.rawValue)"
-      case .ipv4(let address):
-        uri = "\(address.debugDescription):\(port.rawValue)"
-      case .ipv6(let address):
-        uri = "\(address.debugDescription):\(port.rawValue)"
+    case .hostPort:
+      uri = "\(destinationAddress)"
+    case .url(let url):
+      if let host = url.host, let port = url.port {
+        uri = "\(host):\(port)"
+      } else {
+        let error = NEHTTPError(
+          code: .unsupportedAddress, errorDescription: "Invalid URL missing host or port")
+        fail(error: error, context: context)
       }
-    case .unix, .url:
-      channelClose(context: context, reason: SocketAddressError.unsupported)
-      return
+    case .unix:
+      let errorDescription = "Unix Domain Sockets don not support proxies"
+      assertionFailure(errorDescription)
+      let error = NEHTTPError(code: .unsupportedAddress, errorDescription: errorDescription)
+      fail(error: error, context: context)
     }
 
-    var head: HTTPRequestHead = .init(version: .http1_1, method: .CONNECT, uri: uri)
+    let httpFields = HTTPFields()
+    var head = HTTPRequest(
+      method: .connect, scheme: nil, authority: uri, path: nil, headerFields: httpFields)
     if authenticationRequired {
-      head.headers.replaceOrAdd(name: "Proxy-Authorization", value: passwordReference)
+      head.headerFields[.proxyAuthorization] = passwordReference
     }
 
-    context.write(NIOAny(HTTPClientRequestPart.head(head)), promise: nil)
-    context.writeAndFlush(NIOAny(HTTPClientRequestPart.end(nil)), promise: nil)
+    context.write(wrapOutboundOut(.head(head)), promise: nil)
+    context.write(wrapOutboundOut(.end(nil)), promise: nil)
+    context.flush()
   }
 
-  private func established(context: ChannelHandlerContext) {
-    let bs = NIOLoopBound(self, eventLoop: context.eventLoop)
-    let ctx = NIOLoopBound(context, eventLoop: context.eventLoop)
-
-    EventLoopFuture.andAllComplete(
-      additionalHTTPHandlers.map {
-        context.pipeline.removeHandler($0)
-          .flatMapError { error in
-            guard case .notFound = error as? ChannelPipelineError else {
-              return ctx.value.eventLoop.makeFailedFuture(error)
-            }
-            return ctx.value.eventLoop.makeSucceededVoidFuture()
-          }
-      },
-      on: context.eventLoop
-    )
-    .flatMap {
-      bs.value.progress = .completed
-      bs.value.unbufferWrites(context: ctx.value)
-      bs.value.scheduled?.cancel()
-      return ctx.value.pipeline.removeHandler(bs.value)
-    }
-    .whenFailure { error in
-      bs.value.channelClose(context: ctx.value, reason: error)
-    }
-  }
-
-  private func channelClose(context: ChannelHandlerContext, reason: any Error) {
-    guard let error = reason as? NEHTTPError else {
-      context.fireErrorCaught(reason)
-      return
+  private func handleHTTPPartHead(response: HTTPResponse, context: ChannelHandlerContext) {
+    guard case .waiting(let scheduled) = self.state else {
+      preconditionFailure("HTTPDecoder should throw an error, if we have not send a request")
     }
 
-    switch error.status {
-    case .badRequest, .requestTimeout:
-      context.close(promise: nil)
+    switch response.status {
+    case _ where response.status.kind == .successful:
+      // Any 2xx (Successful) response indicates that the sender (and all
+      // inbound proxies) will switch to tunnel mode immediately after the
+      // blank line that concludes the successful response's header section
+      state = .preparing(scheduled)
+    case .proxyAuthenticationRequired:
+      fail(error: NEHTTPError.proxyAuthenticationRequired, context: context)
     default:
-      context.fireErrorCaught(error)
+      // Any response other than a successful response indicates that the tunnel
+      // has not yet been formed and that the connection remains governed by HTTP.
+      fail(error: NEHTTPError(code: .unacceptableStatus(response.status)), context: context)
+    }
+  }
+
+  private func handleHTTPPartBody(body: ByteBuffer?, context: ChannelHandlerContext) {
+    switch state {
+    case .setup, .waiting, .ready:
+      let errorDescription = "Receive response body in invalid HTTP CONNECT handshake state"
+      assertionFailure(errorDescription)
+      fail(
+        error: NEHTTPError(code: .unacceptableRead, errorDescription: errorDescription),
+        context: context)
+    case .preparing(let scheduled):
+      // we don't expect a body on HTTP CONNECT.
+      scheduled.cancel()
+      fail(
+        error: NEHTTPError(
+          code: .unacceptableRead,
+          errorDescription: "Receive response body in HTTP CONNECT handshaking"), context: context
+      )
+    case .failed:
+      break
+    }
+  }
+
+  private func handleHTTPPartEnd(fields: HTTPFields?, context: ChannelHandlerContext) {
+    switch state {
+    case .preparing(let scheduled):
+      scheduled.cancel()
+      EventLoopFuture.andAllSucceed(
+        additionalHTTPHandlers.map {
+          context.pipeline.removeHandler($0)
+        }, on: context.eventLoop
+      )
+      .whenComplete {
+        switch $0 {
+        case .success:
+          self.state = .ready
+          self.negotiationResultPromise?.succeed()
+          context.pipeline.removeHandler(context: context, promise: nil)
+        case .failure(let error):
+          self.fail(error: error, context: context)
+        }
+      }
+
+    case .setup, .waiting, .ready:
+      let errorDescription = "Receive response end in invalid HTTP CONNECT handshake state"
+      assertionFailure(errorDescription)
+      fail(
+        error: NEHTTPError(code: .unacceptableRead, errorDescription: errorDescription),
+        context: context)
+    case .failed:
+      break
+    }
+  }
+
+  private func fail(error: any Error, context: ChannelHandlerContext, close: Bool = true) {
+    negotiationResultPromise?.fail(error)
+    state = .failed(error)
+    context.fireErrorCaught(error)
+    if close {
+      context.close(mode: .all, promise: nil)
     }
   }
 }

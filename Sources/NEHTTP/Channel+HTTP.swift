@@ -16,6 +16,7 @@ import HTTPTypes
 import NEAddressProcessing
 import NIOCore
 import NIOHTTP1
+import NIOHTTPTypesHTTP1
 
 extension Channel {
 
@@ -25,18 +26,21 @@ extension Channel {
   ///   - authenticationRequired: The flag whether the tunnel require authentication.
   ///   - passwordReference: The password reference for authentication.
   ///   - destinationAddress: The target address this tunnel work for.
+  ///   - timeoutInterval: Amount of times that connection should timeout from now.
   ///   - position: The position in the pipeline whitch to insert the handlers.
   /// - Returns: An `EventLoopFuture<Void>` that completes when the channel is ready to negotiate.
   @preconcurrency public func configureHTTPTunnelPipeline(
     authenticationRequired: Bool = false,
     passwordReference: String = "",
     destinationAddress: Address,
+    timeoutInterval: TimeAmount = .seconds(60),
     position: ChannelPipeline.Position = .last
   ) -> EventLoopFuture<Void> {
     _configureHTTPTunnelPipeline(
       authenticationRequired: authenticationRequired,
       passwordReference: passwordReference,
       destinationAddress: destinationAddress,
+      timeoutInterval: timeoutInterval,
       position: position
     )
   }
@@ -45,6 +49,7 @@ extension Channel {
     authenticationRequired: Bool = false,
     passwordReference: String = "",
     destinationAddress: Address,
+    timeoutInterval: TimeAmount,
     position: ChannelPipeline.Position = .last
   ) -> EventLoopFuture<Void> {
     if eventLoop.inEventLoop {
@@ -53,6 +58,7 @@ extension Channel {
           authenticationRequired: authenticationRequired,
           passwordReference: passwordReference,
           destinationAddress: destinationAddress,
+          timeoutInterval: timeoutInterval,
           position: position
         )
       }
@@ -62,6 +68,7 @@ extension Channel {
           authenticationRequired: authenticationRequired,
           passwordReference: passwordReference,
           destinationAddress: destinationAddress,
+          timeoutInterval: timeoutInterval,
           position: position
         )
       }
@@ -130,31 +137,32 @@ extension ChannelPipeline.SynchronousOperations {
   ///   - authenticationRequired: The flag whether the tunnel require authentication.
   ///   - passwordReference: The password reference for authentication.
   ///   - destinationAddress: The target address this tunnel work for.
+  ///   - timeoutInterval: Amount of times that connection should timeout from now.
   ///   - position: The position in the pipeline whitch to insert the handlers.
   public func configureHTTPTunnelPipeline(
     authenticationRequired: Bool = false,
     passwordReference: String,
     destinationAddress: Address,
+    timeoutInterval: TimeAmount = .seconds(60),
     position: ChannelPipeline.Position = .last
   ) throws {
     eventLoop.assertInEventLoop()
 
-    let requestEncoder = HTTPRequestEncoder()
-    let responseDecoder = ByteToMessageHandler(HTTPResponseDecoder())
-
-    let handlers: [ChannelHandler] = [
-      HTTPProxyClientHandler(
-        passwordReference: passwordReference,
-        authenticationRequired: authenticationRequired,
-        destinationAddress: destinationAddress,
-        additionalHTTPHandlers: [
-          requestEncoder,
-          responseDecoder,
-        ]
-      ),
-      requestEncoder,
-      responseDecoder,
+    var handlers: [any RemovableChannelHandler] = [
+      HTTPRequestEncoder(),
+      ByteToMessageHandler(HTTPResponseDecoder()),
+      HTTP1ToHTTPClientCodec(),
     ]
+
+    let handshake = HTTPProxyClientHandler(
+      passwordReference: passwordReference,
+      authenticationRequired: authenticationRequired,
+      destinationAddress: destinationAddress,
+      additionalHTTPHandlers: handlers,
+      timeoutInterval: timeoutInterval
+    )
+
+    handlers.append(handshake)
     try self.addHandlers(handlers, position: position)
   }
 
