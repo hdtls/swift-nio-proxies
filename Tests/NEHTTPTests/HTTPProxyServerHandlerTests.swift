@@ -63,7 +63,11 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     let head = HTTPRequestHead(version: .http1_1, method: .CONNECT, uri: "example.com")
     try channel.writeInbound(HTTPServerRequestPart.head(head))
     XCTAssertThrowsError(try channel.writeInbound(HTTPServerRequestPart.end(nil))) { error in
-      guard case .proxyAuthenticationRequired = error as? NEHTTPError else {
+      guard let error = error as? NEHTTPError else {
+        XCTFail("should throw NEHTTPError.proxyAuthenticationRequired")
+        return
+      }
+      guard case .proxyAuthenticationRequired = error else {
         XCTFail("should throw NEHTTPError.proxyAuthenticationRequired")
         return
       }
