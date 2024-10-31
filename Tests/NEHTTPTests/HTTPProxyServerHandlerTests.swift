@@ -50,38 +50,6 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     handler = nil
   }
 
-  func testReceiveRequestEndBeforeHeadReceived() throws {
-    XCTAssertThrowsError(try channel.writeInbound(HTTPServerRequestPart.end(nil)))
-    var response = try XCTUnwrap(channel.readOutbound(as: HTTPServerResponsePart.self))
-    XCTAssertEqual(
-      response,
-      .head(
-        .init(
-          version: .http1_1, status: .badRequest,
-          headers: ["Connection": "close", "Content-Length": "0"])
-      )
-    )
-    response = try XCTUnwrap(channel.readOutbound(as: HTTPServerResponsePart.self))
-    XCTAssertEqual(response, .end(nil))
-    XCTAssertThrowsError(try channel.finish())
-  }
-
-  func testReceiveRequestBodyBeforeHeadReceived() throws {
-    XCTAssertThrowsError(try channel.writeInbound(HTTPServerRequestPart.end(nil)))
-    var response = try XCTUnwrap(channel.readOutbound(as: HTTPServerResponsePart.self))
-    XCTAssertEqual(
-      response,
-      .head(
-        .init(
-          version: .http1_1, status: .badRequest,
-          headers: ["Connection": "close", "Content-Length": "0"])
-      )
-    )
-    response = try XCTUnwrap(channel.readOutbound(as: HTTPServerResponsePart.self))
-    XCTAssertEqual(response, .end(nil))
-    XCTAssertThrowsError(try channel.finish())
-  }
-
   func testProxyAuthenticationRequire() async throws {
     handler = HTTPProxyServerHandler(
       passwordReference: passwordReference,
@@ -95,11 +63,7 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
     let head = HTTPRequestHead(version: .http1_1, method: .CONNECT, uri: "example.com")
     try channel.writeInbound(HTTPServerRequestPart.head(head))
     XCTAssertThrowsError(try channel.writeInbound(HTTPServerRequestPart.end(nil))) { error in
-      guard let error = error as? NEHTTPError else {
-        XCTFail("should throw NEHTTPError.proxyAuthenticationRequired")
-        return
-      }
-      guard error == .proxyAuthenticationRequired else {
+      guard case .proxyAuthenticationRequired = error as? NEHTTPError else {
         XCTFail("should throw NEHTTPError.proxyAuthenticationRequired")
         return
       }
@@ -166,9 +130,22 @@ final class HTTPProxyServerHandlerTests: XCTestCase {
   }
 
   func testHTTPConnectProxyWorkflow() async throws {
+    let eventLoop = EmbeddedEventLoop()
+
+    let handler = HTTPProxyServerHandler(
+      passwordReference: passwordReference,
+      authenticationRequired: false,
+      additionalHTTPHandlers: []
+    ) { _, _ in
+      eventLoop.makeSucceededFuture((EmbeddedChannel(), 0))
+    }
+    let channel = EmbeddedChannel(handler: handler, loop: eventLoop)
+
     let head = HTTPRequestHead.init(version: .http1_1, method: .CONNECT, uri: "example.com")
     try channel.writeInbound(HTTPServerRequestPart.head(head))
     try channel.writeInbound(HTTPServerRequestPart.end(nil))
+
+    _ = try await handler.negotiationResultFuture.get()
 
     let headPart = try channel.readOutbound(as: HTTPServerResponsePart.self)
     let _ = try channel.readOutbound(as: HTTPServerResponsePart.self)

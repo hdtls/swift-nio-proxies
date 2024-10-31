@@ -79,7 +79,9 @@ private func correctlyFrameTransportHeaders(
 
 /// A channel handler that wraps a channel for HTTP proxy.
 /// This handler can be used in channels that are acting as the server in the HTTP proxy dialog.
-final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
+final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler,
+  RemovableChannelHandler
+{
 
   public typealias InboundIn = HTTPServerRequestPart
 
@@ -92,19 +94,24 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
     case channelReadComplete
   }
 
-  private enum Progress: Equatable {
-    case waitingForData
-    case waitingForComplete
-    case completed
+  private enum State {
+    /// The initial state prior to start
+    case setup
+
+    /// Waiting are waiting for HTTP request data.
+    case waiting(HTTPVersion, HTTPRequest)
+
+    /// Preparing are HTTP request data is received.
+    case preparing(HTTPVersion, HTTPRequest)
+
+    /// Ready are actively establishing the connection.
+    case ready
+
+    /// Failed are failed to complete handshake.
+    case failed(any Error)
   }
 
-  private var progress: Progress = .waitingForData
-
-  /// The task request head part. this value is updated after `head` part received.
-  private var originalHTTPRequest: HTTPRequest?
-
-  /// The task request version. this value is updated after `head` part received.
-  private var originalHTTPVersion = HTTPVersion.http1_1
+  private var state = State.setup
 
   /// The credentials used to authenticate this proxy connection.
   private let passwordReference: String
@@ -159,54 +166,43 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
     negotiationResultPromise = context.eventLoop.makePromise(of: NegotiationResult.self)
   }
 
-  public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-    guard progress == .waitingForData else {
-      guard progress == .waitingForComplete else {
-        context.fireChannelRead(data)
-        return
-      }
-      // All inbound events will be buffered until handle remove from pipeline.
-      eventBuffer.append(.channelRead(data: data))
-      return
+  public func handlerRemoved(context: ChannelHandlerContext) {
+    switch state {
+    case .setup, .waiting, .preparing:
+      fail(
+        error: NEHTTPError(code: .userCancelled, errorDescription: "EOF during handshake"),
+        context: context)
+    case .ready, .failed:
+      break
     }
+  }
 
-    switch unwrapInboundIn(data) {
-    case .head(var head) where progress == .waitingForData:
-      do {
-        originalHTTPVersion = head.version
-
-        if head.method == .CONNECT {
-          originalHTTPRequest = try HTTPRequest(head)
-        } else {
-          // Strip hop-by-hop header based on rfc2616.
-          head.headers.trimmingHopByHopFields()
-          originalHTTPRequest = try HTTPRequest(head)
-          let data = serializeHTTPPart(context: context, .head(head))
-          eventBuffer.append(.channelRead(data: NIOAny(data)))
-        }
-      } catch {
-        fail(
-          error: NEHTTPError(code: .badRequest, errorDescription: error.localizedDescription),
-          context: context)
+  public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+    switch state {
+    case .setup, .waiting:
+      switch unwrapInboundIn(data) {
+      case .head(let request):
+        handleHTTPPartHead(request, context: context)
+      case .body(let body):
+        handleHTTPPartBody(body, context: context)
+      case .end(let fields):
+        handleHTTPPartEnd(fields, context: context)
       }
-    case .body(let bodyPart)
-    where originalHTTPRequest != nil && originalHTTPRequest?.method != .connect:
-      let data = serializeHTTPPart(context: context, .body(bodyPart))
-      eventBuffer.append(.channelRead(data: NIOAny(data)))
-    case .end(let trailers) where originalHTTPRequest != nil:
-      progress = .waitingForComplete
-      if originalHTTPRequest?.method != .connect {
-        let data = serializeHTTPPart(context: context, .end(trailers))
-        eventBuffer.append(.channelRead(data: NIOAny(data)))
-      }
-      configureHTTPTunnelPipeline(context: context)
-    default:
-      fail(error: NEHTTPError.badRequest, context: context)
+    case .preparing:
+      eventBuffer.append(.channelRead(data: data))
+    case .ready:
+      context.fireChannelRead(data)
+    case .failed:
+      break
     }
   }
 
   public func channelReadComplete(context: ChannelHandlerContext) {
-    eventBuffer.append(.channelReadComplete)
+    guard case .ready = state else {
+      eventBuffer.append(.channelReadComplete)
+      return
+    }
+    context.fireChannelReadComplete()
   }
 
   /// Encode HTTP request into ByteBuffer, see HTTPRequestEncoder for more details.
@@ -275,25 +271,90 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
     }
   }
 
-  private func authenticate(context: ChannelHandlerContext, connection: HTTPRequest) {
-    guard authenticationRequired else {
+  public func removeHandler(
+    context: ChannelHandlerContext,
+    removalToken: ChannelHandlerContext.RemovalToken
+  ) {
+    // We're being removed from the pipeline. If we have buffered events, deliver them.
+    while !eventBuffer.isEmpty {
+      switch eventBuffer.removeFirst() {
+      case .channelRead(let data):
+        context.fireChannelRead(data)
+      case .channelReadComplete:
+        context.fireChannelReadComplete()
+      }
+    }
+
+    context.leavePipeline(removalToken: removalToken)
+  }
+}
+
+extension HTTPProxyServerHandler {
+
+  private func handleHTTPPartHead(_ request: HTTPRequestHead, context: ChannelHandlerContext) {
+    do {
+      var head = request
+      let originalHTTPRequest: HTTPRequest
+      if head.method == .CONNECT {
+        originalHTTPRequest = try HTTPRequest(head)
+      } else {
+        // Strip hop-by-hop header based on rfc2616.
+        head.headers.trimmingHopByHopFields()
+        originalHTTPRequest = try HTTPRequest(head)
+        let data = serializeHTTPPart(context: context, .head(head))
+        eventBuffer.append(.channelRead(data: NIOAny(data)))
+      }
+      state = .waiting(head.version, originalHTTPRequest)
+    } catch {
+      fail(
+        error: NEHTTPError(code: .badRequest, errorDescription: error.localizedDescription),
+        context: context)
+    }
+  }
+
+  private func handleHTTPPartBody(_ body: ByteBuffer, context: ChannelHandlerContext) {
+    guard case .waiting(_, let originalHTTPRequest) = state else {
+      let errorDescription = "Receive request body in invalid HTTP CONNECT handshake state"
+      preconditionFailure(errorDescription)
+    }
+
+    guard originalHTTPRequest.method != .connect else {
+      let errorDescription = "Receive request body in invalid HTTP CONNECT handshaking"
+      fail(
+        error: NEHTTPError(code: .badRequest, errorDescription: errorDescription),
+        context: context)
       return
     }
 
-    guard !connection.headerFields[values: .proxyAuthorization].contains(passwordReference) else {
-      return
+    let data = serializeHTTPPart(context: context, .body(body))
+    eventBuffer.append(.channelRead(data: NIOAny(data)))
+  }
+
+  private func handleHTTPPartEnd(_ fields: HTTPHeaders?, context: ChannelHandlerContext) {
+    guard case .waiting(let originalHTTPVersion, let originalHTTPRequest) = state else {
+      let errorDescription = "Receive request body in invalid HTTP CONNECT handshake state"
+      preconditionFailure(errorDescription)
     }
-    fail(error: NEHTTPError.proxyAuthenticationRequired, context: context)
+
+    state = .preparing(originalHTTPVersion, originalHTTPRequest)
+
+    if originalHTTPRequest.method != .connect {
+      let data = serializeHTTPPart(context: context, .end(fields))
+      eventBuffer.append(.channelRead(data: NIOAny(data)))
+    }
+    configureHTTPTunnelPipeline(context: context)
   }
 
   private func configureHTTPTunnelPipeline(context: ChannelHandlerContext) {
-    guard let originalHTTPRequest else {
-      fail(error: NEHTTPError.badRequest, context: context)
+    guard case .preparing(let originalHTTPVersion, let originalHTTPRequest) = state else {
+      let errorDescription = "Configure HTTP tunnel in invalid HTTP CONNECT handshake state"
+      preconditionFailure(errorDescription)
+    }
+
+    guard authenticate(context: context, connection: originalHTTPRequest) else {
       return
     }
-    authenticate(context: context, connection: originalHTTPRequest)
 
-    let originalHTTPVersion = self.originalHTTPVersion
     channelInitializer(originalHTTPVersion, originalHTTPRequest)
       .hop(to: context.eventLoop)
       .flatMap { negotiationResult in
@@ -311,36 +372,44 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
           context.write(data, promise: nil)
         }
 
-        // Remove all additional http handlers, so we can receive original request data.
-        let futures = self.additionalHTTPHandlers.map {
-          context.pipeline.removeHandler($0)
-            .flatMapError { error in
-              // Map `notFound` error to success future, because handlers may
-              // be removed by user outside this handler.
-              guard case .notFound = error as? ChannelPipelineError else {
-                return context.eventLoop.makeFailedFuture(error)
-              }
-              return context.eventLoop.makeSucceededVoidFuture()
-            }
-        }
-        return EventLoopFuture.andAllSucceed(futures, on: context.eventLoop)
-          .map { _ in negotiationResult }
+        return EventLoopFuture.andAllSucceed(
+          self.additionalHTTPHandlers.map { context.pipeline.removeHandler($0) },
+          on: context.eventLoop
+        )
+        .map { _ in negotiationResult }
       }
       .whenComplete {
         switch $0 {
         case .success(let negotiationResult):
           // After all additional http handlers removed, we should flush our response.
           context.flush()
+          self.state = .ready
           self.negotiationResultPromise?.succeed(negotiationResult)
-          self.progress = .completed
-          context.pipeline.removeHandler(self, promise: nil)
+
+          // Handshake is completed and we can remove handler and unbuffer all reads.
+          context.pipeline.removeHandler(context: context, promise: nil)
         case .failure(let error):
           self.fail(error: error, context: context)
         }
       }
   }
 
+  private func authenticate(context: ChannelHandlerContext, connection: HTTPRequest) -> Bool {
+    guard authenticationRequired else {
+      return true
+    }
+
+    guard connection.headerFields[.proxyAuthorization] != passwordReference else {
+      return true
+    }
+    fail(error: NEHTTPError.proxyAuthenticationRequired, context: context)
+    return false
+  }
+
   private func fail(error: any Error, context: ChannelHandlerContext, close: Bool = true) {
+    negotiationResultPromise?.fail(error)
+    state = .failed(error)
+
     defer {
       context.fireErrorCaught(error)
       if close {
@@ -373,36 +442,12 @@ final public class HTTPProxyServerHandler<Connection>: ChannelInboundHandler {
     }
 
     let head = HTTPResponseHead(
-      version: originalHTTPVersion,
+      version: .http1_1,
       status: status,
       headers: httpFields
     )
     context.write(wrapOutboundOut(.head(head)), promise: nil)
     context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
-  }
-}
-
-extension HTTPProxyServerHandler: RemovableChannelHandler {
-
-  public func removeHandler(
-    context: ChannelHandlerContext,
-    removalToken: ChannelHandlerContext.RemovalToken
-  ) {
-    // We're being removed from the pipeline. If we have buffered events, deliver them.
-    while !eventBuffer.isEmpty {
-      switch eventBuffer.removeFirst() {
-      case .channelRead(let data):
-        context.fireChannelRead(data)
-      case .channelReadComplete:
-        context.fireChannelReadComplete()
-      }
-    }
-
-    if progress != .completed {
-      negotiationResultPromise?.fail(ChannelError.inappropriateOperationForState)
-    }
-
-    context.leavePipeline(removalToken: removalToken)
   }
 }
 
