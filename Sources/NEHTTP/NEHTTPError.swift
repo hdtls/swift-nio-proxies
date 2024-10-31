@@ -24,6 +24,7 @@ public struct NEHTTPError: Error, Equatable {
     case channelInactive
     case unacceptableStatus(HTTPResponse.Status)
     case unacceptableRead
+    case userCancelled
   }
   /// The code this error will return.
   public var code: Code

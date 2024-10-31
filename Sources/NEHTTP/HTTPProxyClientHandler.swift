@@ -41,15 +41,16 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
     /// The initial state prior to start
     case setup
 
-    /// Waiting are waiting for HTTP response head part data
+    /// Waiting are waiting for HTTP response data
     case waiting(Scheduled<Void>)
 
-    /// Preparing are HTTP response head part data received
+    /// Preparing are HTTP response head received
     case preparing(Scheduled<Void>)
 
     /// Ready are actively establishing the connection
     case ready
 
+    /// Failed are failed to complete handshake.
     case failed(any Error)
   }
 
@@ -105,8 +106,9 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
   public func handlerRemoved(context: ChannelHandlerContext) {
     switch state {
     case .setup, .waiting, .preparing:
-      struct AbortError: Error {}
-      fail(error: AbortError(), context: context)
+      fail(
+        error: NEHTTPError(code: .userCancelled, errorDescription: "EOF during handshake"),
+        context: context)
     case .ready, .failed:
       break
     }
@@ -141,11 +143,11 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
 
     switch unwrapInboundIn(data) {
     case .head(let response):
-      handleHTTPPartHead(response: response, context: context)
+      handleHTTPPartHead(response, context: context)
     case .body(let body):
-      handleHTTPPartBody(body: body, context: context)
+      handleHTTPPartBody(body, context: context)
     case .end(let fields):
-      handleHTTPPartEnd(fields: fields, context: context)
+      handleHTTPPartEnd(fields, context: context)
     }
   }
 
@@ -154,30 +156,26 @@ final public class HTTPProxyClientHandler: ChannelDuplexHandler, RemovableChanne
     data: NIOAny,
     promise: EventLoopPromise<Void>?
   ) {
-    bufferedWrites.append((data, promise))
+    guard case .ready = state else {
+      bufferedWrites.append((data, promise))
+      return
+    }
+    context.write(data, promise: promise)
   }
 
   public func flush(context: ChannelHandlerContext) {
-    bufferedWrites.mark()
-
     // Unbuffer writes when handshake is success.
     guard case .ready = state else {
+      bufferedWrites.mark()
       return
     }
-    unbufferWrites(context: context)
+    context.flush()
   }
 
   public func removeHandler(
     context: ChannelHandlerContext, removalToken: ChannelHandlerContext.RemovalToken
   ) {
-    unbufferWrites(context: context)
-    context.leavePipeline(removalToken: removalToken)
-  }
-}
-
-extension HTTPProxyClientHandler {
-
-  private func unbufferWrites(context: ChannelHandlerContext) {
+    // We're being removed from the pipeline. If we have buffered events, deliver them.
     while bufferedWrites.hasMark {
       let bufferedWrite = bufferedWrites.removeFirst()
       context.write(bufferedWrite.data, promise: bufferedWrite.promise)
@@ -188,7 +186,12 @@ extension HTTPProxyClientHandler {
       let bufferedWrite = bufferedWrites.removeFirst()
       context.write(bufferedWrite.data, promise: bufferedWrite.promise)
     }
+
+    context.leavePipeline(removalToken: removalToken)
   }
+}
+
+extension HTTPProxyClientHandler {
 
   private func becomeActive(context: ChannelHandlerContext) {
     guard case .setup = self.state else {
@@ -241,7 +244,7 @@ extension HTTPProxyClientHandler {
     context.flush()
   }
 
-  private func handleHTTPPartHead(response: HTTPResponse, context: ChannelHandlerContext) {
+  private func handleHTTPPartHead(_ response: HTTPResponse, context: ChannelHandlerContext) {
     guard case .waiting(let scheduled) = self.state else {
       preconditionFailure("HTTPDecoder should throw an error, if we have not send a request")
     }
@@ -261,7 +264,7 @@ extension HTTPProxyClientHandler {
     }
   }
 
-  private func handleHTTPPartBody(body: ByteBuffer?, context: ChannelHandlerContext) {
+  private func handleHTTPPartBody(_ body: ByteBuffer?, context: ChannelHandlerContext) {
     switch state {
     case .setup, .waiting, .ready:
       let errorDescription = "Receive response body in invalid HTTP CONNECT handshake state"
@@ -282,7 +285,7 @@ extension HTTPProxyClientHandler {
     }
   }
 
-  private func handleHTTPPartEnd(fields: HTTPFields?, context: ChannelHandlerContext) {
+  private func handleHTTPPartEnd(_ fields: HTTPFields?, context: ChannelHandlerContext) {
     switch state {
     case .preparing(let scheduled):
       scheduled.cancel()
