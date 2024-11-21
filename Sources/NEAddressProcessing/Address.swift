@@ -12,14 +12,101 @@
 //
 //===----------------------------------------------------------------------===//
 
-import struct NIOCore.ByteBuffer
-import enum NIOCore.SocketAddress
-
 #if canImport(Darwin)
   import Foundation
 #else
   @preconcurrency import Foundation
 #endif
+
+#if os(Windows)
+  import ucrt
+
+  import let WinSDK.AF_INET
+  import let WinSDK.AF_INET6
+
+  import let WinSDK.INET_ADDRSTRLEN
+  import let WinSDK.INET6_ADDRSTRLEN
+
+  import func WinSDK.inet_ntop
+  import func WinSDK.inet_pton
+
+  // swift-format-ignore: TypeNamesShouldBeCapitalized
+  private typealias socklen_t = ucrt.size_t
+
+#elseif os(Linux) || os(FreeBSD) || os(Android)
+  #if canImport(Glibc)
+    import Glibc
+  #elseif canImport(Musl)
+    import Musl
+  #elseif canImport(Android)
+    import Android
+  #endif
+
+  #if os(Android)
+    // swift-format-ignore: AlwaysUseLowerCamelCase
+    private let sysInet_ntop:
+      @convention(c) (CInt, UnsafeRawPointer, UnsafeMutablePointer<CChar>, socklen_t) ->
+        UnsafePointer<CChar>? = inet_ntop
+    // swift-format-ignore: AlwaysUseLowerCamelCase
+    private let sysInet_pton:
+      @convention(c) (CInt, UnsafePointer<CChar>, UnsafeMutableRawPointer) -> CInt = inet_pton
+  #else
+    // swift-format-ignore: AlwaysUseLowerCamelCase
+    private let sysInet_ntop:
+      @convention(c) (CInt, UnsafeRawPointer?, UnsafeMutablePointer<CChar>?, socklen_t) ->
+        UnsafePointer<CChar>? =
+        inet_ntop
+    // swift-format-ignore: AlwaysUseLowerCamelCase
+    private let sysInet_pton:
+      @convention(c) (CInt, UnsafePointer<CChar>?, UnsafeMutableRawPointer?) -> CInt = inet_pton
+  #endif
+#elseif canImport(Darwin)
+  import Darwin
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  private let sysInet_ntop:
+    @convention(c) (CInt, UnsafeRawPointer?, UnsafeMutablePointer<CChar>?, socklen_t) ->
+      UnsafePointer<CChar>? =
+      inet_ntop
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  private let sysInet_pton:
+    @convention(c) (CInt, UnsafePointer<CChar>?, UnsafeMutableRawPointer?) -> CInt = inet_pton
+#elseif canImport(WASILibc)
+  import WASILibc
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  private let sysInet_ntop:
+    @convention(c) (CInt, UnsafeRawPointer?, UnsafeMutablePointer<CChar>?, socklen_t) ->
+      UnsafePointer<CChar>? =
+      inet_ntop
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  private let sysInet_pton:
+    @convention(c) (CInt, UnsafePointer<CChar>?, UnsafeMutableRawPointer?) -> CInt = inet_pton
+#else
+  #error("The Socket Addresses module was unable to identify your C library.")
+#endif
+
+/// Returns a description for the given address.
+private func descriptionForAddress(
+  family: CInt,
+  bytes: UnsafeRawPointer,
+  length byteCount: Int
+) -> String {
+  var addressBytes: [Int8] = Array(repeating: 0, count: byteCount)
+  return addressBytes.withUnsafeMutableBufferPointer {
+    (addressBytesPtr: inout UnsafeMutableBufferPointer<Int8>) -> String in
+    #if os(Windows)
+      // TODO(compnerd) use `InetNtopW` to ensure that we handle unicode properly
+      _ = WinSDK.inet_ntop(family, bytes, addressBytesPtr.baseAddress!, Int(byteCount))
+    #else
+      _ = sysInet_ntop(family, bytes, addressBytesPtr.baseAddress!, socklen_t(byteCount))
+    #endif
+    return addressBytesPtr.baseAddress!.withMemoryRebound(to: UInt8.self, capacity: byteCount) {
+      addressBytesPtr -> String in
+      String(cString: addressBytesPtr)
+    }
+  }
+}
 
 /// An IP address
 public protocol IPAddress: Sendable {
@@ -54,16 +141,10 @@ public struct IPv4Address: IPAddress, Hashable, CustomDebugStringConvertible {
   ///
   /// - Parameter rawValue: The raw bytes of the IPv4 address, must be exactly 4 bytes or init will fail.
   public init?(_ rawValue: Data) {
-    guard rawValue.count == 4 else {
+    guard rawValue.count == MemoryLayout<in_addr>.size else {
       return nil
     }
-
-    let buffer = ByteBuffer(bytes: rawValue)
-    guard case .v4 = try? SocketAddress(packedIPAddress: buffer, port: 0) else {
-      return nil
-    }
-
-    _rawValue = rawValue
+    self._rawValue = rawValue
   }
 
   /// Create an IPv4 address from an address literal string.
@@ -74,20 +155,31 @@ public struct IPv4Address: IPAddress, Hashable, CustomDebugStringConvertible {
   /// - Parameter string: An IPv4 address literal string such as "127.0.0.1".
   /// contain an IPv4 address literal.
   public init?(_ string: String) {
-    guard case .v4(let v4) = try? SocketAddress(ipAddress: string, port: 0) else {
-      return nil
-    }
-    var localAddr = v4.address
-    _rawValue = withUnsafeBytes(of: &localAddr.sin_addr) {
-      precondition($0.count == 4)
-      return Data(bytes: $0.baseAddress!, count: $0.count)
-    }
+    var ipv4Addr = in_addr()
+
+    #if os(Windows)
+      // TODO(compnerd) use `InetPtonW` to ensure that we handle unicode properly
+      guard WinSDK.inet_pton(AF_INET, string, &ipv4Addr) == 1 else {
+        return nil
+      }
+    #else
+      guard sysInet_pton(CInt(AF_INET), string, &ipv4Addr) == 1 else {
+        return nil
+      }
+    #endif
+
+    _rawValue = withUnsafeBytes(of: &ipv4Addr) { Data($0) }
   }
 
   public var debugDescription: String {
-    let packedIPAddress = ByteBuffer(bytes: rawValue)
-    let address = try! SocketAddress(packedIPAddress: packedIPAddress, port: 0)
-    return address.ipAddress!
+    self._rawValue.withUnsafeBytes {
+      // this uses inet_ntop which is documented to only fail if family is not AF_INET or AF_INET6 (or ENOSPC)
+      descriptionForAddress(
+        family: AF_INET,
+        bytes: $0.bindMemory(to: in_addr.self).baseAddress!,
+        length: Int(INET_ADDRSTRLEN)
+      )
+    }
   }
 }
 
@@ -104,15 +196,9 @@ public struct IPv6Address: IPAddress, Hashable, CustomDebugStringConvertible {
   ///
   /// - Parameter rawValue: A 16 byte IPv6 address
   public init?(_ rawValue: Data) {
-    guard rawValue.count == 16 else {
+    guard rawValue.count == MemoryLayout<in6_addr>.size else {
       return nil
     }
-
-    let buffer = ByteBuffer(bytes: rawValue)
-    guard case .v6 = try? SocketAddress(packedIPAddress: buffer, port: 0) else {
-      return nil
-    }
-
     _rawValue = rawValue
   }
 
@@ -123,20 +209,31 @@ public struct IPv6Address: IPAddress, Hashable, CustomDebugStringConvertible {
   ///
   /// - Parameter string: An IPv6 address literal string.
   public init?(_ string: String) {
-    guard case .v6(let v6) = try? SocketAddress(ipAddress: string, port: 0) else {
-      return nil
-    }
-    var localAddr = v6.address
-    _rawValue = withUnsafeBytes(of: &localAddr.sin6_addr) {
-      precondition($0.count == 16)
-      return Data(bytes: $0.baseAddress!, count: $0.count)
-    }
+    var ipv6Addr = in6_addr()
+
+    #if os(Windows)
+      // TODO(compnerd) use `InetPtonW` to ensure that we handle unicode properly
+      guard WinSDK.inet_pton(AF_INET6, string, &ipv6Addr) == 1 else {
+        return nil
+      }
+    #else
+      guard sysInet_pton(CInt(AF_INET6), string, &ipv6Addr) == 1 else {
+        return nil
+      }
+    #endif
+
+    _rawValue = withUnsafeBytes(of: &ipv6Addr) { Data($0) }
   }
 
   public var debugDescription: String {
-    let packedIPAddress = ByteBuffer(bytes: rawValue)
-    let address = try! SocketAddress(packedIPAddress: packedIPAddress, port: 0)
-    return address.ipAddress!
+    self._rawValue.withUnsafeBytes {
+      // this uses inet_ntop which is documented to only fail if family is not AF_INET or AF_INET6 (or ENOSPC)
+      descriptionForAddress(
+        family: AF_INET6,
+        bytes: $0.bindMemory(to: in6_addr.self).baseAddress!,
+        length: Int(INET6_ADDRSTRLEN)
+      )
+    }
   }
 }
 
